@@ -1,0 +1,106 @@
+name: Deploy web
+
+# main -> staging (affected apps only); tag vX.Y.Z -> production (gated by environment reviewers).
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+    paths:
+      - "apps/warehouse-web/**"
+      - "apps/admin-web/**"
+      - "packages/**"
+      - "infra/ecs/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.plan.outputs.environment }}
+      apps: ${{ steps.plan.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: plan
+        run: |
+          all='["warehouse-web","admin-web"]'
+          if [[ "$GITHUB_REF" == refs/tags/* || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            apps="$all"
+          else
+            affected=$(pnpm --silent turbo run build --filter="...[HEAD^1]" --dry-run=json \
+              | jq -c '[.packages[] | select(startswith("@qc/")) | sub("^@qc/"; "")]')
+            apps=$(jq -c --argjson a "$affected" 'map(select(. as $s | $a | index($s)))' <<<"$all")
+          fi
+          [[ "$GITHUB_REF" == refs/tags/* ]] && env=production || env=staging
+          echo "environment=$env" >> "$GITHUB_OUTPUT"
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.apps != '[]'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.environment }}
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJson(needs.plan.outputs.apps) }}
+    env:
+      APP: ${{ matrix.app }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          IMAGE: ${{ env.ECR_REGISTRY }}/qc/${{ matrix.app }}:${{ github.sha }}
+        run: |
+          docker build -f "apps/$APP/Dockerfile" -t "$IMAGE" -t "$ECR_REGISTRY/qc/$APP:latest" \
+            --build-arg NEXT_PUBLIC_APP_ENV="${{ needs.plan.outputs.environment }}" \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="${{ vars.NEXT_PUBLIC_API_BASE_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ vars.NEXT_PUBLIC_SUPABASE_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+            --build-arg NEXT_PUBLIC_GOOGLE_MAPS_KEY="${{ vars.NEXT_PUBLIC_GOOGLE_MAPS_KEY }}" \
+            --build-arg NEXT_PUBLIC_SENTRY_DSN="${{ vars.NEXT_PUBLIC_SENTRY_DSN }}" \
+            .
+          docker push "$IMAGE"
+          docker push "$ECR_REGISTRY/qc/$APP:latest"
+
+      - name: Deploy to ECS Fargate
+        env:
+          IMAGE: ${{ env.ECR_REGISTRY }}/qc/${{ matrix.app }}:${{ github.sha }}
+        run: |
+          family="qc-$APP"
+          task=$(aws ecs describe-task-definition --task-definition "$family" --query 'taskDefinition' --output json)
+          new=$(echo "$task" | jq --arg IMAGE "$IMAGE" \
+            'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy) | .containerDefinitions[0].image = $IMAGE')
+          aws ecs register-task-definition --cli-input-json "$new" >/dev/null
+          aws ecs update-service --cluster "$CLUSTER" --service "$family" --force-new-deployment --query 'service.serviceName' --output text

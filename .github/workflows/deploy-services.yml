@@ -1,0 +1,120 @@
+name: Deploy services
+
+# main -> staging (affected services only); tag vX.Y.Z -> production (all services, gated by
+# the "production" environment's required reviewers).
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+    paths:
+      - "services/**"
+      - "packages/**"
+      - "supabase/migrations/**"
+      - "infra/ecs/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-services.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-services-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.plan.outputs.environment }}
+      services: ${{ steps.plan.outputs.services }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: plan
+        run: |
+          all=$(jq -c '.services | keys' infra/ecs/services.json)
+          if [[ "$GITHUB_REF" == refs/tags/* || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            services="$all"
+          else
+            affected=$(pnpm --silent turbo run build --filter="...[HEAD^1]" --dry-run=json \
+              | jq -c '[.packages[] | select(startswith("@qc/")) | sub("^@qc/"; "")]')
+            services=$(jq -c --argjson a "$affected" 'map(select(. as $s | $a | index($s)))' <<<"$all")
+          fi
+          [[ "$GITHUB_REF" == refs/tags/* ]] && env=production || env=staging
+          echo "environment=$env" >> "$GITHUB_OUTPUT"
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          echo "Deploying to $env: $services"
+
+  migrate:
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Apply migrations (expand -> migrate -> contract)
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+  deploy:
+    needs: [plan, migrate]
+    if: needs.plan.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.environment }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.plan.outputs.services) }}
+    env:
+      SERVICE: ${{ matrix.service }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          IMAGE: ${{ env.ECR_REGISTRY }}/qc/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          docker build -f "services/$SERVICE/Dockerfile" -t "$IMAGE" -t "$ECR_REGISTRY/qc/$SERVICE:latest" .
+          docker push "$IMAGE"
+          docker push "$ECR_REGISTRY/qc/$SERVICE:latest"
+
+      - name: Deploy to ECS Fargate
+        env:
+          IMAGE: ${{ env.ECR_REGISTRY }}/qc/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          family="qc-$SERVICE"
+          task=$(aws ecs describe-task-definition --task-definition "$family" --query 'taskDefinition' --output json)
+          new=$(echo "$task" | jq --arg IMAGE "$IMAGE" \
+            'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy) | .containerDefinitions[0].image = $IMAGE')
+          aws ecs register-task-definition --cli-input-json "$new" >/dev/null
+          aws ecs update-service --cluster "$CLUSTER" --service "$family" --force-new-deployment --query 'service.serviceName' --output text
+
+      - name: Smoke test
+        if: matrix.service == 'gateway'
+        run: |
+          curl -fsS --retry 5 --retry-delay 5 "${{ vars.GATEWAY_URL }}/health/ready"

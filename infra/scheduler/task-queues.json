@@ -1,0 +1,22 @@
+{
+  "queues": [
+    {
+      "name": "reservation-expiry",
+      "service": "warehouse-inventory",
+      "maxDispatchesPerSecond": 50,
+      "maxAttempts": 10
+    },
+    {
+      "name": "offer-expiry",
+      "service": "delivery",
+      "maxDispatchesPerSecond": 50,
+      "maxAttempts": 10
+    },
+    {
+      "name": "order-timeouts",
+      "service": "order",
+      "maxDispatchesPerSecond": 50,
+      "maxAttempts": 10
+    }
+  ]
+}

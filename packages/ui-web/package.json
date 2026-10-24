@@ -1,0 +1,28 @@
+{
+  "name": "@qc/ui-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "catalog:web",
+    "react-dom": "catalog:web"
+  },
+  "devDependencies": {
+    "@qc/eslint-config": "workspace:*",
+    "@qc/tsconfig": "workspace:*",
+    "@types/react": "catalog:web",
+    "@types/react-dom": "catalog:web",
+    "eslint": "catalog:",
+    "react": "catalog:web",
+    "react-dom": "catalog:web",
+    "typescript": "catalog:"
+  }
+}

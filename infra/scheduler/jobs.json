@@ -1,0 +1,22 @@
+{
+  "defaults": {
+    "timeZone": "Asia/Kolkata",
+    "httpMethod": "POST",
+    "pathPrefix": "/internal/jobs/",
+    "attemptDeadline": "180s"
+  },
+  "jobs": [
+    { "name": "inventory-tick", "schedule": "*/15 * * * *", "service": "warehouse-inventory" },
+    { "name": "order-tick", "schedule": "*/5 * * * *", "service": "order" },
+    { "name": "delivery-tick", "schedule": "*/5 * * * *", "service": "delivery" },
+    { "name": "notification-tick", "schedule": "*/5 * * * *", "service": "notification" },
+    { "name": "analytics-refresh", "schedule": "0 * * * *", "service": "analytics" },
+    { "name": "housekeeping", "schedule": "0 3 * * *", "service": "identity" },
+    { "name": "housekeeping", "schedule": "5 3 * * *", "service": "catalog" },
+    { "name": "housekeeping", "schedule": "10 3 * * *", "service": "warehouse-inventory" },
+    { "name": "housekeeping", "schedule": "15 3 * * *", "service": "order" },
+    { "name": "housekeeping", "schedule": "20 3 * * *", "service": "payment" },
+    { "name": "housekeeping", "schedule": "25 3 * * *", "service": "delivery" },
+    { "name": "housekeeping", "schedule": "30 3 * * *", "service": "notification" }
+  ]
+}

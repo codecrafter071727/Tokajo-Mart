@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Commit messages (Conventional Commits)
+        if: github.event_name == 'pull_request'
+        run: pnpm exec commitlint --from "origin/${{ github.base_ref }}" --to HEAD
+
+      - name: Format
+        run: pnpm format:check
+
+      - name: Migration lint (destructive statements need "-- allow-destructive")
+        run: |
+          base="${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD^1' }}"
+          status=0
+          for f in $(git diff --name-only --diff-filter=AM "$base" -- 'supabase/migrations/*.sql'); do
+            if grep -Eiq '\b(drop[[:space:]]+(table|column|schema|type)|truncate)\b' "$f" && ! grep -q -- '-- allow-destructive' "$f"; then
+              echo "::error file=$f::Destructive statement without '-- allow-destructive' marker"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Lint, typecheck, test, build (affected)
+        run: |
+          filter="${{ github.event_name == 'pull_request' && format('...[origin/{0}]', github.base_ref) || '...[HEAD^1]' }}"
+          pnpm turbo run lint typecheck test build --filter="$filter"
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level high

@@ -1,0 +1,42 @@
+{
+  "name": "qc-platform",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=22.13.0 <23",
+    "pnpm": ">=10.18.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "pnpm dev:services",
+    "dev:services": "node scripts/ensure-local-env.mjs && turbo run dev --filter=./services/*",
+    "dev:web": "node scripts/ensure-local-env.mjs && turbo run dev --filter=@qc/warehouse-web --filter=@qc/admin-web",
+    "dev:all": "node scripts/ensure-local-env.mjs && turbo run dev --filter=./services/* --filter=@qc/warehouse-web --filter=@qc/admin-web",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "db:migrate": "supabase migration up",
+    "db:reset": "supabase db reset",
+    "db:types": "turbo run db:types",
+    "infra:up": "docker compose -f infra/docker/docker-compose.dev.yml up -d",
+    "infra:down": "docker compose -f infra/docker/docker-compose.dev.yml down",
+    "gen:api": "turbo run gen:api",
+    "mobile:customer": "pnpm --filter @qc/customer-app start",
+    "mobile:rider": "pnpm --filter @qc/rider-app start",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.0",
+    "supabase": "^2.122.0",
+    "turbo": "^2.11.0",
+    "typescript": "catalog:"
+  }
+}

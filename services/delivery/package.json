@@ -1,0 +1,39 @@
+{
+  "name": "@qc/delivery",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --config ../../packages/service-kit/nodemon.json",
+    "build": "tsup",
+    "start": "node --enable-source-maps dist/server.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "db:types": "kysely-codegen --dialect postgres --camel-case --include-pattern \"delivery.*\" --out-file src/db/types.generated.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.787.0",
+    "@qc/api-client": "workspace:*",
+    "@qc/contracts": "workspace:*",
+    "@qc/maps-client": "workspace:*",
+    "@qc/service-kit": "workspace:*",
+    "fastify": "catalog:",
+    "kysely": "catalog:",
+    "pg": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@qc/eslint-config": "workspace:*",
+    "@qc/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "eslint": "catalog:",
+    "kysely-codegen": "catalog:",
+    "nodemon": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

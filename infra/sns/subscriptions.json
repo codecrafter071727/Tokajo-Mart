@@ -1,0 +1,134 @@
+{
+  "defaults": {
+    "ackDeadlineSeconds": 30,
+    "maxDeliveryAttempts": 5,
+    "deadLetterQueueSuffix": "-dlq",
+    "visibilityTimeoutSeconds": 30,
+    "internalPathPrefix": "/internal/events/"
+  },
+  "subscriptions": [
+    {
+      "name": "notification--identity-events",
+      "topic": "identity-events",
+      "consumer": "notification",
+      "eventTypes": ["user.created", "user.deleted"]
+    },
+    {
+      "name": "order--identity-events",
+      "topic": "identity-events",
+      "consumer": "order",
+      "eventTypes": ["user.blocked", "user.deleted"]
+    },
+    {
+      "name": "delivery--identity-events",
+      "topic": "identity-events",
+      "consumer": "delivery",
+      "eventTypes": ["user.blocked", "user.deleted", "rider.approved", "rider.suspended"]
+    },
+    {
+      "name": "warehouse-inventory--catalog-events",
+      "topic": "catalog-events",
+      "consumer": "warehouse-inventory",
+      "eventTypes": ["product.upserted", "product.deleted"]
+    },
+    {
+      "name": "catalog--inventory-events",
+      "topic": "inventory-events",
+      "consumer": "catalog",
+      "eventTypes": ["stock.changed"]
+    },
+    {
+      "name": "notification--inventory-events",
+      "topic": "inventory-events",
+      "consumer": "notification",
+      "eventTypes": ["stock.changed", "stock.low", "batch.near_expiry"]
+    },
+    {
+      "name": "warehouse-inventory--order-events",
+      "topic": "order-events",
+      "consumer": "warehouse-inventory",
+      "eventTypes": ["order.confirmed", "order.cancelled"]
+    },
+    {
+      "name": "delivery--order-events",
+      "topic": "order-events",
+      "consumer": "delivery",
+      "eventTypes": ["order.confirmed", "order.packed", "order.cancelled"]
+    },
+    {
+      "name": "catalog--order-events",
+      "topic": "order-events",
+      "consumer": "catalog",
+      "eventTypes": ["order.confirmed"]
+    },
+    {
+      "name": "payment--order-events",
+      "topic": "order-events",
+      "consumer": "payment",
+      "eventTypes": ["order.cancelled"]
+    },
+    {
+      "name": "analytics--order-events",
+      "topic": "order-events",
+      "consumer": "analytics",
+      "eventTypes": ["order.delivered"]
+    },
+    {
+      "name": "notification--order-events",
+      "topic": "order-events",
+      "consumer": "notification",
+      "eventTypes": [
+        "order.placed",
+        "order.confirmed",
+        "order.packing_started",
+        "order.packed",
+        "order.cancelled",
+        "order.delivered",
+        "order.return_requested"
+      ]
+    },
+    {
+      "name": "order--payment-events",
+      "topic": "payment-events",
+      "consumer": "order",
+      "eventTypes": ["payment.captured", "payment.failed", "refund.initiated", "refund.processed"]
+    },
+    {
+      "name": "notification--payment-events",
+      "topic": "payment-events",
+      "consumer": "notification",
+      "eventTypes": ["payment.failed", "refund.initiated", "refund.processed"]
+    },
+    {
+      "name": "order--delivery-events",
+      "topic": "delivery-events",
+      "consumer": "order",
+      "eventTypes": [
+        "rider.assigned",
+        "delivery.picked_up",
+        "delivery.started",
+        "delivery.delivered",
+        "delivery.failed"
+      ]
+    },
+    {
+      "name": "payment--delivery-events",
+      "topic": "delivery-events",
+      "consumer": "payment",
+      "eventTypes": ["delivery.delivered"]
+    },
+    {
+      "name": "notification--delivery-events",
+      "topic": "delivery-events",
+      "consumer": "notification",
+      "eventTypes": [
+        "rider.offered",
+        "rider.assigned",
+        "delivery.picked_up",
+        "delivery.started",
+        "delivery.delivered",
+        "delivery.failed"
+      ]
+    }
+  ]
+}

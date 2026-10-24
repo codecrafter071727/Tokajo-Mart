@@ -1,0 +1,75 @@
+{
+  "defaults": {
+    "region": "ap-south-1",
+    "launchType": "FARGATE",
+    "cpu": "256",
+    "memory": "512",
+    "desiredCount": 1,
+    "maxCount": 5,
+    "containerPort": 8080,
+    "assignPublicIp": false,
+    "public": false
+  },
+  "cluster": {
+    "staging": "qc-staging",
+    "production": "qc-prod"
+  },
+  "services": {
+    "gateway": {
+      "public": true,
+      "assignPublicIp": true,
+      "maxCount": 10,
+      "secrets": ["SENTRY_DSN"]
+    },
+    "identity": {
+      "secrets": [
+        "DATABASE_URL",
+        "SENTRY_DSN",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_AUTH_HOOK_SECRET",
+        "GOOGLE_MAPS_SERVER_KEY"
+      ]
+    },
+    "catalog": {
+      "secrets": ["DATABASE_URL", "SENTRY_DSN"]
+    },
+    "warehouse-inventory": {
+      "secrets": ["DATABASE_URL", "SENTRY_DSN"]
+    },
+    "order": {
+      "maxCount": 10,
+      "secrets": ["DATABASE_URL", "SENTRY_DSN"]
+    },
+    "payment": {
+      "secrets": [
+        "DATABASE_URL",
+        "SENTRY_DSN",
+        "RAZORPAY_KEY_ID",
+        "RAZORPAY_KEY_SECRET",
+        "RAZORPAY_WEBHOOK_SECRET"
+      ]
+    },
+    "delivery": {
+      "secrets": ["DATABASE_URL", "SENTRY_DSN", "GOOGLE_MAPS_SERVER_KEY"]
+    },
+    "notification": {
+      "secrets": [
+        "DATABASE_URL",
+        "SENTRY_DSN",
+        "FCM_SERVICE_ACCOUNT",
+        "RESEND_API_KEY",
+        "SUPABASE_SMS_HOOK_SECRET",
+        "SMS_PROVIDER_API_KEY"
+      ]
+    },
+    "analytics": {
+      "cpu": "256",
+      "memory": "512",
+      "secrets": ["DATABASE_URL", "SENTRY_DSN"]
+    }
+  },
+  "web": {
+    "warehouse-web": { "public": true, "assignPublicIp": true, "containerPort": 8080 },
+    "admin-web": { "public": true, "assignPublicIp": true, "containerPort": 8080 }
+  }
+}

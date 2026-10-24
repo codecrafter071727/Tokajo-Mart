@@ -1,0 +1,8 @@
+# Replace the placeholders with the two co-founders' GitHub handles before enabling
+# "Require review from Code Owners" on main.
+#
+# *                       @owner-one @owner-two
+# /packages/contracts/    @owner-one @owner-two
+# /supabase/migrations/   @owner-one @owner-two
+# /infra/                 @owner-one @owner-two
+# /.github/               @owner-one @owner-two

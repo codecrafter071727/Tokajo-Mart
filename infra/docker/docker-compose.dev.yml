@@ -1,0 +1,16 @@
+name: qc-platform
+
+services:
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sns,sqs,secretsmanager
+      AWS_DEFAULT_REGION: ap-south-1
+    volumes:
+      - localstack-data:/var/lib/localstack
+    restart: unless-stopped
+
+volumes:
+  localstack-data:

@@ -1,0 +1,38 @@
+{
+  "name": "@qc/notification",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --config ../../packages/service-kit/nodemon.json",
+    "build": "tsup",
+    "start": "node --enable-source-maps dist/server.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "db:types": "kysely-codegen --dialect postgres --camel-case --include-pattern \"notifications.*\" --out-file src/db/types.generated.ts"
+  },
+  "dependencies": {
+    "@qc/contracts": "workspace:*",
+    "@qc/service-kit": "workspace:*",
+    "fastify": "catalog:",
+    "firebase-admin": "^14.5.0",
+    "kysely": "catalog:",
+    "pg": "catalog:",
+    "resend": "^6.34.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@qc/eslint-config": "workspace:*",
+    "@qc/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "eslint": "catalog:",
+    "kysely-codegen": "catalog:",
+    "nodemon": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

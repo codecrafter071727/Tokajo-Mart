@@ -1,0 +1,11 @@
+{
+  "topics": [
+    { "name": "identity-events", "producer": "identity" },
+    { "name": "catalog-events", "producer": "catalog" },
+    { "name": "inventory-events", "producer": "warehouse-inventory" },
+    { "name": "order-events", "producer": "order" },
+    { "name": "payment-events", "producer": "payment" },
+    { "name": "delivery-events", "producer": "delivery" }
+  ],
+  "messageRetentionSeconds": 604800
+}
