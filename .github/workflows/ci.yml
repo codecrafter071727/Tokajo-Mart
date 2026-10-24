@@ -42,9 +42,21 @@ jobs:
 
       - name: Migration lint (destructive statements need "-- allow-destructive")
         run: |
-          base="${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD^1' }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base="origin/${{ github.base_ref }}"
+          elif git rev-parse --verify --quiet HEAD^ >/dev/null; then
+            base="HEAD^"
+          else
+            base=""
+          fi
+          if [[ -n "$base" ]]; then
+            mapfile -t files < <(git diff --name-only --diff-filter=AM "$base" -- 'supabase/migrations/*.sql')
+          else
+            mapfile -t files < <(git ls-files 'supabase/migrations/*.sql')
+          fi
           status=0
-          for f in $(git diff --name-only --diff-filter=AM "$base" -- 'supabase/migrations/*.sql'); do
+          for f in "${files[@]}"; do
+            [[ -z "$f" ]] && continue
             if grep -Eiq '\b(drop[[:space:]]+(table|column|schema|type)|truncate)\b' "$f" && ! grep -q -- '-- allow-destructive' "$f"; then
               echo "::error file=$f::Destructive statement without '-- allow-destructive' marker"
               status=1
@@ -54,8 +66,18 @@ jobs:
 
       - name: Lint, typecheck, test, build (affected)
         run: |
-          filter="${{ github.event_name == 'pull_request' && format('...[origin/{0}]', github.base_ref) || '...[HEAD^1]' }}"
-          pnpm turbo run lint typecheck test build --filter="$filter"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            filter="...[origin/${{ github.base_ref }}]"
+          elif git rev-parse --verify --quiet HEAD^ >/dev/null; then
+            filter="...[HEAD^]"
+          else
+            filter=""
+          fi
+          if [[ -n "$filter" ]]; then
+            pnpm turbo run lint typecheck test build --filter="$filter"
+          else
+            pnpm turbo run lint typecheck test build
+          fi
 
       - name: Dependency audit
         run: pnpm audit --audit-level high

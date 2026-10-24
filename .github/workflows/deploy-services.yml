@@ -45,10 +45,11 @@ jobs:
       - id: plan
         run: |
           all=$(jq -c '.services | keys' infra/ecs/services.json)
-          if [[ "$GITHUB_REF" == refs/tags/* || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] \
+            || ! git rev-parse --verify --quiet HEAD^ >/dev/null; then
             services="$all"
           else
-            affected=$(pnpm --silent turbo run build --filter="...[HEAD^1]" --dry-run=json \
+            affected=$(pnpm --silent turbo run build --filter="...[HEAD^]" --dry-run=json \
               | jq -c '[.packages[] | select(startswith("@qc/")) | sub("^@qc/"; "")]')
             services=$(jq -c --argjson a "$affected" 'map(select(. as $s | $a | index($s)))' <<<"$all")
           fi
