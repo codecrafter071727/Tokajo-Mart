@@ -18,7 +18,7 @@ const nextConfig = {
   poweredByHeader: false,
   transpilePackages: ["@qc/ui-web"],
   eslint: { ignoreDuringBuilds: true },
-  experimental: { outputFileTracingRoot: monorepoRoot },
+  outputFileTracingRoot: monorepoRoot,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

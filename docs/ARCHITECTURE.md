@@ -48,8 +48,8 @@
 | --------------- | ------------------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------- |
 | `customer-app`  | Customers                            | React Native (Expo), Android + iOS | Browse, cart, checkout, tracking, reorder                                                     |
 | `rider-app`     | Delivery riders                      | React Native (Expo), Android + iOS | Offers, handover, navigation, proof of delivery, earnings                                     |
-| `warehouse-web` | Warehouse managers, pickers, packers | Next.js 14, responsive             | Used on a desktop at the packing desk or a phone/tablet on the floor. Scoped to one warehouse |
-| `admin-web`     | Platform owner, admin team           | Next.js 14                         | Whole network: warehouses, catalog, orders, riders, customers, analytics, marketing           |
+| `warehouse-web` | Warehouse managers, pickers, packers | Next.js 15, responsive             | Used on a desktop at the packing desk or a phone/tablet on the floor. Scoped to one warehouse |
+| `admin-web`     | Platform owner, admin team           | Next.js 15                         | Whole network: warehouses, catalog, orders, riders, customers, analytics, marketing           |
 
 ### 1.2 High-level diagram
 
@@ -130,7 +130,7 @@
 
 ### 2.2 Web baseline
 
-Next.js 14 (App Router), Tailwind CSS, shadcn/ui, TanStack Query, TanStack Table, React Hook Form + Zod, Recharts (analytics), `@supabase/ssr` (session), `@vis.gl/react-google-maps`.
+Next.js 15 (App Router), Tailwind CSS, shadcn/ui, TanStack Query, TanStack Table, React Hook Form + Zod, Recharts (analytics), `@supabase/ssr` (session), `@vis.gl/react-google-maps`.
 
 ### 2.3 Mobile baseline
 
@@ -161,7 +161,7 @@ qc-platform/
 │   │   └── eas.json
 │   ├── rider-app/                    # Expo (React Native), same layout, rider features
 │   │   └── src/features/             # offers, active-delivery, handover, pod, earnings, trips
-│   ├── warehouse-web/                # Next.js 14
+│   ├── warehouse-web/                # Next.js 15
 │   │   ├── src/app/
 │   │   │   ├── (auth)/login
 │   │   │   ├── queue/                # live incoming orders
@@ -171,7 +171,7 @@ qc-platform/
 │   │   │   ├── reports/
 │   │   │   └── settings/             # open/close, hours
 │   │   └── src/{components,lib,hooks}
-│   └── admin-web/                    # Next.js 14
+│   └── admin-web/                    # Next.js 15
 │       └── src/app/
 │           ├── (auth)/login
 │           ├── dashboard/            # analytics

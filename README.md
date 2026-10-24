@@ -8,8 +8,8 @@ Working name **QC Platform** (`@qc/*`). Built by TheHXD. Rename when the client 
 | ------------- | ------------------- | ----------------------- |
 | Customer app  | `@qc/customer-app`  | Expo (React Native)     |
 | Rider app     | `@qc/rider-app`     | Expo (React Native)     |
-| Warehouse web | `@qc/warehouse-web` | Next.js 14              |
-| Admin web     | `@qc/admin-web`     | Next.js 14              |
+| Warehouse web | `@qc/warehouse-web` | Next.js 15              |
+| Admin web     | `@qc/admin-web`     | Next.js 15              |
 | Backend       | `services/*`        | Fastify 5 on Node.js 22 |
 
 The full design — service boundaries, events, data ownership, auth, and the 8-week plan — is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Treat that file as the source of truth.

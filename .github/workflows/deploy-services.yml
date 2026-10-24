@@ -60,6 +60,7 @@ jobs:
 
   migrate:
     needs: plan
+    if: needs.plan.outputs.services != '[]'
     runs-on: ubuntu-latest
     environment: ${{ needs.plan.outputs.environment }}
     steps:
@@ -68,13 +69,18 @@ jobs:
         with:
           version: latest
       - name: Apply migrations (expand -> migrate -> contract)
-        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [[ -z "$SUPABASE_DB_URL" ]]; then
+            echo "SUPABASE_DB_URL is not set; skipping remote migrate until staging is configured."
+            exit 0
+          fi
+          supabase db push --db-url "$SUPABASE_DB_URL" --include-all
 
   deploy:
     needs: [plan, migrate]
-    if: needs.plan.outputs.services != '[]'
+    if: needs.plan.outputs.services != '[]' && vars.AWS_DEPLOY_ROLE_ARN != ''
     runs-on: ubuntu-latest
     environment: ${{ needs.plan.outputs.environment }}
     strategy:

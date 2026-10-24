@@ -38,5 +38,17 @@
     "supabase": "^2.122.0",
     "turbo": "^2.11.0",
     "typescript": "catalog:"
+  },
+  "pnpm": {
+    "overrides": {
+      "@grpc/grpc-js": ">=1.13.6",
+      "postcss": ">=8.5.18",
+      "zod": ">=4.6.6"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-86w9-cpqp-85rv"
+      ]
+    }
   }
 }

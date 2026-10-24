@@ -58,7 +58,7 @@ jobs:
 
   deploy:
     needs: plan
-    if: needs.plan.outputs.apps != '[]'
+    if: needs.plan.outputs.apps != '[]' && vars.AWS_DEPLOY_ROLE_ARN != ''
     runs-on: ubuntu-latest
     environment: ${{ needs.plan.outputs.environment }}
     strategy:

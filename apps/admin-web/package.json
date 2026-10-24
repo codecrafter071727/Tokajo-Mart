@@ -36,7 +36,7 @@
     "@types/react": "catalog:web",
     "@types/react-dom": "catalog:web",
     "eslint": "catalog:",
-    "postcss": "^8.5.0",
+    "postcss": "^8.5.18",
     "tailwindcss": "^4.3.0",
     "typescript": "catalog:"
   }

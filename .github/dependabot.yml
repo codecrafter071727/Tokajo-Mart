@@ -9,7 +9,7 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Locked major versions (see docs/ARCHITECTURE.md): Next.js 14 / React 18 on web, Expo SDK on mobile.
+      # Locked major versions (see docs/ARCHITECTURE.md): Next.js 15 / React 18 on web, Expo SDK on mobile.
       - dependency-name: next
         update-types: ["version-update:semver-major"]
       - dependency-name: expo*
