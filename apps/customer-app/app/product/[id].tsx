@@ -56,7 +56,7 @@ export default function ProductDetailScreen() {
           {product.name}
         </Text>
         <Pressable style={styles.shareBtn}>
-          <Text style={styles.shareBtnText}>⎙</Text>
+          <Text style={styles.shareBtnText}>↗</Text>
         </Pressable>
       </View>
 
@@ -74,7 +74,7 @@ export default function ProductDetailScreen() {
           ) : null}
 
           <View style={styles.deliveryPill}>
-            <Text style={styles.deliveryPillText}>🕐 {product.deliveryMins ?? 10} MINS</Text>
+            <Text style={styles.deliveryPillText}>⏱ {product.deliveryMins ?? 10} MINS</Text>
           </View>
 
           <View style={styles.imageArea}>
@@ -143,6 +143,40 @@ export default function ProductDetailScreen() {
           ))}
         </View>
 
+        {/* Why shop from Tokajo Mart */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Why shop from Tokajo Mart?</Text>
+          <View style={styles.trustRow}>
+            <Text style={styles.trustEmoji}>⚡</Text>
+            <View style={styles.trustText}>
+              <Text style={styles.trustHeading}>Superfast 10-Minute Delivery</Text>
+              <Text style={styles.trustSub}>
+                Get your order delivered fresh to your doorstep in minutes.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.trustDivider} />
+          <View style={styles.trustRow}>
+            <Text style={styles.trustEmoji}>🏷️</Text>
+            <View style={styles.trustText}>
+              <Text style={styles.trustHeading}>Best Prices & Deals</Text>
+              <Text style={styles.trustSub}>
+                Direct warehouse sourcing brings you lowest everyday prices.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.trustDivider} />
+          <View style={styles.trustRow}>
+            <Text style={styles.trustEmoji}>💯</Text>
+            <View style={styles.trustText}>
+              <Text style={styles.trustHeading}>100% Fresh & Authentic</Text>
+              <Text style={styles.trustSub}>
+                Strict quality checks and hygienic packaging guaranteed.
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Similar products */}
         {similarProducts.length > 0 && (
           <View style={styles.similarSection}>
@@ -167,8 +201,15 @@ export default function ProductDetailScreen() {
       {/* Sticky bottom bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing[8] }]}>
         <View style={styles.bottomPriceBlock}>
-          <Text style={styles.bottomPrice}>₹{product.price}</Text>
-          {product.mrp > product.price && <Text style={styles.bottomMrp}>₹{product.mrp}</Text>}
+          <View style={styles.bottomPriceRow}>
+            <Text style={styles.bottomPrice}>₹{product.price}</Text>
+            {product.mrp > product.price && <Text style={styles.bottomMrp}>₹{product.mrp}</Text>}
+          </View>
+          {savings > 0 ? (
+            <Text style={styles.bottomSavingsText}>You save ₹{savings}</Text>
+          ) : (
+            <Text style={styles.bottomTaxNote}>Inclusive of all taxes</Text>
+          )}
         </View>
         <AddButton productId={product.id} productData={product} size="md" />
       </View>
@@ -422,6 +463,36 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
+  // Trust section
+  trustRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[12],
+    paddingVertical: Spacing[6],
+  },
+  trustEmoji: {
+    fontSize: 22,
+  },
+  trustText: {
+    flex: 1,
+  },
+  trustHeading: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+  },
+  trustSub: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  trustDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing[4],
+  },
+
   // Bottom bar
   bottomBar: {
     backgroundColor: Colors.surface,
@@ -431,12 +502,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: Spacing[16],
-    paddingTop: Spacing[12],
+    paddingTop: Spacing[10],
     ...Shadow.sticky,
   },
   bottomPriceBlock: {
+    gap: 2,
+  },
+  bottomPriceRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
     gap: Spacing[8],
   },
   bottomPrice: {
@@ -445,9 +519,18 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   bottomMrp: {
-    fontSize: FontSize.body,
+    fontSize: 13,
     color: Colors.textTertiary,
     textDecorationLine: "line-through",
+  },
+  bottomSavingsText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.brandGreen,
+  },
+  bottomTaxNote: {
+    fontSize: 11,
+    color: Colors.textSecondary,
   },
 
   // Not found

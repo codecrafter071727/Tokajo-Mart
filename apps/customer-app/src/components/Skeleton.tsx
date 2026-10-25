@@ -31,8 +31,10 @@ export function Skeleton({ width = "100%", height = 16, borderRadius = 4, style 
     opacity: opacity.value,
   }));
 
+  const AnimatedView = Animated.View as any;
+
   return (
-    <Animated.View
+    <AnimatedView
       style={[
         {
           width: width as number,

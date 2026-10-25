@@ -1,79 +1,139 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { ProductCard } from "../../src/components/ProductCard";
-import { categories, getProductsByCategory } from "../../src/lib/mockData";
+import { categories, getFeaturedProducts, getProductsByCategory } from "../../src/lib/mockData";
+
+const SUBCAT_CHIPS = ["All", "Popular", "Value Packs", "Best Deals"];
 
 export default function CategoriesScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const params = useLocalSearchParams<{ categoryId?: string }>();
   const [activeCategory, setActiveCategory] = useState<string>(
     params.categoryId ?? categories[0]?.id ?? "fruits",
   );
+  const [activeSubcat, setActiveSubcat] = useState("All");
 
-  const products = getProductsByCategory(activeCategory);
+  useEffect(() => {
+    if (params.categoryId) setActiveCategory(params.categoryId);
+  }, [params.categoryId]);
+
+  const matched = getProductsByCategory(activeCategory);
+  const products = matched.length > 0 ? matched : getFeaturedProducts();
   const activeCat = categories.find((c) => c.id === activeCategory) ??
     categories[0] ?? { id: "fruits", name: "Fruits", image: "🥦", color: "#E8F5E9" };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
+      {/* ── Brand Header ───────────────────────────────── */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Categories</Text>
+        <View style={styles.headerTop}>
+          <View style={styles.deliveryInfo}>
+            <View style={styles.deliveryBadge}>
+              <Text style={styles.boltIcon}>⚡</Text>
+              <Text style={styles.deliveryTitle}>Delivery in 10 minutes</Text>
+            </View>
+            <Pressable style={styles.addressRow}>
+              <Text style={styles.addressText} numberOfLines={1}>
+                Home — 123, MG Road, Bengaluru
+              </Text>
+              <Text style={styles.chevron}>⌄</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Quick search shortcut */}
+        <Pressable style={styles.searchBar} onPress={() => router.push("/search")}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <Text style={styles.searchPlaceholder}>
+            Search in {activeCat.name.replace("\n", " ")}...
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.body}>
-        {/* Left: Category sidebar */}
+        {/* ── Left: Category sidebar ─────────────────── */}
         <ScrollView
           style={styles.sidebar}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.sidebarContent}
         >
-          {categories.map((cat) => (
-            <Pressable
-              key={cat.id}
-              style={[styles.sidebarItem, activeCategory === cat.id && styles.sidebarItemActive]}
-              onPress={() => setActiveCategory(cat.id)}
-            >
-              <View
-                style={[
-                  styles.sidebarIconBg,
-                  { backgroundColor: cat.color },
-                  activeCategory === cat.id && styles.sidebarIconBgActive,
-                ]}
+          {categories.map((cat) => {
+            const count = getProductsByCategory(cat.id).length;
+            const isActive = activeCategory === cat.id;
+
+            return (
+              <Pressable
+                key={cat.id}
+                style={[styles.sidebarItem, isActive && styles.sidebarItemActive]}
+                onPress={() => {
+                  setActiveCategory(cat.id);
+                  setActiveSubcat("All");
+                }}
               >
-                <Text style={styles.sidebarEmoji}>{cat.image}</Text>
-              </View>
-              <Text
-                style={[
-                  styles.sidebarLabel,
-                  activeCategory === cat.id && styles.sidebarLabelActive,
-                ]}
-                numberOfLines={2}
-              >
-                {cat.name}
-              </Text>
-            </Pressable>
-          ))}
+                <View
+                  style={[
+                    styles.sidebarIconBg,
+                    { backgroundColor: cat.color },
+                    isActive && styles.sidebarIconBgActive,
+                  ]}
+                >
+                  <Text style={styles.sidebarEmoji}>{cat.image}</Text>
+                </View>
+                <Text
+                  style={[styles.sidebarLabel, isActive && styles.sidebarLabelActive]}
+                  numberOfLines={2}
+                >
+                  {cat.name}
+                </Text>
+                <View style={[styles.countBadge, isActive && styles.countBadgeActive]}>
+                  <Text style={[styles.countText, isActive && styles.countTextActive]}>
+                    {count}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
-        {/* Right: Product grid */}
+        {/* ── Right: Subcategory chips & Product grid ── */}
         <View style={styles.grid}>
-          {/* Category header */}
-          <View style={styles.gridHeader}>
-            <Text style={styles.catHeaderEmoji}>{activeCat.image}</Text>
-            <Text style={styles.catHeaderName}>{activeCat.name.replace("\n", " ")}</Text>
+          {/* Subcategory chips bar */}
+          <View style={styles.subcatBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.subcatList}
+            >
+              {SUBCAT_CHIPS.map((chip) => {
+                const isSelected = activeSubcat === chip;
+                return (
+                  <Pressable
+                    key={chip}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    onPress={() => setActiveSubcat(chip)}
+                  >
+                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                      {chip}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
 
+          {/* Product grid — 3 columns */}
           <FlatList
             data={products}
             keyExtractor={(p) => p.id}
-            numColumns={2}
+            numColumns={3}
+            key="3col"
             columnWrapperStyle={styles.columnWrapper}
-            ItemSeparatorComponent={() => <View style={{ height: Spacing[8] }} />}
-            contentContainerStyle={[styles.gridContent, { paddingBottom: 140 + insets.bottom }]}
+            ItemSeparatorComponent={() => <View style={{ height: Spacing[6] }} />}
+            contentContainerStyle={[styles.gridContent, { paddingBottom: 160 + insets.bottom }]}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyState}>
@@ -98,36 +158,89 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.canvas,
   },
+  // ── Header ──────────────────────────────────────────
   header: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing[16],
-    paddingVertical: Spacing[12],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    backgroundColor: Colors.brandYellow,
+    paddingHorizontal: Spacing[14],
+    paddingTop: Spacing[6],
+    paddingBottom: Spacing[10],
+    gap: Spacing[8],
   },
-  headerTitle: {
-    fontSize: FontSize.h1,
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  deliveryInfo: {
+    gap: 2,
+  },
+  deliveryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  boltIcon: {
+    fontSize: 14,
+  },
+  deliveryTitle: {
+    fontSize: FontSize.h2,
     fontWeight: FontWeight.h1,
-    color: Colors.textPrimary,
+    color: Colors.brandBlack,
   },
+  addressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  addressText: {
+    fontSize: FontSize.caption,
+    color: Colors.brandBlack,
+    opacity: 0.85,
+    maxWidth: 240,
+  },
+  chevron: {
+    fontSize: 12,
+    color: Colors.brandBlack,
+    fontWeight: "700",
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    height: 40,
+    paddingHorizontal: Spacing[10],
+    gap: Spacing[8],
+    ...Shadow.card,
+  },
+  searchIcon: {
+    fontSize: 14,
+  },
+  searchPlaceholder: {
+    fontSize: FontSize.caption,
+    color: Colors.textTertiary,
+    flex: 1,
+  },
+
   body: {
     flex: 1,
     flexDirection: "row",
   },
-  // Sidebar
+
+  // ── Sidebar ─────────────────────────────────────────
   sidebar: {
-    width: 84,
+    width: 78,
     backgroundColor: Colors.surface,
     borderRightWidth: 1,
     borderRightColor: Colors.border,
   },
   sidebarContent: {
-    paddingVertical: Spacing[8],
+    paddingVertical: Spacing[4],
   },
   sidebarItem: {
     alignItems: "center",
-    paddingVertical: Spacing[12],
-    paddingHorizontal: Spacing[8],
+    paddingVertical: Spacing[10],
+    paddingHorizontal: 4,
     gap: Spacing[4],
     borderLeftWidth: 3,
     borderLeftColor: "transparent",
@@ -137,8 +250,8 @@ const styles = StyleSheet.create({
     borderLeftColor: Colors.brandGreen,
   },
   sidebarIconBg: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: Radius.sm,
     alignItems: "center",
     justifyContent: "center",
@@ -148,10 +261,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.brandGreen,
   },
   sidebarEmoji: {
-    fontSize: 24,
+    fontSize: 22,
   },
   sidebarLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "600",
     color: Colors.textSecondary,
     textAlign: "center",
@@ -159,34 +272,69 @@ const styles = StyleSheet.create({
   },
   sidebarLabelActive: {
     color: Colors.brandGreen,
+    fontWeight: "700",
   },
-  // Grid
+  countBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: Radius.pill,
+    backgroundColor: "#F0F0F0",
+  },
+  countBadgeActive: {
+    backgroundColor: Colors.greenTint,
+    borderWidth: 1,
+    borderColor: Colors.greenBorder,
+  },
+  countText: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: Colors.textTertiary,
+  },
+  countTextActive: {
+    color: Colors.brandGreen,
+  },
+
+  // ── Grid & Subcategories ────────────────────────────
   grid: {
     flex: 1,
   },
-  gridHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[8],
-    paddingHorizontal: Spacing[12],
-    paddingVertical: Spacing[12],
+  subcatBar: {
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    paddingVertical: Spacing[8],
   },
-  catHeaderEmoji: {
-    fontSize: 20,
+  subcatList: {
+    paddingHorizontal: Spacing[8],
+    gap: Spacing[6],
   },
-  catHeaderName: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
-    color: Colors.textPrimary,
+  chip: {
+    paddingHorizontal: Spacing[10],
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
+  chipActive: {
+    backgroundColor: Colors.greenTint,
+    borderColor: Colors.brandGreen,
+  },
+  chipText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.textSecondary,
+  },
+  chipTextActive: {
+    color: Colors.brandGreen,
+    fontWeight: "700",
+  },
+
   gridContent: {
-    padding: Spacing[8],
+    padding: Spacing[6],
   },
   columnWrapper: {
-    gap: Spacing[8],
+    gap: Spacing[6],
   },
   gridCard: {
     flex: 1,

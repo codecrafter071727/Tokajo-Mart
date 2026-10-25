@@ -1,6 +1,17 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
+// This phone only has Expo Go. The chooser page's Development Build button
+// has no installed app to open, so it stays on a loading screen.
+process.env.EXPO_NO_REDIRECT_PAGE ??= "1";
+
 type AppEnv = "development" | "staging" | "production";
+
+function existingProjectFile(filePath: string | undefined): string | undefined {
+  if (!filePath) return undefined;
+  return fs.existsSync(path.resolve(process.cwd(), filePath)) ? filePath : undefined;
+}
 
 const APP_ENV = (process.env.APP_ENV ?? "development") as AppEnv;
 
@@ -12,6 +23,10 @@ const variants: Record<AppEnv, { name: string; idSuffix: string }> = {
 
 const variant = variants[APP_ENV];
 const appId = `com.thehxd.qc.customer${variant.idSuffix}`;
+const googleServicesPlist = existingProjectFile(process.env.GOOGLE_SERVICES_PLIST);
+const googleServicesJson = existingProjectFile(process.env.GOOGLE_SERVICES_JSON);
+// Firebase's config plugin refuses to prebuild unless both Google service files exist.
+const hasGoogleServices = Boolean(googleServicesPlist && googleServicesJson);
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -26,7 +41,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: appId,
     supportsTablet: false,
     usesAppleSignIn: true,
-    googleServicesFile: process.env.GOOGLE_SERVICES_PLIST,
+    ...(googleServicesPlist ? { googleServicesFile: googleServicesPlist } : {}),
     config: { googleMapsApiKey: process.env.GOOGLE_MAPS_IOS_KEY },
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
@@ -35,7 +50,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: appId,
-    googleServicesFile: process.env.GOOGLE_SERVICES_JSON,
+    ...(googleServicesJson ? { googleServicesFile: googleServicesJson } : {}),
     config: { googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_KEY } },
   },
   plugins: [
@@ -43,6 +58,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-image",
     "expo-splash-screen",
+    "expo-status-bar",
     "expo-apple-authentication",
     [
       "expo-location",
@@ -51,10 +67,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           "Your location is used to find the nearest store and set your delivery address.",
       },
     ],
-    ["expo-build-properties", { ios: { useFrameworks: "static" } }],
-    "@react-native-firebase/app",
-    "@react-native-firebase/messaging",
-    "@react-native-google-signin/google-signin",
+    ...(hasGoogleServices
+      ? ([
+          ["expo-build-properties", { ios: { useFrameworks: "static" } }],
+          "@react-native-firebase/app",
+          "@react-native-firebase/messaging",
+          "@react-native-google-signin/google-signin",
+        ] as NonNullable<ExpoConfig["plugins"]>)
+      : []),
     [
       "@sentry/react-native",
       { organization: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT_CUSTOMER },

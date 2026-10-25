@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, FlatList } from "react-native";
-import { Colors, Radius, Shadow, FontSize, FontWeight, Spacing } from "../theme";
+import { Colors, FontSize, FontWeight, Spacing } from "../theme";
 import { ProductCard } from "./ProductCard";
 import type { Product } from "../lib/mockData";
 
@@ -64,6 +64,6 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   cardWrapper: {
-    width: 144,
+    width: 132,
   },
 });

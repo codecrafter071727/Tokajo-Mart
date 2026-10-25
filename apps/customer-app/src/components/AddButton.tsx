@@ -17,7 +17,7 @@ interface AddButtonProps {
   size?: "sm" | "md";
 }
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable as any);
 
 export function AddButton({ productId, productData, size = "sm" }: AddButtonProps) {
   const quantity = useCartStore((s: CartState) => s.getQuantity(productId));
@@ -40,8 +40,8 @@ export function AddButton({ productId, productData, size = "sm" }: AddButtonProp
     }
   }, [quantity, addItem, productData, scale]);
 
-  const btnH = size === "sm" ? 32 : 40;
-  const btnW = size === "sm" ? 72 : 88;
+  const btnH = size === "sm" ? 30 : 36;
+  const btnW = size === "sm" ? 64 : 80;
 
   if (quantity === 0) {
     return (

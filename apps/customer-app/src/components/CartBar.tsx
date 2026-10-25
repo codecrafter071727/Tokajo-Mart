@@ -7,7 +7,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
 import { Colors, Radius, Shadow, Spacing, FontSize, FontWeight, Motion } from "../theme";
 import { useCartStore } from "../store/cart";
 
@@ -18,6 +18,7 @@ interface CartBarProps {
 
 export function CartBar({ bottomOffset = 0 }: CartBarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const items = useCartStore((s) => s.items);
   const totalItems = useCartStore((s) => s.totalItems());
@@ -42,11 +43,13 @@ export function CartBar({ bottomOffset = 0 }: CartBarProps) {
   }));
 
   if (items.length === 0) return null;
+  if (pathname?.includes("cart") || pathname?.includes("checkout")) return null;
 
   const bottomInset = insets.bottom + bottomOffset + Spacing[8];
+  const AnimatedView = Animated.View as any;
 
   return (
-    <Animated.View
+    <AnimatedView
       style={[styles.container, { bottom: bottomInset }, animatedStyle]}
       pointerEvents="box-none"
     >
@@ -72,7 +75,7 @@ export function CartBar({ bottomOffset = 0 }: CartBarProps) {
           <Text style={styles.chevron}>›</Text>
         </View>
       </Pressable>
-    </Animated.View>
+    </AnimatedView>
   );
 }
 

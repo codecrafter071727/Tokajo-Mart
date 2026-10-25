@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
+import { useAuthStore } from "../../src/store/auth";
 
 const OTP_LENGTH = 4;
 
@@ -20,13 +21,15 @@ export default function OtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [countdown, setCountdown] = useState(30);
-  const inputs = useRef<(TextInput | null)[]>([]);
+  const inputs = useRef<any[]>([]);
 
   useEffect(() => {
     if (countdown <= 0) return;
     const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(timer);
   }, [countdown]);
+
+  const login = useAuthStore((s) => s.login);
 
   const handleOtpChange = (value: string, index: number) => {
     const newOtp = [...otp];
@@ -37,7 +40,8 @@ export default function OtpScreen() {
     }
     // Auto-verify when all filled
     if (newOtp.every((d) => d !== "") && newOtp.join("").length === OTP_LENGTH) {
-      setTimeout(() => router.replace("/(tabs)"), 500);
+      login(phone ?? "98765 43210");
+      setTimeout(() => router.replace("/(tabs)"), 400);
     }
   };
 
@@ -113,11 +117,14 @@ export default function OtpScreen() {
         <Pressable
           style={[styles.verifyBtn, !isComplete && styles.verifyBtnDisabled]}
           onPress={() => {
-            if (isComplete) router.replace("/(tabs)");
+            if (isComplete) {
+              login(phone ?? "98765 43210");
+              router.replace("/(tabs)");
+            }
           }}
         >
           <Text style={[styles.verifyBtnText, !isComplete && styles.verifyBtnTextDisabled]}>
-            Verify &amp; Continue
+            Verify & Continue
           </Text>
         </Pressable>
 

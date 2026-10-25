@@ -40,10 +40,12 @@ export default function SearchScreen() {
             autoFocus
             returnKeyType="search"
           />
-          {query.length > 0 && (
+          {query.length > 0 ? (
             <Pressable onPress={() => setQuery("")} style={styles.clearBtn}>
               <Text style={styles.clearBtnText}>✕</Text>
             </Pressable>
+          ) : (
+            <Text style={styles.micIcon}>🎙️</Text>
           )}
         </View>
       </View>
@@ -81,21 +83,22 @@ export default function SearchScreen() {
           <Text style={styles.emptySubtitle}>Try searching with different keywords</Text>
         </View>
       ) : (
-        /* Results grid */
+        /* Results grid — 3 columns */
         <FlatList
           data={results}
           keyExtractor={(p) => p.id}
-          numColumns={2}
+          numColumns={3}
+          key="3col"
           columnWrapperStyle={styles.columnWrapper}
-          contentContainerStyle={[styles.resultsList, { paddingBottom: 120 + insets.bottom }]}
-          ItemSeparatorComponent={() => <View style={{ height: Spacing[8] }} />}
+          contentContainerStyle={[styles.resultsList, { paddingBottom: 140 + insets.bottom }]}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing[6] }} />}
           ListHeaderComponent={
             <Text style={styles.resultsCount}>
               {results.length} result{results.length !== 1 ? "s" : ""} for "{query}"
             </Text>
           }
           renderItem={({ item }) => (
-            <View style={{ flex: 1 }}>
+            <View style={styles.gridCard}>
               <ProductCard product={item} />
             </View>
           )}
@@ -193,17 +196,26 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
 
+  micIcon: {
+    fontSize: 16,
+  },
+
   // Results
   resultsList: {
-    padding: Spacing[12],
+    padding: Spacing[8],
   },
   columnWrapper: {
-    gap: Spacing[8],
+    gap: Spacing[6],
+  },
+  gridCard: {
+    flex: 1,
+    maxWidth: "33.33%",
   },
   resultsCount: {
     fontSize: FontSize.caption,
     color: Colors.textSecondary,
-    marginBottom: Spacing[12],
+    marginBottom: Spacing[8],
+    paddingHorizontal: Spacing[4],
   },
 
   // Empty state

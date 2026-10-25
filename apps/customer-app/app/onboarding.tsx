@@ -11,6 +11,7 @@ import Animated, {
   interpolate,
 } from "react-native-reanimated";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
+import { useAuthStore } from "../src/store/auth";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -45,6 +46,7 @@ const SLIDES = [
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const completeOnboarding = useAuthStore((s) => s.completeOnboarding);
   const flatListRef = useRef<FlatList>(null);
   const currentIdx = useRef(0);
   const [activeIdx, setActiveIdx] = React.useState(0);
@@ -74,37 +76,40 @@ export default function OnboardingScreen() {
       flatListRef.current?.scrollToIndex({ index: next, animated: true });
       setActiveIdx(next);
     } else {
+      completeOnboarding();
       router.replace("/(auth)/login");
     }
   };
 
   const handleSkip = () => {
+    completeOnboarding();
     router.replace("/(auth)/login");
   };
 
-  const activeSlide = SLIDES[activeIdx] ?? SLIDES[0];
+  const activeSlide = (SLIDES[activeIdx] ?? SLIDES[0])!;
+  const AnimatedView = Animated.View as any;
 
   return (
     <View style={[styles.root, { backgroundColor: activeSlide.bg }]}>
       {/* Skip button */}
-      <Animated.View
+      <AnimatedView
         style={[styles.skipWrapper, { paddingTop: insets.top + Spacing[8] }, contentStyle]}
       >
         <Pressable style={styles.skipBtn} onPress={handleSkip}>
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
-      </Animated.View>
+      </AnimatedView>
 
       {/* Logo */}
-      <Animated.View style={[styles.logoSection, logoStyle]}>
+      <AnimatedView style={[styles.logoSection, logoStyle]}>
         <View style={styles.logoCircle}>
           <Text style={styles.logoEmoji}>🛒</Text>
         </View>
         <Text style={styles.appName}>Tokajo Mart</Text>
-      </Animated.View>
+      </AnimatedView>
 
       {/* Slide carousel */}
-      <Animated.View style={[styles.slidesContainer, contentStyle]}>
+      <AnimatedView style={[styles.slidesContainer, contentStyle]}>
         <FlatList
           ref={flatListRef}
           data={SLIDES}
@@ -121,10 +126,10 @@ export default function OnboardingScreen() {
             </View>
           )}
         />
-      </Animated.View>
+      </AnimatedView>
 
       {/* Dots */}
-      <Animated.View style={[styles.dotsRow, contentStyle]}>
+      <AnimatedView style={[styles.dotsRow, contentStyle]}>
         {SLIDES.map((_, i) => (
           <View
             key={i}
@@ -136,10 +141,10 @@ export default function OnboardingScreen() {
             ]}
           />
         ))}
-      </Animated.View>
+      </AnimatedView>
 
       {/* CTA */}
-      <Animated.View
+      <AnimatedView
         style={[styles.ctaWrapper, { paddingBottom: insets.bottom + Spacing[24] }, contentStyle]}
       >
         <Pressable
@@ -159,7 +164,7 @@ export default function OnboardingScreen() {
             </Text>
           </Pressable>
         )}
-      </Animated.View>
+      </AnimatedView>
     </View>
   );
 }

@@ -1,9 +1,45 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { useCartStore } from "../../src/store/cart";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface Address {
+  id: string;
+  tag: string;
+  emoji: string;
+  line1: string;
+  line2: string;
+}
+
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+const SAVED_ADDRESSES: Address[] = [
+  {
+    id: "a1",
+    tag: "Home",
+    emoji: "🏠",
+    line1: "123, MG Road, Indiranagar",
+    line2: "Bengaluru — 560038",
+  },
+  {
+    id: "a2",
+    tag: "Work",
+    emoji: "🏢",
+    line1: "45, HSR Layout, Sector 6",
+    line2: "Bengaluru — 560102",
+  },
+  {
+    id: "a3",
+    tag: "Parents",
+    emoji: "🏡",
+    line1: "7B, Jayanagar 4th Block",
+    line2: "Bengaluru — 560041",
+  },
+];
 
 const PAYMENT_METHODS = [
   { id: "upi", label: "UPI / GPay / PhonePe", emoji: "📲" },
@@ -12,10 +48,156 @@ const PAYMENT_METHODS = [
   { id: "wallet", label: "Tokajo Wallet", emoji: "👛" },
 ];
 
+// ─── Address Bottom Sheet ─────────────────────────────────────────────────────
+
+function AddressSheet({
+  visible,
+  selectedId,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  selectedId: string;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      {/* Scrim — tap to close */}
+      <Pressable style={sheetStyles.scrim} onPress={onClose} />
+
+      <View style={[sheetStyles.panel, { paddingBottom: insets.bottom + Spacing[16] }]}>
+        {/* Grabber handle */}
+        <View style={sheetStyles.grabber} />
+
+        <Text style={sheetStyles.title}>Select delivery address</Text>
+
+        {SAVED_ADDRESSES.map((addr) => (
+          <Pressable
+            key={addr.id}
+            style={[sheetStyles.addrRow, selectedId === addr.id && sheetStyles.addrRowActive]}
+            onPress={() => {
+              onSelect(addr.id);
+              onClose();
+            }}
+          >
+            <View style={sheetStyles.radioOuter}>
+              {selectedId === addr.id && <View style={sheetStyles.radioInner} />}
+            </View>
+            <Text style={sheetStyles.addrEmoji}>{addr.emoji}</Text>
+            <View style={sheetStyles.addrText}>
+              <Text style={sheetStyles.addrTag}>{addr.tag}</Text>
+              <Text style={sheetStyles.addrLine}>{addr.line1}</Text>
+              <Text style={sheetStyles.addrLine}>{addr.line2}</Text>
+            </View>
+          </Pressable>
+        ))}
+
+        <Pressable style={sheetStyles.addNewBtn} onPress={onClose}>
+          <Text style={sheetStyles.addNewText}>+ Add new address</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  );
+}
+
+const sheetStyles = StyleSheet.create({
+  scrim: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  panel: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingTop: Spacing[12],
+    paddingHorizontal: Spacing[16],
+    ...Shadow.sheet,
+  },
+  grabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: "center",
+    marginBottom: Spacing[16],
+  },
+  title: {
+    fontSize: FontSize.h2,
+    fontWeight: FontWeight.h2,
+    color: Colors.textPrimary,
+    marginBottom: Spacing[16],
+  },
+  addrRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing[12],
+    padding: Spacing[12],
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing[10],
+  },
+  addrRowActive: {
+    borderColor: Colors.brandGreen,
+    backgroundColor: Colors.greenTint,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: Colors.brandGreen,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 3,
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: Colors.brandGreen,
+  },
+  addrEmoji: { fontSize: 20, marginTop: 1 },
+  addrText: { flex: 1 },
+  addrTag: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  addrLine: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    lineHeight: 17,
+  },
+  addNewBtn: {
+    paddingVertical: Spacing[14],
+    alignItems: "center",
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.brandGreen,
+    borderStyle: "dashed",
+    marginTop: Spacing[4],
+    marginBottom: Spacing[4],
+  },
+  addNewText: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    color: Colors.brandGreen,
+  },
+});
+
+// ─── Checkout Screen ──────────────────────────────────────────────────────────
+
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [selectedPayment, setSelectedPayment] = useState("upi");
+  const [selectedAddressId, setSelectedAddressId] = useState("a1");
+  const [addressSheetVisible, setAddressSheetVisible] = useState(false);
+
   const items = useCartStore((s) => s.items);
   const totalPrice = useCartStore((s) => s.totalPrice());
   const totalSavings = useCartStore((s) => s.totalSavings());
@@ -24,6 +206,9 @@ export default function CheckoutScreen() {
   const deliveryFee = totalPrice >= 99 ? 0 : 29;
   const handlingFee = 5;
   const grandTotal = totalPrice + deliveryFee + handlingFee;
+
+  const selectedAddress =
+    SAVED_ADDRESSES.find((a) => a.id === selectedAddressId) ?? SAVED_ADDRESSES[0];
 
   const handlePlaceOrder = () => {
     Alert.alert(
@@ -34,7 +219,7 @@ export default function CheckoutScreen() {
           text: "Track Order",
           onPress: () => {
             clearCart();
-            router.replace("/(tabs)/account");
+            router.replace("/orders/ORD001");
           },
         },
       ],
@@ -43,6 +228,14 @@ export default function CheckoutScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Address sheet */}
+      <AddressSheet
+        visible={addressSheetVisible}
+        selectedId={selectedAddressId}
+        onSelect={setSelectedAddressId}
+        onClose={() => setAddressSheetVisible(false)}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
@@ -60,12 +253,18 @@ export default function CheckoutScreen() {
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>
             <Text style={styles.cardTitle}>📍 Delivery address</Text>
-            <Pressable>
+            <Pressable onPress={() => setAddressSheetVisible(true)}>
               <Text style={styles.changeBtn}>Change</Text>
             </Pressable>
           </View>
-          <Text style={styles.addressName}>Home</Text>
-          <Text style={styles.addressDetail}>123, MG Road, Indiranagar, Bengaluru — 560038</Text>
+          <View style={styles.addrTagRow}>
+            <Text style={styles.addrEmoji}>{selectedAddress?.emoji}</Text>
+            <Text style={styles.addressName}>{selectedAddress?.tag}</Text>
+          </View>
+          <Text style={styles.addressDetail}>
+            {selectedAddress?.line1},{"\n"}
+            {selectedAddress?.line2}
+          </Text>
           <View style={styles.addressTag}>
             <Text style={styles.addressTagText}>Delivery in 10 minutes</Text>
           </View>
@@ -163,6 +362,8 @@ export default function CheckoutScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -178,9 +379,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     gap: Spacing[8],
   },
-  backBtn: {
-    padding: Spacing[4],
-  },
+  backBtn: { padding: Spacing[4] },
   backBtnText: {
     fontSize: 24,
     fontWeight: "700",
@@ -220,6 +419,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.brandGreen,
   },
+  addrTagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[6] ?? 6,
+  },
+  addrEmoji: { fontSize: 16 },
   addressName: {
     fontSize: FontSize.body,
     fontWeight: "700",
@@ -251,16 +456,12 @@ const styles = StyleSheet.create({
     gap: Spacing[8],
     paddingVertical: Spacing[4],
   },
-  orderItemEmoji: {
-    fontSize: 20,
-    width: 28,
-    textAlign: "center",
-  },
+  orderItemEmoji: { fontSize: 20, width: 28, textAlign: "center" },
   orderItemName: {
     flex: 1,
     fontSize: FontSize.caption,
-    color: Colors.textPrimary,
     fontWeight: "600",
+    color: Colors.textPrimary,
   },
   orderItemQty: {
     fontSize: FontSize.caption,
@@ -282,7 +483,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing[4],
   },
 
-  // Payment methods
+  // Payment
   paymentMethod: {
     flexDirection: "row",
     alignItems: "center",
@@ -312,40 +513,33 @@ const styles = StyleSheet.create({
     borderRadius: 4.5,
     backgroundColor: Colors.brandGreen,
   },
-  paymentEmoji: {
-    fontSize: 20,
-  },
+  paymentEmoji: { fontSize: 20 },
   paymentLabel: {
     fontSize: FontSize.body,
     fontWeight: "600",
     color: Colors.textPrimary,
   },
 
-  // Coupon card
+  // Coupon
   couponCard: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     padding: Spacing[16],
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     borderStyle: "dashed",
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing[12],
   },
-  couponEmoji: {
-    fontSize: 20,
-  },
+  couponEmoji: { fontSize: 20 },
   couponText: {
     flex: 1,
     fontSize: FontSize.body,
     fontWeight: "600",
     color: Colors.brandGreen,
   },
-  couponChevron: {
-    fontSize: 20,
-    color: Colors.textTertiary,
-  },
+  couponChevron: { fontSize: 20, color: Colors.textTertiary },
 
   // Bill
   billRow: {
@@ -408,9 +602,7 @@ const styles = StyleSheet.create({
     gap: Spacing[16],
     ...Shadow.sticky,
   },
-  bottomInfo: {
-    flex: 1,
-  },
+  bottomInfo: { flex: 1 },
   bottomTotal: {
     fontSize: 20,
     fontWeight: "800",
@@ -424,7 +616,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brandGreen,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing[24],
-    paddingVertical: Spacing[14] ?? 14,
+    paddingVertical: Spacing[14],
     alignItems: "center",
     justifyContent: "center",
   },

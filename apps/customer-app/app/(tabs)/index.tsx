@@ -1,219 +1,139 @@
-import React, { useRef, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Dimensions,
-} from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, Dimensions } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  interpolate,
-} from "react-native-reanimated";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
-import { SectionRail } from "../../src/components/SectionRail";
-import {
-  categories,
-  products,
-  banners,
-  getFeaturedProducts,
-  getProductsByCategory,
-} from "../../src/lib/mockData";
+import { homeSections, homeShortcuts, type HomeTile } from "../../src/lib/mockData";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-const BANNER_W = SCREEN_W - Spacing[16] * 2;
+const GRID_PAD = 12;
+const GRID_GAP = 12;
+const COLS = 4;
+const TILE_W = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP * (COLS - 1)) / COLS);
 
-const SEARCH_PLACEHOLDERS = ['Search "milk"', 'Search "onion"', 'Search "bread"', 'Search "cola"'];
+const SEARCH_PLACEHOLDERS = [
+  'Search "atta"',
+  'Search "dal"',
+  'Search "coke"',
+  'Search "milk"',
+  'Search "bread"',
+];
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
-  const [bannerIdx, setBannerIdx] = useState(0);
-  const scrollY = useSharedValue(0);
+  const [activeShortcut, setActiveShortcut] = useState("all");
 
-  // Cycle through search placeholders
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = setInterval(() => {
       setPlaceholderIdx((i) => (i + 1) % SEARCH_PLACEHOLDERS.length);
     }, 2500);
     return () => clearInterval(timer);
   }, []);
 
-  const onScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      scrollY.value = e.nativeEvent.contentOffset.y;
-    },
-    [scrollY],
-  );
-
-  const headerAnimStyle = useAnimatedStyle(() => ({
-    shadowOpacity: interpolate(scrollY.value, [0, 60], [0, 0.1]),
-  }));
-
-  const featuredProducts = getFeaturedProducts();
-  const dairyProducts = getProductsByCategory("dairy");
-  const snackProducts = getProductsByCategory("snacks");
-  const beverageProducts = getProductsByCategory("beverages");
+  const openTile = (tile: HomeTile) => {
+    router.push({
+      pathname: "/(tabs)/categories",
+      params: { categoryId: tile.categoryId },
+    });
+  };
 
   return (
     <View style={styles.root}>
-      {/* Yellow header */}
-      <Animated.View style={[styles.header, { paddingTop: insets.top }, headerAnimStyle]}>
-        {/* Row 1: delivery + address + avatar */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerRow1}>
           <View style={styles.headerLeft}>
-            <Text style={styles.deliveryHeadline}>Delivery in 10 minutes</Text>
+            <View style={styles.deliveryRow}>
+              <Text style={styles.deliveryEmoji}>⚡</Text>
+              <Text style={styles.deliveryHeadline}>Delivery in 10 minutes</Text>
+            </View>
             <Pressable style={styles.addressRow}>
+              <Text style={styles.addressLabel}>Home</Text>
               <Text style={styles.addressText} numberOfLines={1}>
-                📍 Home — 123, MG Road, Bengaluru
+                {" "}
+                — 123, MG Road, Bengaluru
               </Text>
-              <Text style={styles.addressChevron}>›</Text>
+              <Text style={styles.addressChevron}>⌄</Text>
             </Pressable>
           </View>
-          <Pressable style={styles.avatarBtn} onPress={() => router.push("/(tabs)/account")}>
-            <Text style={styles.avatarEmoji}>👤</Text>
+          <Pressable
+            style={styles.profileBtn}
+            onPress={() => router.push("/(tabs)/account")}
+            accessibilityLabel="Profile"
+          >
+            <View style={styles.profileHead} />
+            <View style={styles.profileBody} />
           </Pressable>
         </View>
 
-        {/* Row 2: search bar */}
         <Pressable style={styles.searchBar} onPress={() => router.push("/search")}>
           <Text style={styles.searchIcon}>🔍</Text>
           <Text style={styles.searchPlaceholder}>{SEARCH_PLACEHOLDERS[placeholderIdx]}</Text>
           <Text style={styles.micIcon}>🎙️</Text>
         </Pressable>
-      </Animated.View>
+      </View>
 
-      {/* Scrollable content */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 88 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Banners carousel */}
-        <View style={styles.bannerSection}>
-          <FlatList
-            data={banners}
-            keyExtractor={(b) => b.id}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / BANNER_W);
-              setBannerIdx(idx);
-            }}
-            ItemSeparatorComponent={() => <View style={{ width: Spacing[12] }} />}
-            contentContainerStyle={{ paddingHorizontal: Spacing[16] }}
-            renderItem={({ item }) => (
-              <Pressable style={[styles.banner, { backgroundColor: item.color }]}>
-                <View style={styles.bannerContent}>
-                  <Text style={styles.bannerTitle}>{item.title}</Text>
-                  <Text style={styles.bannerSubtitle}>{item.subtitle}</Text>
-                  <View style={styles.bannerCta}>
-                    <Text style={styles.bannerCtaText}>Order now</Text>
-                  </View>
-                </View>
-                <Text style={styles.bannerEmoji}>{item.image}</Text>
-              </Pressable>
-            )}
-          />
-          {/* Dots */}
-          <View style={styles.dotsRow}>
-            {banners.map((_, i) => (
-              <View key={i} style={[styles.dot, i === bannerIdx && styles.dotActive]} />
-            ))}
-          </View>
-        </View>
-
-        {/* Categories grid */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Shop by category</Text>
-            <Pressable onPress={() => router.push("/(tabs)/categories")}>
-              <Text style={styles.seeAll}>see all</Text>
-            </Pressable>
-          </View>
-          <View style={styles.categoryGrid}>
-            {categories.slice(0, 8).map((cat) => (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.shortcutRow}
+        >
+          {homeShortcuts.map((item) => {
+            const active = item.id === activeShortcut;
+            return (
               <Pressable
-                key={cat.id}
-                style={styles.categoryTile}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(tabs)/categories",
-                    params: { categoryId: cat.id },
-                  })
-                }
+                key={item.id}
+                style={styles.shortcut}
+                onPress={() => setActiveShortcut(item.id)}
               >
-                <View style={[styles.catIconBg, { backgroundColor: cat.color }]}>
-                  <Text style={styles.catEmoji}>{cat.image}</Text>
+                {item.badge ? (
+                  <Text style={styles.shortcutBadge}>{item.badge}</Text>
+                ) : (
+                  <View style={styles.badgeSpacer} />
+                )}
+                <View style={[styles.shortcutIcon, active && styles.shortcutIconActive]}>
+                  <Text style={styles.shortcutEmoji}>{item.emoji}</Text>
                 </View>
-                <Text style={styles.catLabel}>{cat.name}</Text>
+                <Text style={[styles.shortcutLabel, active && styles.shortcutLabelActive]}>
+                  {item.label}
+                </Text>
+                {active ? (
+                  <View style={styles.shortcutUnderline} />
+                ) : (
+                  <View style={styles.underlineSpacer} />
+                )}
               </Pressable>
-            ))}
+            );
+          })}
+        </ScrollView>
+
+        {homeSections.map((section) => (
+          <View key={section.id} style={styles.section}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <View style={styles.grid}>
+              {section.tiles.map((item) => (
+                <Pressable key={item.id} style={styles.tile} onPress={() => openTile(item)}>
+                  <View style={styles.tileArt}>
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.tileImage}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  </View>
+                  <Text style={styles.tileLabel}>{item.name}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
-        </View>
-
-        {/* Free delivery nudge */}
-        <View style={styles.nudge}>
-          <Text style={styles.nudgeText}>🚚 Free delivery on all orders above ₹99</Text>
-        </View>
-
-        {/* Product rails */}
-        <SectionRail
-          title="Best sellers"
-          products={featuredProducts}
-          onSeeAll={() => router.push("/(tabs)/categories")}
-        />
-
-        <SectionRail
-          title="Dairy & Breakfast"
-          products={dairyProducts}
-          onSeeAll={() =>
-            router.push({
-              pathname: "/(tabs)/categories",
-              params: { categoryId: "dairy" },
-            })
-          }
-        />
-
-        {/* Offer strip */}
-        <View style={styles.offerStrip}>
-          <Text style={styles.offerText}>🎉 Up to 30% off on snacks &amp; beverages</Text>
-        </View>
-
-        <SectionRail
-          title="Snacks & Munchies"
-          products={snackProducts}
-          onSeeAll={() =>
-            router.push({
-              pathname: "/(tabs)/categories",
-              params: { categoryId: "snacks" },
-            })
-          }
-        />
-
-        <SectionRail
-          title="Cold Drinks & Juices"
-          products={beverageProducts}
-          onSeeAll={() =>
-            router.push({
-              pathname: "/(tabs)/categories",
-              params: { categoryId: "beverages" },
-            })
-          }
-        />
+        ))}
       </ScrollView>
     </View>
   );
@@ -222,10 +142,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.canvas,
+    backgroundColor: Colors.surface,
   },
-
-  // Header
   header: {
     backgroundColor: Colors.brandYellow,
     paddingHorizontal: Spacing[16],
@@ -236,12 +154,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: Spacing[12],
+    marginBottom: Spacing[10],
     marginTop: Spacing[8],
   },
   headerLeft: {
     flex: 1,
     marginRight: Spacing[12],
+  },
+  deliveryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  deliveryEmoji: {
+    fontSize: 16,
   },
   deliveryHeadline: {
     fontSize: FontSize.h1,
@@ -252,7 +178,12 @@ const styles = StyleSheet.create({
   addressRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 3,
+  },
+  addressLabel: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    color: Colors.brandBlack,
   },
   addressText: {
     fontSize: FontSize.caption,
@@ -262,20 +193,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addressChevron: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.brandBlack,
     marginLeft: 2,
+    fontWeight: "700",
   },
-  avatarBtn: {
+  profileBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.08)",
+    backgroundColor: Colors.surface,
     alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
+    ...Shadow.card,
   },
-  avatarEmoji: {
-    fontSize: 20,
+  profileHead: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.brandBlack,
+    marginTop: 7,
+  },
+  profileBody: {
+    width: 22,
+    height: 12,
+    borderTopLeftRadius: 11,
+    borderTopRightRadius: 11,
+    backgroundColor: Colors.brandBlack,
+    marginTop: 2,
   },
   searchBar: {
     flexDirection: "row",
@@ -287,167 +232,110 @@ const styles = StyleSheet.create({
     gap: Spacing[8],
     ...Shadow.card,
   },
-  searchIcon: {
-    fontSize: 16,
-  },
+  searchIcon: { fontSize: 16 },
   searchPlaceholder: {
     flex: 1,
     fontSize: FontSize.body,
     fontWeight: FontWeight.body,
     color: Colors.textTertiary,
   },
-  micIcon: {
-    fontSize: 18,
-  },
-
-  // Scroll
+  micIcon: { fontSize: 18 },
   scroll: {
     flex: 1,
+    backgroundColor: Colors.surface,
   },
   scrollContent: {
-    paddingTop: Spacing[16],
-    gap: 0,
+    paddingTop: Spacing[8],
   },
-
-  // Banners
-  bannerSection: {
-    marginBottom: Spacing[20],
+  shortcutRow: {
+    paddingHorizontal: Spacing[8],
+    paddingBottom: Spacing[8],
+    gap: 4,
   },
-  banner: {
-    width: BANNER_W,
-    borderRadius: Radius.md,
-    flexDirection: "row",
+  shortcut: {
+    width: 72,
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing[20],
-    paddingVertical: Spacing[20],
-    minHeight: 130,
-    overflow: "hidden",
   },
-  bannerContent: {
-    flex: 1,
+  badgeSpacer: {
+    height: 14,
   },
-  bannerTitle: {
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
-    color: Colors.brandBlack,
-    lineHeight: 24,
-    marginBottom: Spacing[4],
+  shortcutBadge: {
+    height: 14,
+    fontSize: 10,
+    fontWeight: "800",
+    color: Colors.danger,
+    lineHeight: 14,
   },
-  bannerSubtitle: {
-    fontSize: FontSize.caption,
-    fontWeight: FontWeight.caption,
-    color: Colors.textSecondary,
-    marginBottom: Spacing[12],
-  },
-  bannerCta: {
-    backgroundColor: Colors.brandGreen,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing[16],
-    paddingVertical: Spacing[8],
-    alignSelf: "flex-start",
-  },
-  bannerCtaText: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.surface,
-  },
-  bannerEmoji: {
-    fontSize: 60,
-  },
-  dotsRow: {
-    flexDirection: "row",
+  shortcutIcon: {
+    width: 44,
+    height: 36,
+    alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    marginTop: Spacing[10] ?? 10,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.textTertiary,
+  shortcutIconActive: {
+    backgroundColor: Colors.brandYellow,
+    borderRadius: Radius.md,
   },
-  dotActive: {
-    backgroundColor: Colors.brandGreen,
-    width: 18,
+  shortcutEmoji: {
+    fontSize: 22,
   },
-
-  // Section
-  section: {
-    paddingHorizontal: Spacing[16],
-    marginBottom: Spacing[20],
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing[12],
-  },
-  sectionTitle: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
+  shortcutLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  seeAll: {
-    fontSize: FontSize.caption,
-    fontWeight: FontWeight.h2,
-    color: Colors.brandGreen,
+  shortcutLabelActive: {
+    fontWeight: "800",
   },
-
-  // Category grid
-  categoryGrid: {
+  shortcutUnderline: {
+    marginTop: 4,
+    height: 3,
+    width: 28,
+    borderRadius: 2,
+    backgroundColor: Colors.brandYellow,
+  },
+  underlineSpacer: {
+    marginTop: 4,
+    height: 3,
+  },
+  section: {
+    paddingHorizontal: GRID_PAD,
+    paddingTop: Spacing[16],
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    marginBottom: Spacing[12],
+  },
+  grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing[8],
+    columnGap: GRID_GAP,
+    rowGap: 14,
   },
-  categoryTile: {
-    width: "22%",
+  tile: {
+    width: TILE_W,
     alignItems: "center",
-    gap: Spacing[4],
   },
-  catIconBg: {
+  tileArt: {
+    width: TILE_W,
+    height: TILE_W,
+    borderRadius: 16,
+    backgroundColor: "#E7F1F8",
+    overflow: "hidden",
+  },
+  tileImage: {
     width: "100%",
-    aspectRatio: 1,
-    borderRadius: Radius.md,
-    alignItems: "center",
-    justifyContent: "center",
+    height: "100%",
   },
-  catEmoji: {
-    fontSize: 32,
-  },
-  catLabel: {
-    fontSize: 10,
+  tileLabel: {
+    marginTop: 6,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "600",
     color: Colors.textPrimary,
     textAlign: "center",
-    lineHeight: 13,
-  },
-
-  // Nudge strip
-  nudge: {
-    marginHorizontal: Spacing[16],
-    marginBottom: Spacing[20],
-    backgroundColor: Colors.yellowTint,
-    borderRadius: Radius.sm,
-    padding: Spacing[12],
-  },
-  nudgeText: {
-    fontSize: FontSize.caption,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-
-  // Offer strip
-  offerStrip: {
-    marginHorizontal: Spacing[16],
-    marginBottom: Spacing[20],
-    backgroundColor: Colors.greenTint,
-    borderRadius: Radius.sm,
-    padding: Spacing[12],
-  },
-  offerText: {
-    fontSize: FontSize.caption,
-    fontWeight: "600",
-    color: Colors.brandGreen,
   },
 });

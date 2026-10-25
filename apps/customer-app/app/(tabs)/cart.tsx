@@ -35,7 +35,7 @@ export default function CartScreen() {
           <Text style={styles.emptyEmoji}>🛒</Text>
           <Text style={styles.emptyTitle}>Your cart is empty!</Text>
           <Text style={styles.emptySubtitle}>Add items to your cart to proceed with delivery</Text>
-          <Pressable style={styles.shopBtn} onPress={() => router.push("/(tabs)/index")}>
+          <Pressable style={styles.shopBtn} onPress={() => router.push("/(tabs)")}>
             <Text style={styles.shopBtnText}>Start Shopping</Text>
           </Pressable>
         </View>
@@ -60,9 +60,20 @@ export default function CartScreen() {
       >
         {/* Delivery strip */}
         <View style={styles.deliveryStrip}>
-          <Text style={styles.deliveryStripText}>
-            🕐 Delivery in 10 minutes · Shipment of {totalItems} item{totalItems !== 1 ? "s" : ""}
-          </Text>
+          <View style={styles.deliveryStripLeft}>
+            <View style={styles.clockIconBg}>
+              <Text style={styles.clockEmoji}>⏱</Text>
+            </View>
+            <View>
+              <Text style={styles.deliveryTimeText}>Delivery in 10 minutes</Text>
+              <Text style={styles.shipmentText}>
+                Shipment of {totalItems} item{totalItems !== 1 ? "s" : ""}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.etaPill}>
+            <Text style={styles.etaPillText}>ON TIME</Text>
+          </View>
         </View>
 
         {/* Cart items */}
@@ -105,7 +116,9 @@ export default function CartScreen() {
               ItemSeparatorComponent={() => <View style={{ width: Spacing[8] }} />}
               renderItem={({ item }) => (
                 <View style={styles.suggestionCard}>
-                  <Text style={styles.suggestionEmoji}>{item.image}</Text>
+                  <View style={styles.suggestionImgBg}>
+                    <Text style={styles.suggestionEmoji}>{item.image}</Text>
+                  </View>
                   <Text style={styles.suggestionName} numberOfLines={2}>
                     {item.name}
                   </Text>
@@ -205,15 +218,26 @@ export default function CartScreen() {
         </View>
       </ScrollView>
 
-      {/* Bottom bar */}
+      {/* Bottom bar — address + total + proceed */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing[8] }]}>
-        <View style={styles.bottomBarLeft}>
-          <Text style={styles.bottomTotal}>₹{grandTotal}</Text>
-          <Text style={styles.bottomTotalLabel}>Total (incl. all taxes)</Text>
-        </View>
-        <Pressable style={styles.proceedBtn} onPress={() => router.push("/checkout")}>
-          <Text style={styles.proceedBtnText}>Proceed to Pay ›</Text>
+        {/* Address row */}
+        <Pressable style={styles.bottomAddressRow}>
+          <Text style={styles.bottomAddressEmoji}>📍</Text>
+          <Text style={styles.bottomAddressText} numberOfLines={1}>
+            Delivering to <Text style={styles.bottomAddressBold}>Home</Text> — 123, MG Road
+          </Text>
+          <Text style={styles.bottomAddressChevron}>›</Text>
         </Pressable>
+        {/* Total + button */}
+        <View style={styles.bottomBarRow}>
+          <View style={styles.bottomBarLeft}>
+            <Text style={styles.bottomTotal}>₹{grandTotal}</Text>
+            <Text style={styles.bottomTotalLabel}>Total (incl. all taxes)</Text>
+          </View>
+          <Pressable style={styles.proceedBtn} onPress={() => router.push("/checkout")}>
+            <Text style={styles.proceedBtnText}>Proceed to Pay ›</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -256,11 +280,50 @@ const styles = StyleSheet.create({
     padding: Spacing[12],
     borderWidth: 1,
     borderColor: Colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    ...Shadow.card,
   },
-  deliveryStripText: {
-    fontSize: FontSize.caption,
-    fontWeight: "600",
+  deliveryStripLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[10],
+  },
+  clockIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.yellowTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clockEmoji: {
+    fontSize: 18,
+  },
+  deliveryTimeText: {
+    fontSize: 13,
+    fontWeight: "700",
     color: Colors.textPrimary,
+  },
+  shipmentText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  etaPill: {
+    backgroundColor: Colors.greenTint,
+    borderWidth: 1,
+    borderColor: Colors.greenBorder,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  etaPillText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: Colors.brandGreen,
+    letterSpacing: 0.5,
   },
 
   // Card
@@ -346,11 +409,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing[16],
   },
   suggestionCard: {
-    width: 120,
-    backgroundColor: Colors.canvas,
+    width: 130,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.sm,
     padding: Spacing[8],
+    borderWidth: 1,
+    borderColor: Colors.border,
     gap: Spacing[4],
+  },
+  suggestionImgBg: {
+    height: 64,
+    backgroundColor: Colors.canvas,
+    borderRadius: Radius.xs,
+    alignItems: "center",
+    justifyContent: "center",
   },
   suggestionEmoji: {
     fontSize: 32,
@@ -519,13 +591,38 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
+    paddingHorizontal: Spacing[16],
+    paddingTop: Spacing[8],
+    gap: Spacing[8],
+    ...Shadow.sticky,
+  },
+  bottomAddressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[6],
+    paddingVertical: Spacing[6],
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  bottomAddressEmoji: { fontSize: 13 },
+  bottomAddressText: {
+    flex: 1,
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+  },
+  bottomAddressBold: {
+    fontWeight: "700",
+    color: Colors.textPrimary,
+  },
+  bottomAddressChevron: {
+    fontSize: 16,
+    color: Colors.textTertiary,
+  },
+  bottomBarRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing[16],
-    paddingTop: Spacing[12],
     gap: Spacing[16],
-    ...Shadow.sticky,
   },
   bottomBarLeft: {
     flex: 1,
