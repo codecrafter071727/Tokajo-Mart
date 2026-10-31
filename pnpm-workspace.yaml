@@ -23,7 +23,7 @@ catalog:
 
 catalogs:
   web:
-    "@types/react": ^18.3.0
+    "@types/react": ^19.3.0
     "@types/react-dom": ^18.3.0
     next: 15.5.28
     react: ^18.3.1
