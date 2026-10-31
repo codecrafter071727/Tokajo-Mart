@@ -13,7 +13,7 @@
     "db:types": "kysely-codegen --dialect postgres --camel-case --include-pattern \"inventory.*\" --out-file src/db/types.generated.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-sqs": "^3.787.0",
+    "@aws-sdk/client-sqs": "^3.1158.0",
     "@qc/contracts": "workspace:*",
     "@qc/service-kit": "workspace:*",
     "fastify": "catalog:",
