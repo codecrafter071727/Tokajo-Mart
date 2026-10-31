@@ -42,14 +42,14 @@
     "react-native-maps": "1.29.11",
     "react-native-razorpay": "^3.0.0",
     "react-native-reanimated": "4.7.1",
-    "react-native-safe-area-context": "~5.10.1",
+    "react-native-safe-area-context": "~5.11.0",
     "react-native-screens": "~4.30.0",
-    "react-native-worklets": "0.13.0",
+    "react-native-worklets": "0.13.1",
     "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@qc/eslint-config": "workspace:*",
-    "@react-native/metro-config": "0.88.0",
+    "@react-native/metro-config": "0.88.1",
     "@types/node": "catalog:",
     "@types/react": "~19.3.0",
     "eslint": "catalog:",
