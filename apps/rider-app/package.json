@@ -19,7 +19,7 @@
     "@expo/metro-runtime": "~56.0.21",
     "@react-native-firebase/app": "^27.1.0",
     "@react-native-firebase/messaging": "^27.1.0",
-    "@sentry/react-native": "~7.11.0",
+    "@sentry/react-native": "~8.32.0",
     "@supabase/supabase-js": "catalog:",
     "@tanstack/react-query": "catalog:",
     "expo": "~56.0.24",

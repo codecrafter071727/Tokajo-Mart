@@ -20,7 +20,7 @@
     "@react-native-firebase/app": "^27.1.0",
     "@react-native-firebase/messaging": "^27.1.0",
     "@react-native-google-signin/google-signin": "^16.1.5",
-    "@sentry/react-native": "~8.28.0",
+    "@sentry/react-native": "~8.32.0",
     "@supabase/supabase-js": "catalog:",
     "@tanstack/react-query": "catalog:",
     "expo": "~58.0.19",
