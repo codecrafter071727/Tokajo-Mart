@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type OrderStatus = "delivered" | "on_the_way" | "cancelled" | "placed";
 
@@ -64,7 +65,7 @@ const STATUS_CONFIG: Record<
 > = {
   delivered: {
     label: "Delivered",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
     bg: Colors.greenTint,
     emoji: "✅",
   },
@@ -132,7 +133,7 @@ function OrderCard({ order }: { order: OrderSummary }) {
               <Text style={styles.reorderBtnText}>Reorder</Text>
             </Pressable>
           )}
-          <Text style={styles.chevron}>›</Text>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
         </View>
       </View>
     </Pressable>
@@ -148,7 +149,7 @@ export default function OrdersListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>‹</Text>
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>My Orders</Text>
       </View>
@@ -170,7 +171,7 @@ export default function OrdersListScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>📦</Text>
+            <Ionicons name="receipt-outline" size={56} color={Colors.border} />
             <Text style={styles.emptyTitle}>No orders yet</Text>
             <Text style={styles.emptySubtitle}>Your past orders will appear here</Text>
           </View>
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
   reorderBtnText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   chevron: {
     fontSize: 20,

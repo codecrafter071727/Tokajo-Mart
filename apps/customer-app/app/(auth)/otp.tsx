@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
 import { useAuthStore } from "../../src/store/auth";
+import { Ionicons } from "@expo/vector-icons";
 
 const OTP_LENGTH = 4;
 
@@ -64,14 +65,14 @@ export default function OtpScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>‹</Text>
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
       </View>
 
       <View style={styles.content}>
         {/* Yellow icon */}
         <View style={styles.iconCircle}>
-          <Text style={styles.iconEmoji}>📱</Text>
+          <Ionicons name="phone-portrait-outline" size={36} color={Colors.brandText} />
         </View>
 
         <Text style={styles.title}>Verify your number</Text>
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.brandYellow,
+    backgroundColor: Colors.brandTint,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing[8],
@@ -225,12 +226,12 @@ const styles = StyleSheet.create({
   },
   countdownValue: {
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   resendText: {
     fontSize: FontSize.body,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 
   // Verify button

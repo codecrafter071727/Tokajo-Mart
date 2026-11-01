@@ -6,6 +6,8 @@ import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src
 import { AddButton } from "../../src/components/AddButton";
 import { ProductCard } from "../../src/components/ProductCard";
 import { getProductById, products } from "../../src/lib/mockData";
+import { Ionicons } from "@expo/vector-icons";
+import { ProductImage } from "../../src/components/ProductImage";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -32,7 +34,7 @@ export default function ProductDetailScreen() {
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backBtnText}>‹ Back</Text>
+            <Text style={styles.backBtnText}>Go back</Text>
           </Pressable>
         </View>
         <View style={styles.notFound}>
@@ -50,13 +52,13 @@ export default function ProductDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>‹</Text>
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {product.name}
         </Text>
         <Pressable style={styles.shareBtn}>
-          <Text style={styles.shareBtnText}>↗</Text>
+          <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
         </Pressable>
       </View>
 
@@ -74,11 +76,17 @@ export default function ProductDetailScreen() {
           ) : null}
 
           <View style={styles.deliveryPill}>
-            <Text style={styles.deliveryPillText}>⏱ {product.deliveryMins ?? 10} MINS</Text>
+            <Text style={styles.deliveryPillText}>{product.deliveryMins ?? 10} MINS</Text>
           </View>
 
           <View style={styles.imageArea}>
-            <Text style={styles.productEmoji}>{product.image}</Text>
+            <ProductImage
+              imageUrl={product.imageUrl}
+              fit={product.imageFit}
+              emoji={product.image}
+              emojiSize={120}
+              style={StyleSheet.absoluteFill}
+            />
           </View>
 
           {/* Carousel dots (single image) */}
@@ -137,7 +145,7 @@ export default function ProductDetailScreen() {
           <Text style={styles.cardTitle}>Product highlights</Text>
           {HIGHLIGHTS.map((h, i) => (
             <View key={i} style={styles.highlightRow}>
-              <Text style={styles.highlightDot}>✓</Text>
+              <Ionicons name="checkmark-circle" size={16} color={Colors.brandText} />
               <Text style={styles.highlightText}>{h}</Text>
             </View>
           ))}
@@ -147,7 +155,7 @@ export default function ProductDetailScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Why shop from Tokajo Mart?</Text>
           <View style={styles.trustRow}>
-            <Text style={styles.trustEmoji}>⚡</Text>
+            <Ionicons name="flash" size={22} color={Colors.brandText} />
             <View style={styles.trustText}>
               <Text style={styles.trustHeading}>Superfast 10-Minute Delivery</Text>
               <Text style={styles.trustSub}>
@@ -157,7 +165,7 @@ export default function ProductDetailScreen() {
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustRow}>
-            <Text style={styles.trustEmoji}>🏷️</Text>
+            <Ionicons name="pricetag" size={22} color={Colors.brandText} />
             <View style={styles.trustText}>
               <Text style={styles.trustHeading}>Best Prices & Deals</Text>
               <Text style={styles.trustSub}>
@@ -167,7 +175,7 @@ export default function ProductDetailScreen() {
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustRow}>
-            <Text style={styles.trustEmoji}>💯</Text>
+            <Ionicons name="shield-checkmark" size={22} color={Colors.brandText} />
             <View style={styles.trustText}>
               <Text style={styles.trustHeading}>100% Fresh & Authentic</Text>
               <Text style={styles.trustSub}>
@@ -301,8 +309,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   imageArea: {
-    width: SCREEN_W * 0.55,
-    height: SCREEN_W * 0.55,
+    width: SCREEN_W * 0.7,
+    height: SCREEN_W * 0.7,
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -374,7 +385,7 @@ const styles = StyleSheet.create({
   savingsBadgeText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   taxNote: {
     fontSize: 11,
@@ -405,7 +416,7 @@ const styles = StyleSheet.create({
   accordionTitle: {
     fontSize: FontSize.body,
     fontWeight: FontWeight.h2,
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   accordionChevron: {
     fontSize: 18,
@@ -432,7 +443,7 @@ const styles = StyleSheet.create({
   highlightDot: {
     fontSize: FontSize.body,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
     width: 18,
   },
   highlightText: {
@@ -526,7 +537,7 @@ const styles = StyleSheet.create({
   bottomSavingsText: {
     fontSize: 11,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   bottomTaxNote: {
     fontSize: 11,

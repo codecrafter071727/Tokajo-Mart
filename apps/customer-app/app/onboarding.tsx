@@ -12,6 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
 import { useAuthStore } from "../src/store/auth";
+import { Ionicons } from "@expo/vector-icons";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -22,8 +23,8 @@ const SLIDES = [
     title: "Delivery in\n10 minutes",
     subtitle:
       'Get groceries, snacks, and daily essentials at your doorstep faster than you can say "hunger".',
-    bg: Colors.brandYellow,
-    accent: Colors.brandBlack,
+    bg: Colors.brandTint,
+    accent: Colors.brandGreen,
   },
   {
     id: "2",
@@ -38,8 +39,8 @@ const SLIDES = [
     emoji: "💰",
     title: "Best prices\nin the market",
     subtitle: "Save more with daily deals, coupons, and up to 40% off on 500+ products.",
-    bg: "#EEF4FF",
-    accent: Colors.offerBlue,
+    bg: Colors.yellowTint,
+    accent: Colors.accentText,
   },
 ];
 
@@ -103,7 +104,7 @@ export default function OnboardingScreen() {
       {/* Logo */}
       <AnimatedView style={[styles.logoSection, logoStyle]}>
         <View style={styles.logoCircle}>
-          <Text style={styles.logoEmoji}>🛒</Text>
+          <Ionicons name="flash" size={28} color={Colors.surface} />
         </View>
         <Text style={styles.appName}>Tokajo Mart</Text>
       </AnimatedView>
@@ -152,7 +153,7 @@ export default function OnboardingScreen() {
           onPress={handleNext}
         >
           <Text style={styles.ctaBtnText}>
-            {activeIdx < SLIDES.length - 1 ? "Next  →" : "Get Started"}
+            {activeIdx < SLIDES.length - 1 ? "Next" : "Get started"}
           </Text>
         </Pressable>
 

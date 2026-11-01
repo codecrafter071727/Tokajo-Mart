@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, FlatList } from "react-native";
-import { Colors, FontSize, FontWeight, Spacing } from "../theme";
+import { Ionicons } from "@expo/vector-icons";
+import { Colors, Spacing, typography } from "../theme";
 import { ProductCard } from "./ProductCard";
 import type { Product } from "../lib/mockData";
 
@@ -10,14 +11,22 @@ interface SectionRailProps {
   onSeeAll?: () => void;
 }
 
+const Separator = () => <View style={{ width: Spacing[8] }} />;
+
 export function SectionRail({ title, products, onSeeAll }: SectionRailProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {onSeeAll && (
-          <Pressable onPress={onSeeAll}>
-            <Text style={styles.seeAll}>see all</Text>
+          <Pressable
+            onPress={onSeeAll}
+            style={styles.seeAllBtn}
+            hitSlop={8}
+            accessibilityLabel={`See all ${title}`}
+          >
+            <Text style={styles.seeAll}>See all</Text>
+            <Ionicons name="chevron-forward" size={14} color={Colors.brandText} />
           </Pressable>
         )}
       </View>
@@ -27,7 +36,7 @@ export function SectionRail({ title, products, onSeeAll }: SectionRailProps) {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.rail}
-        ItemSeparatorComponent={() => <View style={{ width: Spacing[8] }} />}
+        ItemSeparatorComponent={Separator}
         renderItem={({ item }) => (
           <View style={styles.cardWrapper}>
             <ProductCard product={item} />
@@ -40,7 +49,7 @@ export function SectionRail({ title, products, onSeeAll }: SectionRailProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: Spacing[12],
+    marginBottom: Spacing[20],
   },
   header: {
     flexDirection: "row",
@@ -50,20 +59,24 @@ const styles = StyleSheet.create({
     marginBottom: Spacing[12],
   },
   title: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
+    ...typography.title,
+    fontWeight: "800",
     color: Colors.textPrimary,
   },
+  seeAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   seeAll: {
-    fontSize: FontSize.caption,
-    fontWeight: FontWeight.h2,
-    color: Colors.brandGreen,
+    ...typography.caption,
+    fontWeight: "700",
+    color: Colors.brandText,
   },
   rail: {
     paddingHorizontal: Spacing[16],
     paddingBottom: 4,
   },
   cardWrapper: {
-    width: 132,
+    width: 136,
   },
 });

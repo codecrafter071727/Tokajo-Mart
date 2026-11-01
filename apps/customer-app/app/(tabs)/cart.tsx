@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { AddButton } from "../../src/components/AddButton";
 import { useCartStore } from "../../src/store/cart";
 import { getSuggestedProducts } from "../../src/lib/mockData";
+import { Ionicons } from "@expo/vector-icons";
+import { ProductImage } from "../../src/components/ProductImage";
 
 const TIP_AMOUNTS = [0, 20, 30, 50];
 
@@ -32,11 +34,13 @@ export default function CartScreen() {
           <Text style={styles.headerTitle}>My Cart</Text>
         </View>
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>🛒</Text>
-          <Text style={styles.emptyTitle}>Your cart is empty!</Text>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="cart-outline" size={56} color={Colors.brandText} />
+          </View>
+          <Text style={styles.emptyTitle}>Your cart is empty</Text>
           <Text style={styles.emptySubtitle}>Add items to your cart to proceed with delivery</Text>
           <Pressable style={styles.shopBtn} onPress={() => router.push("/(tabs)")}>
-            <Text style={styles.shopBtnText}>Start Shopping</Text>
+            <Text style={styles.shopBtnText}>Start shopping</Text>
           </Pressable>
         </View>
       </View>
@@ -62,7 +66,7 @@ export default function CartScreen() {
         <View style={styles.deliveryStrip}>
           <View style={styles.deliveryStripLeft}>
             <View style={styles.clockIconBg}>
-              <Text style={styles.clockEmoji}>⏱</Text>
+              <Ionicons name="flash" size={18} color={Colors.brandText} />
             </View>
             <View>
               <Text style={styles.deliveryTimeText}>Delivery in 10 minutes</Text>
@@ -82,7 +86,13 @@ export default function CartScreen() {
             <View key={item.id}>
               <View style={styles.cartItem}>
                 <View style={styles.cartItemImage}>
-                  <Text style={styles.cartItemEmoji}>{item.image}</Text>
+                  <ProductImage
+                    imageUrl={item.imageUrl}
+                    fit={item.imageFit}
+                    emoji={item.image}
+                    emojiSize={32}
+                    style={StyleSheet.absoluteFill}
+                  />
                 </View>
                 <View style={styles.cartItemInfo}>
                   <Text style={styles.cartItemName} numberOfLines={2}>
@@ -117,7 +127,13 @@ export default function CartScreen() {
               renderItem={({ item }) => (
                 <View style={styles.suggestionCard}>
                   <View style={styles.suggestionImgBg}>
-                    <Text style={styles.suggestionEmoji}>{item.image}</Text>
+                    <ProductImage
+                      imageUrl={item.imageUrl}
+                      fit={item.imageFit}
+                      emoji={item.image}
+                      emojiSize={30}
+                      style={StyleSheet.absoluteFill}
+                    />
                   </View>
                   <Text style={styles.suggestionName} numberOfLines={2}>
                     {item.name}
@@ -136,7 +152,7 @@ export default function CartScreen() {
         {/* Tip section */}
         <View style={styles.card}>
           <View style={styles.tipHeader}>
-            <Text style={styles.tipTitle}>🙏 Tip your delivery partner</Text>
+            <Text style={styles.tipTitle}>Tip your delivery partner</Text>
             <Text style={styles.tipSubtitle}>
               They work hard to deliver on time. Show your appreciation!
             </Text>
@@ -203,7 +219,7 @@ export default function CartScreen() {
 
           {totalSavings > 0 && (
             <View style={styles.savingsStrip}>
-              <Text style={styles.savingsText}>🎉 You saved ₹{totalSavings} on this order</Text>
+              <Text style={styles.savingsText}>You saved ₹{totalSavings} on this order</Text>
             </View>
           )}
         </View>
@@ -218,15 +234,15 @@ export default function CartScreen() {
         </View>
       </ScrollView>
 
-      {/* Bottom bar — address + total + proceed */}
+      {/* Bottom bar - address + total + proceed */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing[8] }]}>
         {/* Address row */}
         <Pressable style={styles.bottomAddressRow}>
-          <Text style={styles.bottomAddressEmoji}>📍</Text>
+          <Ionicons name="location" size={18} color={Colors.brandText} />
           <Text style={styles.bottomAddressText} numberOfLines={1}>
-            Delivering to <Text style={styles.bottomAddressBold}>Home</Text> — 123, MG Road
+            Delivering to <Text style={styles.bottomAddressBold}>Home</Text> - 123, MG Road
           </Text>
-          <Text style={styles.bottomAddressChevron}>›</Text>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
         </Pressable>
         {/* Total + button */}
         <View style={styles.bottomBarRow}>
@@ -235,7 +251,8 @@ export default function CartScreen() {
             <Text style={styles.bottomTotalLabel}>Total (incl. all taxes)</Text>
           </View>
           <Pressable style={styles.proceedBtn} onPress={() => router.push("/checkout")}>
-            <Text style={styles.proceedBtnText}>Proceed to Pay ›</Text>
+            <Text style={styles.proceedBtnText}>Proceed to pay</Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.surface} />
           </Pressable>
         </View>
       </View>
@@ -322,7 +339,7 @@ const styles = StyleSheet.create({
   etaPillText: {
     fontSize: 9,
     fontWeight: "800",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
     letterSpacing: 0.5,
   },
 
@@ -346,7 +363,10 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.canvas,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -418,9 +438,12 @@ const styles = StyleSheet.create({
     gap: Spacing[4],
   },
   suggestionImgBg: {
-    height: 64,
-    backgroundColor: Colors.canvas,
-    borderRadius: Radius.xs,
+    height: 72,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: "hidden",
+    borderRadius: Radius.sm,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -487,7 +510,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   tipChipTextActive: {
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 
   // Bill
@@ -536,7 +559,7 @@ const styles = StyleSheet.create({
   billFree: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   billDivider: {
     height: 1,
@@ -562,7 +585,7 @@ const styles = StyleSheet.create({
   savingsText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
     textAlign: "center",
   },
 
@@ -641,12 +664,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingHorizontal: Spacing[24],
     paddingVertical: Spacing[14] ?? 14,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
   },
   proceedBtnText: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
+    fontSize: FontSize.body + 1,
+    fontWeight: "800",
     color: Colors.surface,
   },
 
@@ -660,6 +685,14 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: {
     fontSize: 80,
+  },
+  emptyIconWrap: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: Colors.brandTint,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyTitle: {
     fontSize: FontSize.h1,

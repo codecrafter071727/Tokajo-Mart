@@ -1,30 +1,72 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, Dimensions } from "react-native";
-import { Image } from "expo-image";
+import React, { useCallback, useRef, useState, useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  FlatList,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
-import { homeSections, homeShortcuts, type HomeTile } from "../../src/lib/mockData";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { setStatusBarStyle } from "expo-status-bar";
+import { Colors, Spacing, Radius, typography } from "../../src/theme";
+import { colors } from "../../src/theme/tokens";
+import { TAB_RESERVE } from "../../src/theme/tabs";
+import { SectionRail } from "../../src/components/SectionRail";
+import {
+  categories,
+  banners,
+  getFeaturedProducts,
+  getProductsByCategory,
+  getRecentlyViewedProducts,
+} from "../../src/lib/mockData";
+import { ProductImage } from "../../src/components/ProductImage";
 
-const { width: SCREEN_W } = Dimensions.get("window");
-const GRID_PAD = 12;
-const GRID_GAP = 12;
-const COLS = 4;
-const TILE_W = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP * (COLS - 1)) / COLS);
+const BANNER_GAP = Spacing[12];
+const CAT_GAP = Spacing[12];
+const SECTION_PAD = Spacing[16];
 
 const SEARCH_PLACEHOLDERS = [
-  'Search "atta"',
-  'Search "dal"',
-  'Search "coke"',
   'Search "milk"',
   'Search "bread"',
+  'Search "eggs"',
+  'Search "atta"',
+  'Search "onion"',
 ];
+
+function getTimeOfDayRail(): { title: string; categoryId: string } {
+  const hour = new Date().getHours();
+  if (hour < 11) return { title: "Breakfast essentials", categoryId: "dairy" };
+  if (hour < 17) return { title: "Afternoon snacks", categoryId: "snacks" };
+  return { title: "Late night picks", categoryId: "beverages" };
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width: screenW } = useWindowDimensions();
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
-  const [activeShortcut, setActiveShortcut] = useState("all");
+  const [bannerIdx, setBannerIdx] = useState(0);
+  const bannerRef = useRef<FlatList>(null);
+  const isReturningUser = true;
+
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, []),
+  );
+
+  const bannerW = screenW - SECTION_PAD * 2;
+  const catCols = screenW < 340 ? 3 : screenW >= 700 ? 5 : 4;
+  const catTileW = useMemo(() => {
+    const inner = screenW - SECTION_PAD * 2;
+    return Math.floor((inner - CAT_GAP * (catCols - 1)) / catCols);
+  }, [screenW, catCols]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -33,107 +75,224 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const openTile = (tile: HomeTile) => {
-    router.push({
-      pathname: "/(tabs)/categories",
-      params: { categoryId: tile.categoryId },
-    });
-  };
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setBannerIdx((prev) => {
+        const next = (prev + 1) % banners.length;
+        bannerRef.current?.scrollToIndex({ index: next, animated: true });
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const buyAgain = getRecentlyViewedProducts();
+  const featured = getFeaturedProducts();
+  const dairy = getProductsByCategory("dairy");
+  const snacks = getProductsByCategory("snacks");
+  const beverages = getProductsByCategory("beverages");
+  const timeRail = getTimeOfDayRail();
+  const timeProducts = getProductsByCategory(timeRail.categoryId);
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <View style={styles.headerRow1}>
+      <LinearGradient
+        colors={[colors.brand[700], colors.brand[600]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + Spacing[8] }]}
+      >
+        <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <View style={styles.deliveryRow}>
-              <Text style={styles.deliveryEmoji}>⚡</Text>
-              <Text style={styles.deliveryHeadline}>Delivery in 10 minutes</Text>
+            <View style={styles.etaLabelRow}>
+              <Ionicons name="flash" size={12} color={colors.accent[500]} />
+              <Text style={styles.etaLabel}>Delivery in</Text>
             </View>
-            <Pressable style={styles.addressRow}>
-              <Text style={styles.addressLabel}>Home</Text>
+            <Text style={styles.etaValue}>9 minutes</Text>
+            <Pressable
+              style={styles.addressRow}
+              hitSlop={6}
+              accessibilityLabel="Change delivery address"
+            >
               <Text style={styles.addressText} numberOfLines={1}>
-                {" "}
-                — 123, MG Road, Bengaluru
+                Sector 62, Noida
               </Text>
-              <Text style={styles.addressChevron}>⌄</Text>
+              <Ionicons name="chevron-down" size={14} color={Colors.brandTint} />
             </Pressable>
           </View>
           <Pressable
-            style={styles.profileBtn}
+            style={styles.avatarBtn}
             onPress={() => router.push("/(tabs)/account")}
-            accessibilityLabel="Profile"
+            accessibilityLabel="Account"
           >
-            <View style={styles.profileHead} />
-            <View style={styles.profileBody} />
+            <Ionicons name="person" size={20} color={Colors.brandText} />
           </Pressable>
         </View>
 
-        <Pressable style={styles.searchBar} onPress={() => router.push("/search")}>
-          <Text style={styles.searchIcon}>🔍</Text>
+        <Pressable
+          style={styles.searchBar}
+          onPress={() => router.push("/search")}
+          accessibilityLabel="Search products"
+        >
+          <Ionicons name="search" size={20} color={Colors.brandText} />
           <Text style={styles.searchPlaceholder}>{SEARCH_PLACEHOLDERS[placeholderIdx]}</Text>
-          <Text style={styles.micIcon}>🎙️</Text>
+          <View style={styles.micWrap}>
+            <Ionicons name="mic-outline" size={18} color={Colors.textSecondary} />
+          </View>
         </Pressable>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 88 + insets.bottom }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: TAB_RESERVE + 100 + insets.bottom },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.shortcutRow}
-        >
-          {homeShortcuts.map((item) => {
-            const active = item.id === activeShortcut;
-            return (
-              <Pressable
-                key={item.id}
-                style={styles.shortcut}
-                onPress={() => setActiveShortcut(item.id)}
-              >
-                {item.badge ? (
-                  <Text style={styles.shortcutBadge}>{item.badge}</Text>
-                ) : (
-                  <View style={styles.badgeSpacer} />
-                )}
-                <View style={[styles.shortcutIcon, active && styles.shortcutIconActive]}>
-                  <Text style={styles.shortcutEmoji}>{item.emoji}</Text>
-                </View>
-                <Text style={[styles.shortcutLabel, active && styles.shortcutLabelActive]}>
-                  {item.label}
-                </Text>
-                {active ? (
-                  <View style={styles.shortcutUnderline} />
-                ) : (
-                  <View style={styles.underlineSpacer} />
-                )}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        {isReturningUser ? (
+          <SectionRail
+            title="Buy again"
+            products={buyAgain}
+            onSeeAll={() => router.push("/(tabs)/categories")}
+          />
+        ) : null}
 
-        {homeSections.map((section) => (
-          <View key={section.id} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <View style={styles.grid}>
-              {section.tiles.map((item) => (
-                <Pressable key={item.id} style={styles.tile} onPress={() => openTile(item)}>
-                  <View style={styles.tileArt}>
-                    <Image
-                      source={{ uri: item.image }}
-                      style={styles.tileImage}
-                      contentFit="cover"
-                      transition={200}
-                    />
+        <View style={styles.bannerSection}>
+          <FlatList
+            ref={bannerRef}
+            data={banners}
+            keyExtractor={(b) => b.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={bannerW + BANNER_GAP}
+            decelerationRate="fast"
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / (bannerW + BANNER_GAP));
+              setBannerIdx(Math.min(idx, banners.length - 1));
+            }}
+            contentContainerStyle={{ paddingHorizontal: SECTION_PAD }}
+            ItemSeparatorComponent={() => <View style={{ width: BANNER_GAP }} />}
+            renderItem={({ item }) => (
+              <Pressable style={{ width: bannerW }} accessibilityLabel={item.title}>
+                <LinearGradient
+                  colors={item.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.banner}
+                >
+                  <View style={styles.bannerCircleLg} />
+                  <View style={styles.bannerCircleSm} />
+                  <View style={styles.bannerContent}>
+                    <Text style={styles.bannerTitle}>{item.title}</Text>
+                    <Text style={styles.bannerSubtitle}>{item.subtitle}</Text>
+                    <View style={styles.bannerCta}>
+                      <Text style={styles.bannerCtaText}>{item.cta}</Text>
+                      <Ionicons name="arrow-forward" size={14} color={colors.ink[900]} />
+                    </View>
                   </View>
-                  <Text style={styles.tileLabel}>{item.name}</Text>
-                </Pressable>
-              ))}
-            </View>
+                  <Text style={styles.bannerEmoji}>{item.image}</Text>
+                </LinearGradient>
+              </Pressable>
+            )}
+          />
+          <View style={styles.dotsRow}>
+            {banners.map((_, i) => (
+              <View key={i} style={[styles.dot, i === bannerIdx && styles.dotActive]} />
+            ))}
           </View>
-        ))}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Shop by category</Text>
+            <Pressable onPress={() => router.push("/(tabs)/categories")}>
+              <Text style={styles.seeAll}>See all</Text>
+            </Pressable>
+          </View>
+          <View style={styles.categoryGrid}>
+            {categories.slice(0, catCols * 2).map((cat) => (
+              <Pressable
+                key={cat.id}
+                style={[styles.categoryTile, { width: catTileW }]}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/categories",
+                    params: { categoryId: cat.id },
+                  })
+                }
+              >
+                <View style={[styles.catIconBg, { backgroundColor: cat.color }]}>
+                  <ProductImage
+                    imageUrl={cat.imageUrl}
+                    fit={cat.imageFit}
+                    emoji={cat.image}
+                    emojiSize={34}
+                    style={StyleSheet.absoluteFill}
+                  />
+                </View>
+                <Text style={styles.catLabel} numberOfLines={2}>
+                  {cat.name.replace(/\n/g, " ")}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <SectionRail
+          title={timeRail.title}
+          products={timeProducts}
+          onSeeAll={() =>
+            router.push({
+              pathname: "/(tabs)/categories",
+              params: { categoryId: timeRail.categoryId },
+            })
+          }
+        />
+
+        <SectionRail
+          title="Bestsellers"
+          products={featured}
+          onSeeAll={() => router.push("/(tabs)/categories")}
+        />
+
+        <SectionRail
+          title="Dairy & breakfast"
+          products={dairy}
+          onSeeAll={() =>
+            router.push({
+              pathname: "/(tabs)/categories",
+              params: { categoryId: "dairy" },
+            })
+          }
+        />
+
+        <SectionRail
+          title="Snacks & munchies"
+          products={snacks}
+          onSeeAll={() =>
+            router.push({
+              pathname: "/(tabs)/categories",
+              params: { categoryId: "snacks" },
+            })
+          }
+        />
+
+        <SectionRail
+          title="Cold drinks & juices"
+          products={beverages}
+          onSeeAll={() =>
+            router.push({
+              pathname: "/(tabs)/categories",
+              params: { categoryId: "beverages" },
+            })
+          }
+        />
+
+        <View style={styles.footer}>
+          <Ionicons name="flash" size={20} color={Colors.border} />
+          <Text style={styles.footerBrand}>Delivered in minutes</Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -142,200 +301,220 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.canvas,
   },
   header: {
-    backgroundColor: Colors.brandYellow,
     paddingHorizontal: Spacing[16],
-    paddingBottom: Spacing[12],
+    paddingBottom: Spacing[16],
+    borderBottomLeftRadius: Radius.xl,
+    borderBottomRightRadius: Radius.xl,
     zIndex: 10,
   },
-  headerRow1: {
+  headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: Spacing[10],
-    marginTop: Spacing[8],
+    marginBottom: Spacing[12],
   },
   headerLeft: {
     flex: 1,
     marginRight: Spacing[12],
   },
-  deliveryRow: {
+  etaLabelRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  deliveryEmoji: {
-    fontSize: 16,
+  etaLabel: {
+    ...typography.caption,
+    color: Colors.brandTint,
   },
-  deliveryHeadline: {
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
-    color: Colors.brandBlack,
-    lineHeight: 24,
+  etaValue: {
+    ...typography.display,
+    fontWeight: "800",
+    color: Colors.surface,
   },
   addressRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 3,
-  },
-  addressLabel: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.brandBlack,
+    marginTop: 2,
+    gap: 4,
   },
   addressText: {
-    fontSize: FontSize.caption,
-    fontWeight: FontWeight.caption,
-    color: Colors.brandBlack,
-    opacity: 0.75,
-    flex: 1,
+    ...typography.bodyStrong,
+    color: Colors.brandTint,
+    flexShrink: 1,
   },
-  addressChevron: {
-    fontSize: 14,
-    color: Colors.brandBlack,
-    marginLeft: 2,
-    fontWeight: "700",
-  },
-  profileBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  avatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Colors.surface,
     alignItems: "center",
-    overflow: "hidden",
-    ...Shadow.card,
-  },
-  profileHead: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.brandBlack,
-    marginTop: 7,
-  },
-  profileBody: {
-    width: 22,
-    height: 12,
-    borderTopLeftRadius: 11,
-    borderTopRightRadius: 11,
-    backgroundColor: Colors.brandBlack,
-    marginTop: 2,
+    justifyContent: "center",
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    height: 46,
-    paddingHorizontal: Spacing[12],
+    borderRadius: Radius.pill,
+    height: 48,
+    paddingLeft: Spacing[16],
+    paddingRight: Spacing[8],
     gap: Spacing[8],
-    ...Shadow.card,
+    shadowColor: Colors.brandBlack,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  searchIcon: { fontSize: 16 },
   searchPlaceholder: {
     flex: 1,
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.body,
+    ...typography.body,
     color: Colors.textTertiary,
   },
-  micIcon: { fontSize: 18 },
-  scroll: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-  },
-  scrollContent: {
-    paddingTop: Spacing[8],
-  },
-  shortcutRow: {
-    paddingHorizontal: Spacing[8],
-    paddingBottom: Spacing[8],
-    gap: 4,
-  },
-  shortcut: {
-    width: 72,
-    alignItems: "center",
-  },
-  badgeSpacer: {
-    height: 14,
-  },
-  shortcutBadge: {
-    height: 14,
-    fontSize: 10,
-    fontWeight: "800",
-    color: Colors.danger,
-    lineHeight: 14,
-  },
-  shortcutIcon: {
-    width: 44,
-    height: 36,
+  micWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.canvas,
     alignItems: "center",
     justifyContent: "center",
   },
-  shortcutIconActive: {
-    backgroundColor: Colors.brandYellow,
-    borderRadius: Radius.md,
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingTop: Spacing[20],
   },
-  shortcutEmoji: {
-    fontSize: 22,
+  bannerSection: {
+    marginBottom: Spacing[20],
   },
-  shortcutLabel: {
-    marginTop: 2,
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  shortcutLabelActive: {
-    fontWeight: "800",
-  },
-  shortcutUnderline: {
-    marginTop: 4,
-    height: 3,
-    width: 28,
-    borderRadius: 2,
-    backgroundColor: Colors.brandYellow,
-  },
-  underlineSpacer: {
-    marginTop: 4,
-    height: 3,
-  },
-  section: {
-    paddingHorizontal: GRID_PAD,
-    paddingTop: Spacing[16],
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: Colors.textPrimary,
-    marginBottom: Spacing[12],
-  },
-  grid: {
+  banner: {
+    borderRadius: Radius.lg,
     flexDirection: "row",
-    flexWrap: "wrap",
-    columnGap: GRID_GAP,
-    rowGap: 14,
-  },
-  tile: {
-    width: TILE_W,
     alignItems: "center",
-  },
-  tileArt: {
-    width: TILE_W,
-    height: TILE_W,
-    borderRadius: 16,
-    backgroundColor: "#E7F1F8",
+    justifyContent: "space-between",
+    paddingLeft: Spacing[20],
+    paddingRight: Spacing[12],
+    paddingVertical: Spacing[20],
+    minHeight: 132,
     overflow: "hidden",
   },
-  tileImage: {
-    width: "100%",
-    height: "100%",
+  bannerCircleLg: {
+    position: "absolute",
+    right: -30,
+    top: -40,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
-  tileLabel: {
-    marginTop: 6,
-    fontSize: 11,
-    lineHeight: 14,
+  bannerCircleSm: {
+    position: "absolute",
+    right: 60,
+    bottom: -30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  bannerContent: { flex: 1, alignItems: "flex-start" },
+  bannerTitle: {
+    ...typography.titleLg,
+    fontWeight: "800",
+    color: Colors.surface,
+  },
+  bannerSubtitle: {
+    ...typography.caption,
+    color: "rgba(255,255,255,0.88)",
+    marginTop: Spacing[4],
+    marginBottom: Spacing[12],
+  },
+  bannerCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing[12],
+    paddingVertical: 6,
+  },
+  bannerCtaText: {
+    ...typography.caption,
+    fontWeight: "800",
+    color: Colors.accentText,
+  },
+  bannerEmoji: { fontSize: 64 },
+  dotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: Spacing[10],
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.border,
+  },
+  dotActive: {
+    backgroundColor: Colors.brandGreen,
+    width: 16,
+  },
+  section: {
+    paddingHorizontal: Spacing[16],
+    marginBottom: Spacing[20],
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing[12],
+  },
+  sectionTitle: {
+    ...typography.title,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+  },
+  seeAll: {
+    ...typography.caption,
+    fontWeight: "700",
+    color: Colors.brandText,
+  },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    columnGap: CAT_GAP,
+    rowGap: Spacing[12],
+  },
+  categoryTile: {
+    alignItems: "center",
+  },
+  catIconBg: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  catEmoji: { fontSize: 34 },
+  catLabel: {
+    ...typography.caption,
     fontWeight: "600",
     color: Colors.textPrimary,
     textAlign: "center",
+    marginTop: Spacing[4],
+    width: "100%",
+  },
+  footer: {
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: Spacing[24],
+  },
+  footerBrand: {
+    ...typography.title,
+    fontWeight: "800",
+    color: Colors.border,
   },
 });
