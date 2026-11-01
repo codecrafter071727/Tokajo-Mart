@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev -p 3000",
-    "build": "next build",
-    "start": "next start -p 3000",
+    "dev": "node init && next dev -p 3000",
+    "build": "node init && next build",
+    "start": "node init && next start -p 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
@@ -15,7 +15,7 @@
     "@qc/api-client": "workspace:*",
     "@qc/contracts": "workspace:*",
     "@qc/ui-web": "workspace:*",
-    "@sentry/nextjs": "^11.9.0",
+    "@sentry/nextjs": "^11.10.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "catalog:",
     "@tanstack/react-query": "catalog:",
@@ -34,7 +34,7 @@
     "@types/react": "catalog:web",
     "@types/react-dom": "catalog:web",
     "eslint": "catalog:",
-    "postcss": "^8.5.18",
+    "postcss": "^8.5.32",
     "tailwindcss": "^4.3.0",
     "typescript": "catalog:"
   }

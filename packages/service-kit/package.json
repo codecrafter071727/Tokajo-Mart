@@ -16,7 +16,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "node init && tsup",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
@@ -28,14 +28,14 @@
     "@fastify/swagger": "^9.9.0",
     "@fastify/swagger-ui": "^6.1.0",
     "@fastify/under-pressure": "^9.2.0",
-    "@aws-sdk/client-sns": "^3.787.0",
-    "@aws-sdk/client-sqs": "^3.787.0",
-    "@aws-sdk/client-sts": "^3.787.0",
+    "@aws-sdk/client-sns": "^3.1160.0",
+    "@aws-sdk/client-sqs": "^3.1160.0",
+    "@aws-sdk/client-sts": "^3.1160.0",
     "@qc/contracts": "workspace:*",
     "@sentry/node": "catalog:",
     "fastify": "catalog:",
     "fastify-type-provider-zod": "^7.0.0",
-    "jose": "^6.2.0",
+    "jose": "^6.2.14",
     "kysely": "catalog:",
     "pg": "catalog:",
     "openapi-types": "^12.1.3",
