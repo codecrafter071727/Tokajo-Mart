@@ -7,6 +7,8 @@ export interface CartItem {
   price: number;
   mrp: number;
   image: string;
+  imageUrl?: string;
+  imageFit?: "cover" | "contain";
   quantity: number;
 }
 

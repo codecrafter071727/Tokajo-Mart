@@ -12,6 +12,9 @@ export interface Product {
   deliveryMins?: number;
   description?: string;
   optionsCount?: number;
+  /** Photo URL; falls back to the emoji in `image` when absent */
+  imageUrl?: string;
+  imageFit?: "cover" | "contain";
 }
 
 export interface Category {
@@ -19,6 +22,8 @@ export interface Category {
   name: string;
   image: string;
   color: string;
+  imageUrl?: string;
+  imageFit?: "cover" | "contain";
 }
 
 export interface Banner {
@@ -27,23 +32,93 @@ export interface Banner {
   title: string;
   subtitle: string;
   color: string;
+  /** Gradient stops for the hero banner, dark enough for white text */
+  gradient: [string, string];
+  cta: string;
 }
 
 export const categories: Category[] = [
-  { id: "fruits", name: "Fruits &\nVeggies", image: "🥦", color: "#E8F5E9" },
-  { id: "dairy", name: "Dairy &\nBreakfast", image: "🥛", color: "#FFF8E1" },
-  { id: "snacks", name: "Snacks &\nMunchies", image: "🍿", color: "#FCE4EC" },
-  { id: "beverages", name: "Cold Drinks\n& Juices", image: "🥤", color: "#E3F2FD" },
-  { id: "bakery", name: "Bakery &\nBiscuits", image: "🍞", color: "#FFF3E0" },
-  { id: "cleaning", name: "Cleaning\nEssentials", image: "🧹", color: "#F3E5F5" },
-  { id: "personal", name: "Personal\nCare", image: "🧴", color: "#E0F7FA" },
-  { id: "frozen", name: "Frozen\nFood", image: "🧊", color: "#E8EAF6" },
+  {
+    id: "fruits",
+    name: "Fruits &\nVeggies",
+    image: "🥦",
+    color: "#E8F5E9",
+    imageUrl:
+      "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
+  },
+  {
+    id: "dairy",
+    name: "Dairy &\nBreakfast",
+    image: "🥛",
+    color: "#FFF8E1",
+    imageUrl:
+      "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
+  },
+  {
+    id: "snacks",
+    name: "Snacks &\nMunchies",
+    image: "🍿",
+    color: "#FCE4EC",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/149/150/2016/front_en.5.400.jpg",
+    imageFit: "contain",
+  },
+  {
+    id: "beverages",
+    name: "Cold Drinks\n& Juices",
+    image: "🥤",
+    color: "#E3F2FD",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/394/876/401/2273/front_en.7.400.jpg",
+    imageFit: "contain",
+  },
+  {
+    id: "bakery",
+    name: "Bakery &\nBiscuits",
+    image: "🍞",
+    color: "#FFF3E0",
+    imageUrl:
+      "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
+  },
+  {
+    id: "cleaning",
+    name: "Cleaning\nEssentials",
+    image: "🧹",
+    color: "#F3E5F5",
+    imageUrl:
+      "https://images.unsplash.com/photo-1563453392212-326f5e854473?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
+  },
+  {
+    id: "personal",
+    name: "Personal\nCare",
+    image: "🧴",
+    color: "#E0F7FA",
+    imageUrl:
+      "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
+  },
+  {
+    id: "frozen",
+    name: "Frozen\nFood",
+    image: "🧊",
+    color: "#E8EAF6",
+    imageUrl:
+      "https://images.unsplash.com/photo-1497034825429-c343d7c6a68f?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
+  },
 ];
 
 export const products: Product[] = [
   // Fruits & Veggies
   {
     id: "p1",
+    imageUrl:
+      "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
     name: "Fresho Banana - Robusta",
     unit: "6 pcs (approx 500 g)",
     price: 25,
@@ -55,7 +130,10 @@ export const products: Product[] = [
   },
   {
     id: "p2",
-    name: "Tomato — Hybrid",
+    imageUrl:
+      "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
+    name: "Tomato - Hybrid",
     unit: "500 g",
     price: 18,
     mrp: 24,
@@ -66,6 +144,9 @@ export const products: Product[] = [
   },
   {
     id: "p3",
+    imageUrl:
+      "https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
     name: "Onion",
     unit: "1 kg",
     price: 35,
@@ -77,6 +158,9 @@ export const products: Product[] = [
   },
   {
     id: "p4",
+    imageUrl:
+      "https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?auto=format&fit=crop&w=400&h=400&q=70",
+    imageFit: "cover",
     name: "Green Capsicum",
     unit: "250 g",
     price: 20,
@@ -89,6 +173,9 @@ export const products: Product[] = [
   // Dairy
   {
     id: "p5",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/126/226/0121/front_en.52.400.jpg",
+    imageFit: "contain",
     name: "Amul Taaza Toned Fresh Milk",
     unit: "500 ml",
     price: 29,
@@ -101,6 +188,9 @@ export const products: Product[] = [
   },
   {
     id: "p6",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/126/201/0016/front_en.53.400.jpg",
+    imageFit: "contain",
     name: "Amul Butter",
     unit: "100 g",
     price: 55,
@@ -112,7 +202,10 @@ export const products: Product[] = [
   },
   {
     id: "p7",
-    name: "Britannia Paneer",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/126/218/0115/front_en.6.400.jpg",
+    imageFit: "contain",
+    name: "Amul Malai Paneer Fresh",
     unit: "200 g",
     price: 89,
     mrp: 95,
@@ -123,6 +216,9 @@ export const products: Product[] = [
   },
   {
     id: "p8",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/164/809/7983/front_en.12.400.jpg",
+    imageFit: "contain",
     name: "Mother Dairy Curd",
     unit: "400 g",
     price: 45,
@@ -135,6 +231,9 @@ export const products: Product[] = [
   // Snacks
   {
     id: "p9",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/149/150/2016/front_en.5.400.jpg",
+    imageFit: "contain",
     name: "Lay's Potato Chips Classic Salted",
     unit: "52 g",
     price: 20,
@@ -146,6 +245,9 @@ export const products: Product[] = [
   },
   {
     id: "p10",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/400/440/0694/front_en.4.400.jpg",
+    imageFit: "contain",
     name: "Haldirams Bhujia",
     unit: "200 g",
     price: 55,
@@ -157,6 +259,9 @@ export const products: Product[] = [
   },
   {
     id: "p11",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/172/501/3684/front_en.24.400.jpg",
+    imageFit: "contain",
     name: "Bingo Mad Angles Achaari Masti",
     unit: "135 g",
     price: 30,
@@ -168,6 +273,9 @@ export const products: Product[] = [
   },
   {
     id: "p12",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/870/149/137/2196/front_en.3.400.jpg",
+    imageFit: "contain",
     name: "Kurkure Masala Munch",
     unit: "90 g",
     price: 20,
@@ -179,6 +287,9 @@ export const products: Product[] = [
   // Beverages
   {
     id: "p13",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/394/876/401/2273/front_en.7.400.jpg",
+    imageFit: "contain",
     name: "Coca-Cola Soft Drink",
     unit: "750 ml",
     price: 38,
@@ -191,7 +302,10 @@ export const products: Product[] = [
   },
   {
     id: "p14",
-    name: "Paper Boat Aamras",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/608/060/4690/front_en.22.400.jpg",
+    imageFit: "contain",
+    name: "Paper Boat Swing Coconut Water",
     unit: "250 ml",
     price: 30,
     mrp: 35,
@@ -202,6 +316,9 @@ export const products: Product[] = [
   },
   {
     id: "p15",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/000/009/016/2602/front_en.151.400.jpg",
+    imageFit: "contain",
     name: "Red Bull Energy Drink",
     unit: "250 ml",
     price: 115,
@@ -213,6 +330,9 @@ export const products: Product[] = [
   },
   {
     id: "p16",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/394/876/403/2912/front_en.12.400.jpg",
+    imageFit: "contain",
     name: "Sprite Soft Drink",
     unit: "750 ml",
     price: 38,
@@ -225,6 +345,9 @@ export const products: Product[] = [
   // Bakery
   {
     id: "p17",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/106/309/2686/front_en.3.400.jpg",
+    imageFit: "contain",
     name: "Britannia Good Day Butter Cookies",
     unit: "150 g",
     price: 25,
@@ -236,6 +359,9 @@ export const products: Product[] = [
   },
   {
     id: "p18",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/404/355/1548/front_en.15.400.jpg",
+    imageFit: "contain",
     name: "Modern Atta Bread",
     unit: "400 g",
     price: 45,
@@ -247,6 +373,9 @@ export const products: Product[] = [
   },
   {
     id: "p19",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/172/501/5275/front_en.51.400.jpg",
+    imageFit: "contain",
     name: "Sunfeast Dark Fantasy Fills",
     unit: "150 g",
     price: 50,
@@ -258,6 +387,9 @@ export const products: Product[] = [
   },
   {
     id: "p20",
+    imageUrl:
+      "https://images.openfoodfacts.org/images/products/890/171/913/4845/front_en.11.400.jpg",
+    imageFit: "contain",
     name: "Parle-G Original Glucose Biscuits",
     unit: "1 kg",
     price: 85,
@@ -273,23 +405,29 @@ export const banners: Banner[] = [
   {
     id: "b1",
     image: "🛒",
-    title: "Grocery delivery\nin 10 minutes",
-    subtitle: "Free delivery on first order",
-    color: "#FFF9E5",
+    title: "Groceries in\n9 minutes",
+    subtitle: "Free delivery on your first order",
+    color: "#DCF7E6",
+    gradient: ["#238A47", "#42C86E"],
+    cta: "Order now",
   },
   {
     id: "b2",
     image: "🥦",
-    title: "Fresh vegetables\nevery morning",
+    title: "Fresh veggies,\npicked this morning",
     subtitle: "Farm fresh, delivered daily",
-    color: "#F7FFF9",
+    color: "#F1FCF5",
+    gradient: ["#1B6B3A", "#5BD686"],
+    cta: "Shop fresh",
   },
   {
     id: "b3",
     image: "🎁",
-    title: "Big savings this\nweekend",
-    subtitle: "Up to 40% off on 500+ products",
-    color: "#FFF3E0",
+    title: "Weekend savings\nup to 40% off",
+    subtitle: "On 500+ everyday products",
+    color: "#FFF3CC",
+    gradient: ["#B45309", "#F59E0B"],
+    cta: "Grab deals",
   },
 ];
 

@@ -2,7 +2,8 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
+import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type OrderStatus = "placed" | "confirmed" | "picking" | "on_the_way" | "delivered";
 
@@ -43,7 +44,7 @@ export default function OrderTrackingScreen() {
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backBtnText}>‹</Text>
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Order not found</Text>
         </View>
@@ -59,7 +60,7 @@ export default function OrderTrackingScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>‹</Text>
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Track Order</Text>
         <Text style={styles.orderId}>#{order.id}</Text>
@@ -72,7 +73,7 @@ export default function OrderTrackingScreen() {
       >
         {/* Map placeholder */}
         <View style={styles.mapPlaceholder}>
-          <Text style={styles.mapEmoji}>🗺️</Text>
+          <Ionicons name="map" size={48} color={Colors.brandText} />
           <Text style={styles.mapText}>Live tracking map</Text>
           <Text style={styles.mapSubtext}>Your rider is {order.eta} away</Text>
         </View>
@@ -81,7 +82,7 @@ export default function OrderTrackingScreen() {
         <View style={[styles.card, styles.etaCard]}>
           <View style={styles.etaLeft}>
             <Text style={styles.etaTime}>
-              {order.status === "delivered" ? "🎉 Delivered" : `🕐 ${order.eta}`}
+              {order.status === "delivered" ? "Delivered" : order.eta}
             </Text>
             <Text style={styles.etaLabel}>
               {order.status === "delivered"
@@ -90,7 +91,7 @@ export default function OrderTrackingScreen() {
             </Text>
           </View>
           <View style={styles.etaBadge}>
-            <Text style={styles.etaBadgeEmoji}>🛵</Text>
+            <Ionicons name="bicycle" size={26} color={Colors.brandText} />
           </View>
         </View>
 
@@ -99,14 +100,17 @@ export default function OrderTrackingScreen() {
           <Text style={styles.cardTitle}>Delivery partner</Text>
           <View style={styles.riderRow}>
             <View style={styles.riderAvatar}>
-              <Text style={styles.riderAvatarEmoji}>🧑‍🦱</Text>
+              <Ionicons name="person" size={24} color={Colors.brandText} />
             </View>
             <View style={styles.riderInfo}>
               <Text style={styles.riderName}>{order.rider.name}</Text>
-              <Text style={styles.riderRating}>⭐ {order.rider.rating}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Ionicons name="star" size={13} color={Colors.accent} />
+                <Text style={styles.riderRating}>{order.rider.rating}</Text>
+              </View>
             </View>
             <Pressable style={styles.callBtn}>
-              <Text style={styles.callBtnEmoji}>📞</Text>
+              <Ionicons name="call" size={16} color={Colors.surface} />
               <Text style={styles.callBtnText}>Call</Text>
             </Pressable>
           </View>
@@ -122,7 +126,7 @@ export default function OrderTrackingScreen() {
               <View key={step.key} style={styles.stepRow}>
                 <View style={styles.stepLeft}>
                   <View style={[styles.stepDot, done ? styles.stepDotDone : styles.stepDotPending]}>
-                    <Text style={styles.stepDotEmoji}>{done ? "✓" : ""}</Text>
+                    {done ? <Ionicons name="checkmark" size={14} color={Colors.surface} /> : null}
                   </View>
                   {!isLast && (
                     <View
@@ -170,19 +174,19 @@ export default function OrderTrackingScreen() {
 
         {/* Delivery address */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>📍 Delivery address</Text>
+          <Text style={styles.cardTitle}>Delivery address</Text>
           <Text style={styles.addressText}>{order.deliveryAddress}</Text>
         </View>
 
         {/* Help */}
         <View style={styles.helpCard}>
           <Pressable style={styles.helpBtn}>
-            <Text style={styles.helpBtnEmoji}>💬</Text>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.brandText} />
             <Text style={styles.helpBtnText}>Chat with us</Text>
           </Pressable>
           <View style={styles.helpDivider} />
           <Pressable style={styles.helpBtn}>
-            <Text style={styles.helpBtnEmoji}>❓</Text>
+            <Ionicons name="help-circle-outline" size={18} color={Colors.brandText} />
             <Text style={styles.helpBtnText}>Help with order</Text>
           </Pressable>
         </View>
@@ -274,7 +278,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: Colors.yellowTint,
-    borderColor: Colors.brandYellow,
+    borderColor: Colors.accent,
   },
   etaLeft: { flex: 1 },
   etaTime: {
@@ -291,7 +295,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.brandYellow,
+    backgroundColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -344,7 +348,7 @@ const styles = StyleSheet.create({
   callBtnText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 
   // Status steps
@@ -494,6 +498,6 @@ const styles = StyleSheet.create({
   helpBtnText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 });
