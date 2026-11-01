@@ -16,7 +16,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "node init && tsup",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "gen:api": "openapi-typescript ../../docs/api/openapi.json -o src/generated/schema.ts"

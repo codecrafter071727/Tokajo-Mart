@@ -7,11 +7,11 @@
     "pnpm": ">=10.18.0"
   },
   "scripts": {
-    "build": "turbo run build",
-    "dev": "pnpm dev:services",
-    "dev:services": "node scripts/ensure-local-env.mjs && turbo run dev --filter=./services/*",
-    "dev:web": "node scripts/ensure-local-env.mjs && turbo run dev --filter=@qc/warehouse-web --filter=@qc/admin-web",
-    "dev:all": "node scripts/ensure-local-env.mjs && turbo run dev --filter=./services/* --filter=@qc/warehouse-web --filter=@qc/admin-web",
+    "build": "node init && turbo run build",
+    "dev": "node init && pnpm dev:services",
+    "dev:services": "node init && node scripts/ensure-local-env.mjs && turbo run dev --filter=./services/*",
+    "dev:web": "node init && node scripts/ensure-local-env.mjs && turbo run dev --filter=@qc/warehouse-web --filter=@qc/admin-web",
+    "dev:all": "node init && node scripts/ensure-local-env.mjs && turbo run dev --filter=./services/* --filter=@qc/warehouse-web --filter=@qc/admin-web",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

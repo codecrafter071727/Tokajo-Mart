@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
+import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -25,11 +26,10 @@ export default function LoginScreen() {
       style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Yellow header section */}
       <View style={[styles.heroSection, { paddingTop: insets.top + Spacing[24] }]}>
-        <Text style={styles.logoText}>🛒</Text>
-        <Text style={styles.appName}>Tokajo Mart</Text>
-        <Text style={styles.tagline}>Delivery in 10 minutes</Text>
+        <Ionicons name="flash" size={40} color={Colors.surface} />
+        <Text style={styles.appName}>Dash</Text>
+        <Text style={styles.tagline}>Delivery in 9 minutes</Text>
       </View>
 
       <ScrollView
@@ -47,7 +47,7 @@ export default function LoginScreen() {
           <View style={styles.countryCode}>
             <Text style={styles.countryFlag}>🇮🇳</Text>
             <Text style={styles.countryCodeText}>+91</Text>
-            <Text style={styles.countryChevron}>›</Text>
+            <Ionicons name="chevron-down" size={14} color={Colors.textSecondary} />
           </View>
           <TextInput
             style={styles.phoneInput}
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   heroSection: {
-    backgroundColor: Colors.brandYellow,
+    backgroundColor: Colors.brandGreen,
     alignItems: "center",
     paddingBottom: Spacing[32] ?? 32,
     paddingHorizontal: Spacing[24],
@@ -119,13 +119,13 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: FontSize.display,
     fontWeight: FontWeight.display,
-    color: Colors.brandBlack,
+    color: Colors.surface,
   },
   tagline: {
     fontSize: FontSize.body,
     fontWeight: FontWeight.body,
-    color: Colors.brandBlack,
-    opacity: 0.7,
+    color: Colors.surface,
+    opacity: 0.85,
     marginTop: Spacing[4],
   },
   formContainer: {

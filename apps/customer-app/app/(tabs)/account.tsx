@@ -3,27 +3,58 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/store/auth";
 
 const MENU_ITEMS = [
-  { emoji: "📦", label: "My Orders", subtitle: "Track, reorder & invoices", route: "/orders/list" },
-  { emoji: "📍", label: "Saved Addresses", subtitle: "Indiranagar, HSR Layout...", route: null },
-  { emoji: "💳", label: "Payment Modes", subtitle: "UPI, Cards, Netbanking", route: null },
-  { emoji: "🎁", label: "Offers & Coupons", subtitle: "Exclusive deals for you", route: null },
   {
-    emoji: "⭐",
+    icon: "receipt-outline" as const,
+    label: "My Orders",
+    subtitle: "Track, reorder & invoices",
+    route: "/orders/list",
+  },
+  {
+    icon: "location-outline" as const,
+    label: "Saved Addresses",
+    subtitle: "Indiranagar, HSR Layout...",
+    route: null,
+  },
+  {
+    icon: "card-outline" as const,
+    label: "Payment Modes",
+    subtitle: "UPI, Cards, Netbanking",
+    route: null,
+  },
+  {
+    icon: "pricetag-outline" as const,
+    label: "Offers & Coupons",
+    subtitle: "Exclusive deals for you",
+    route: null,
+  },
+  {
+    icon: "star-outline" as const,
     label: "Rate Us on Play Store",
     subtitle: "Love the speed? Let us know",
     route: null,
   },
   {
-    emoji: "🔔",
+    icon: "notifications-outline" as const,
     label: "Notification Preferences",
     subtitle: "Order updates & alerts",
     route: null,
   },
-  { emoji: "❓", label: "Customer Support & FAQs", subtitle: "24/7 instant chat", route: null },
-  { emoji: "📋", label: "Terms, Privacy & Policies", subtitle: "Tokajo Mart v0.1.0", route: null },
+  {
+    icon: "help-circle-outline" as const,
+    label: "Customer Support & FAQs",
+    subtitle: "24/7 instant chat",
+    route: null,
+  },
+  {
+    icon: "document-text-outline" as const,
+    label: "Terms, Privacy & Policies",
+    subtitle: "Tokajo Mart v0.1.0",
+    route: null,
+  },
 ];
 
 export default function AccountScreen() {
@@ -36,7 +67,15 @@ export default function AccountScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Account</Text>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={styles.backBtn}
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>My account</Text>
       </View>
 
       <ScrollView
@@ -47,7 +86,7 @@ export default function AccountScreen() {
         {/* Profile card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarEmoji}>👤</Text>
+            <Ionicons name="person" size={28} color={Colors.brandText} />
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user.name}</Text>
@@ -62,7 +101,7 @@ export default function AccountScreen() {
         <View style={styles.walletCard}>
           <View style={styles.walletLeft}>
             <View style={styles.walletIconBg}>
-              <Text style={styles.walletIconEmoji}>👛</Text>
+              <Ionicons name="wallet" size={22} color={Colors.brandText} />
             </View>
             <View>
               <View style={styles.walletTitleRow}>
@@ -75,14 +114,14 @@ export default function AccountScreen() {
             </View>
           </View>
           <Pressable style={styles.addMoneyBtn}>
-            <Text style={styles.addMoneyText}>+ Add Money</Text>
+            <Text style={styles.addMoneyText}>Add money</Text>
           </Pressable>
         </View>
 
         {/* ── Referral Promo Card ──────────────────────── */}
         <View style={styles.referralCard}>
           <View style={styles.referralLeft}>
-            <Text style={styles.referralEmoji}>🎁</Text>
+            <Ionicons name="gift" size={32} color={Colors.accentText} />
             <View style={styles.referralTextContainer}>
               <Text style={styles.referralTitle}>Invite Friends & Earn ₹100</Text>
               <Text style={styles.referralSubtitle}>
@@ -108,7 +147,7 @@ export default function AccountScreen() {
           </View>
           <View style={styles.statsDivider} />
           <View style={styles.savingsStat}>
-            <Text style={styles.savingsValue}>4.8★</Text>
+            <Text style={styles.savingsValue}>4.8</Text>
             <Text style={styles.savingsLabel}>Avg rating</Text>
           </View>
         </View>
@@ -124,13 +163,13 @@ export default function AccountScreen() {
                 }}
               >
                 <View style={styles.menuIconCircle}>
-                  <Text style={styles.menuEmoji}>{item.emoji}</Text>
+                  <Ionicons name={item.icon} size={20} color={Colors.brandText} />
                 </View>
                 <View style={styles.menuLabelContainer}>
                   <Text style={styles.menuLabel}>{item.label}</Text>
                   {item.subtitle && <Text style={styles.menuSubLabel}>{item.subtitle}</Text>}
                 </View>
-                <Text style={styles.menuChevron}>›</Text>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
               </Pressable>
               {index < MENU_ITEMS.length - 1 && <View style={styles.menuDivider} />}
             </View>
@@ -148,18 +187,23 @@ export default function AccountScreen() {
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
 
-        <Text style={styles.version}>Tokajo Mart · Made with ❤️ for fast delivery</Text>
+        <Text style={styles.version}>Tokajo Mart · Delivered in minutes</Text>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  backBtn: {
+    marginRight: Spacing[8],
+  },
   root: {
     flex: 1,
     backgroundColor: Colors.canvas,
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.surface,
     paddingHorizontal: Spacing[16],
     paddingVertical: Spacing[14],
@@ -193,7 +237,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.brandYellow,
+    backgroundColor: Colors.brandTint,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -224,7 +268,7 @@ const styles = StyleSheet.create({
   editBtnText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 
   // Wallet Card
@@ -276,7 +320,7 @@ const styles = StyleSheet.create({
   activePillText: {
     fontSize: 8,
     fontWeight: "800",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   walletBalance: {
     fontSize: 18,
@@ -295,7 +339,7 @@ const styles = StyleSheet.create({
   addMoneyText: {
     fontSize: 12,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 
   // Referral Card
@@ -304,7 +348,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Spacing[14],
     borderWidth: 1,
-    borderColor: Colors.brandYellow,
+    borderColor: Colors.brandGreen,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -363,7 +407,7 @@ const styles = StyleSheet.create({
   savingsValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   savingsLabel: {
     fontSize: FontSize.caption,

@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { useCartStore } from "../../src/store/cart";
+import { Ionicons } from "@expo/vector-icons";
+import { ProductImage } from "../../src/components/ProductImage";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -23,21 +25,21 @@ const SAVED_ADDRESSES: Address[] = [
     tag: "Home",
     emoji: "🏠",
     line1: "123, MG Road, Indiranagar",
-    line2: "Bengaluru — 560038",
+    line2: "Bengaluru - 560038",
   },
   {
     id: "a2",
     tag: "Work",
     emoji: "🏢",
     line1: "45, HSR Layout, Sector 6",
-    line2: "Bengaluru — 560102",
+    line2: "Bengaluru - 560102",
   },
   {
     id: "a3",
     tag: "Parents",
     emoji: "🏡",
     line1: "7B, Jayanagar 4th Block",
-    line2: "Bengaluru — 560041",
+    line2: "Bengaluru - 560041",
   },
 ];
 
@@ -64,7 +66,7 @@ function AddressSheet({
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      {/* Scrim — tap to close */}
+      {/* Scrim - tap to close */}
       <Pressable style={sheetStyles.scrim} onPress={onClose} />
 
       <View style={[sheetStyles.panel, { paddingBottom: insets.bottom + Spacing[16] }]}>
@@ -185,7 +187,7 @@ const sheetStyles = StyleSheet.create({
   addNewText: {
     fontSize: FontSize.body,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 });
 
@@ -212,7 +214,7 @@ export default function CheckoutScreen() {
 
   const handlePlaceOrder = () => {
     Alert.alert(
-      "🎉 Order Placed!",
+      "Order placed!",
       `Your order will be delivered in 10 minutes.\n\nOrder total: ₹${grandTotal}`,
       [
         {
@@ -239,7 +241,7 @@ export default function CheckoutScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>‹</Text>
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Checkout</Text>
       </View>
@@ -252,7 +254,7 @@ export default function CheckoutScreen() {
         {/* Delivery address */}
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle}>📍 Delivery address</Text>
+            <Text style={styles.cardTitle}>Delivery address</Text>
             <Pressable onPress={() => setAddressSheetVisible(true)}>
               <Text style={styles.changeBtn}>Change</Text>
             </Pressable>
@@ -272,10 +274,16 @@ export default function CheckoutScreen() {
 
         {/* Order summary */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>🛒 Order summary</Text>
+          <Text style={styles.cardTitle}>Order summary</Text>
           {items.slice(0, 4).map((item) => (
             <View key={item.id} style={styles.orderItem}>
-              <Text style={styles.orderItemEmoji}>{item.image}</Text>
+              <ProductImage
+                imageUrl={item.imageUrl}
+                fit={item.imageFit}
+                emoji={item.image}
+                emojiSize={18}
+                style={styles.orderItemImg}
+              />
               <Text style={styles.orderItemName} numberOfLines={1}>
                 {item.name}
               </Text>
@@ -288,7 +296,7 @@ export default function CheckoutScreen() {
 
         {/* Payment method */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>💳 Payment method</Text>
+          <Text style={styles.cardTitle}>Payment method</Text>
           {PAYMENT_METHODS.map((method) => (
             <Pressable
               key={method.id}
@@ -309,14 +317,14 @@ export default function CheckoutScreen() {
 
         {/* Coupons */}
         <Pressable style={styles.couponCard}>
-          <Text style={styles.couponEmoji}>🎟️</Text>
+          <Ionicons name="pricetag" size={20} color={Colors.brandText} />
           <Text style={styles.couponText}>Apply coupon / promo code</Text>
-          <Text style={styles.couponChevron}>›</Text>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
         </Pressable>
 
         {/* Bill summary */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>📝 Bill summary</Text>
+          <Text style={styles.cardTitle}>Bill summary</Text>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Items total</Text>
             <Text style={styles.billValue}>₹{totalPrice}</Text>
@@ -340,7 +348,7 @@ export default function CheckoutScreen() {
           </View>
           {totalSavings > 0 && (
             <View style={styles.savingsRow}>
-              <Text style={styles.savingsText}>🎉 You save ₹{totalSavings}</Text>
+              <Text style={styles.savingsText}>You save ₹{totalSavings}</Text>
             </View>
           )}
         </View>
@@ -355,7 +363,8 @@ export default function CheckoutScreen() {
           </Text>
         </View>
         <Pressable style={styles.placeOrderBtn} onPress={handlePlaceOrder}>
-          <Text style={styles.placeOrderText}>Place Order ›</Text>
+          <Text style={styles.placeOrderText}>Place order</Text>
+          <Ionicons name="chevron-forward" size={18} color={Colors.surface} />
         </Pressable>
       </View>
     </View>
@@ -417,7 +426,7 @@ const styles = StyleSheet.create({
   changeBtn: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   addrTagRow: {
     flexDirection: "row",
@@ -446,7 +455,7 @@ const styles = StyleSheet.create({
   addressTagText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
 
   // Order items
@@ -456,7 +465,15 @@ const styles = StyleSheet.create({
     gap: Spacing[8],
     paddingVertical: Spacing[4],
   },
-  orderItemEmoji: { fontSize: 20, width: 28, textAlign: "center" },
+  orderItemImg: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    marginRight: Spacing[8],
+  },
   orderItemName: {
     flex: 1,
     fontSize: FontSize.caption,
@@ -478,7 +495,7 @@ const styles = StyleSheet.create({
   },
   moreItems: {
     fontSize: FontSize.caption,
-    color: Colors.brandGreen,
+    color: Colors.brandText,
     fontWeight: "600",
     marginTop: Spacing[4],
   },
@@ -537,7 +554,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.body,
     fontWeight: "600",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   couponChevron: { fontSize: 20, color: Colors.textTertiary },
 
@@ -559,7 +576,7 @@ const styles = StyleSheet.create({
   billFree: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
   },
   billDivider: {
     height: 1,
@@ -585,7 +602,7 @@ const styles = StyleSheet.create({
   savingsText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.brandGreen,
+    color: Colors.brandText,
     textAlign: "center",
   },
 
@@ -617,8 +634,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingHorizontal: Spacing[24],
     paddingVertical: Spacing[14],
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
   },
   placeOrderText: {
     fontSize: FontSize.body,

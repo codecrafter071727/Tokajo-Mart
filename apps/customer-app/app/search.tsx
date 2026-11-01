@@ -6,6 +6,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
 import { ProductCard } from "../src/components/ProductCard";
 import { CartBar } from "../src/components/CartBar";
 import { products } from "../src/lib/mockData";
+import { Ionicons } from "@expo/vector-icons";
 
 const RECENT_SEARCHES = ["milk", "banana", "bread", "cola", "onion"];
 
@@ -27,10 +28,10 @@ export default function SearchScreen() {
       {/* Search bar header */}
       <View style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>‹</Text>
+          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
         <View style={styles.searchBarWrapper}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Ionicons name="search" size={18} color={Colors.brandText} />
           <TextInput
             style={styles.searchInput}
             value={query}
@@ -42,10 +43,10 @@ export default function SearchScreen() {
           />
           {query.length > 0 ? (
             <Pressable onPress={() => setQuery("")} style={styles.clearBtn}>
-              <Text style={styles.clearBtnText}>✕</Text>
+              <Ionicons name="close-circle" size={20} color={Colors.textTertiary} />
             </Pressable>
           ) : (
-            <Text style={styles.micIcon}>🎙️</Text>
+            <Ionicons name="mic-outline" size={20} color={Colors.textSecondary} />
           )}
         </View>
       </View>
@@ -57,7 +58,8 @@ export default function SearchScreen() {
           <View style={styles.recentChips}>
             {RECENT_SEARCHES.map((s) => (
               <Pressable key={s} style={styles.chip} onPress={() => setQuery(s)}>
-                <Text style={styles.chipText}>🕐 {s}</Text>
+                <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+                <Text style={styles.chipText}>{s}</Text>
               </Pressable>
             ))}
           </View>
@@ -70,7 +72,8 @@ export default function SearchScreen() {
                 style={[styles.chip, styles.chipTrending]}
                 onPress={() => setQuery(s)}
               >
-                <Text style={styles.chipText}>🔥 {s}</Text>
+                <Ionicons name="trending-up" size={14} color={Colors.brandText} />
+                <Text style={styles.chipText}>{s}</Text>
               </Pressable>
             ))}
           </View>
@@ -78,12 +81,12 @@ export default function SearchScreen() {
       ) : results.length === 0 ? (
         /* Empty state */
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>🔍</Text>
+          <Ionicons name="search-outline" size={56} color={Colors.border} />
           <Text style={styles.emptyTitle}>No results for "{query}"</Text>
           <Text style={styles.emptySubtitle}>Try searching with different keywords</Text>
         </View>
       ) : (
-        /* Results grid — 3 columns */
+        /* Results grid - 3 columns */
         <FlatList
           data={results}
           keyExtractor={(p) => p.id}
@@ -118,11 +121,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.brandYellow,
+    backgroundColor: Colors.surface,
     paddingHorizontal: Spacing[12],
     paddingBottom: Spacing[12],
     paddingTop: Spacing[8],
     gap: Spacing[8],
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   backBtn: {
     padding: Spacing[4],
@@ -130,14 +135,14 @@ const styles = StyleSheet.create({
   backBtnText: {
     fontSize: 24,
     fontWeight: "700",
-    color: Colors.brandBlack,
+    color: Colors.textPrimary,
   },
   searchBarWrapper: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
+    backgroundColor: Colors.canvas,
+    borderRadius: Radius.pill,
     height: 46,
     paddingHorizontal: Spacing[12],
     gap: Spacing[8],
@@ -179,6 +184,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing[8],
   },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: Spacing[12],
     paddingVertical: Spacing[8],
     borderRadius: Radius.pill,
@@ -187,8 +195,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   chipTrending: {
-    backgroundColor: Colors.yellowTint,
-    borderColor: Colors.brandYellow,
+    backgroundColor: Colors.brandTint,
+    borderColor: Colors.brandGreen,
   },
   chipText: {
     fontSize: FontSize.caption,
