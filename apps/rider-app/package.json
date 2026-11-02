@@ -16,7 +16,7 @@
     "@qc/contracts": "workspace:*",
     "@expo/dom-webview": "~56.0.6",
     "@expo/log-box": "~56.0.14",
-    "@expo/metro-runtime": "~56.0.21",
+    "@expo/metro-runtime": "~58.0.15",
     "@react-native-firebase/app": "^27.1.0",
     "@react-native-firebase/messaging": "^27.1.0",
     "@sentry/react-native": "~7.11.0",
