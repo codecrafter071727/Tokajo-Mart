@@ -13,7 +13,7 @@
     "db:types": "kysely-codegen --dialect postgres --camel-case --include-pattern \"catalog.*\" --out-file src/db/types.generated.ts"
   },
   "dependencies": {
-    "@fastify/multipart": "^10.1.0",
+    "@fastify/multipart": "^10.1.7",
     "@qc/contracts": "workspace:*",
     "@qc/service-kit": "workspace:*",
     "csv-parse": "^7.0.0",

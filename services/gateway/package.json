@@ -12,7 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@fastify/http-proxy": "^11.6.0",
+    "@fastify/http-proxy": "^11.6.6",
     "@qc/api-client": "workspace:*",
     "@qc/contracts": "workspace:*",
     "@qc/service-kit": "workspace:*",
