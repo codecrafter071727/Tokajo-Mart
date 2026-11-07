@@ -15,7 +15,7 @@
     "@qc/api-client": "workspace:*",
     "@qc/contracts": "workspace:*",
     "@qc/ui-web": "workspace:*",
-    "@sentry/nextjs": "^11.9.0",
+    "@sentry/nextjs": "^11.10.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "catalog:",
     "@tanstack/react-query": "catalog:",
@@ -29,13 +29,13 @@
   "devDependencies": {
     "@qc/eslint-config": "workspace:*",
     "@qc/tsconfig": "workspace:*",
-    "@tailwindcss/postcss": "^4.3.0",
+    "@tailwindcss/postcss": "^4.3.4",
     "@types/node": "catalog:",
     "@types/react": "catalog:web",
     "@types/react-dom": "catalog:web",
     "eslint": "catalog:",
-    "postcss": "^8.5.18",
-    "tailwindcss": "^4.3.0",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.4",
     "typescript": "catalog:"
   }
 }
