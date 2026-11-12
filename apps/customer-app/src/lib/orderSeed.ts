@@ -1,4 +1,5 @@
 import { priceCart } from "./pricing";
+import { products } from "./mockData";
 import type { Order, OrderItem } from "./orders";
 
 /** A few finished orders so the history is not empty on first launch. */
@@ -19,6 +20,7 @@ const item = (
   unitPricePaise: price * 100,
   mrpPaise: mrp * 100,
   emoji,
+  imageUrl: products.find((p) => p.id === productId)?.imageUrl,
 });
 
 const HOME = { tag: "Home", line1: "123, MG Road, Indiranagar", line2: "Bengaluru - 560038" };
@@ -41,6 +43,7 @@ function order(id: string, daysAgo: number, items: OrderItem[], cancelled = fals
     payment: "cod",
     address: HOME,
     deliveryCode: "0000",
+    promisedMins: 10,
     cancelledAt: cancelled ? new Date(placedAt.getTime() + 60_000).toISOString() : null,
   };
 }

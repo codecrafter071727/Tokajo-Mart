@@ -35,6 +35,8 @@ export interface Banner {
   /** Gradient stops for the hero banner, dark enough for white text */
   gradient: [string, string];
   cta: string;
+  /** Up to three product photos shown as overlapping circles */
+  images: string[];
 }
 
 export const categories: Category[] = [
@@ -401,15 +403,18 @@ export const products: Product[] = [
   },
 ];
 
+const photo = (id: string) => products.find((p) => p.id === id)?.imageUrl ?? "";
+
 export const banners: Banner[] = [
   {
     id: "b1",
     image: "🛒",
-    title: "Groceries in\n9 minutes",
+    title: "Groceries in\n{eta} minutes",
     subtitle: "Free delivery on your first order",
     color: "#DCF7E6",
     gradient: ["#238A47", "#42C86E"],
     cta: "Order now",
+    images: [photo("p5"), photo("p1"), photo("p9")],
   },
   {
     id: "b2",
@@ -419,6 +424,7 @@ export const banners: Banner[] = [
     color: "#F1FCF5",
     gradient: ["#1B6B3A", "#5BD686"],
     cta: "Shop fresh",
+    images: [photo("p2"), photo("p4"), photo("p3")],
   },
   {
     id: "b3",
@@ -428,6 +434,7 @@ export const banners: Banner[] = [
     color: "#FFF3CC",
     gradient: ["#B45309", "#F59E0B"],
     cta: "Grab deals",
+    images: [photo("p17"), photo("p13"), photo("p20")],
   },
 ];
 

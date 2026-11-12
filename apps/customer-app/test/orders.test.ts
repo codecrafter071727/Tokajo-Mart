@@ -3,6 +3,8 @@ import {
   createInMemoryOrderRepository,
   DEMO_TIMELINE,
   etaMinutes,
+  journeyProgress,
+  riderProgress,
   statusAt,
   type OrderError,
   type PlaceOrderInput,
@@ -24,6 +26,7 @@ const input = (over: Partial<PlaceOrderInput> = {}): PlaceOrderInput => ({
   tipPaise: 0,
   address: { tag: "Home", line1: "123, MG Road", line2: "Bengaluru" },
   payment: "cod",
+  promisedMins: 8,
   ...over,
 });
 
@@ -139,13 +142,50 @@ describe("order status over time", () => {
     expect(statusAt(order, new Date("2026-11-12T12:00:00.000Z"))).toBe("cancelled");
   });
 
-  it("counts the ETA down but never shows less than 1 minute in flight", async () => {
+  it("starts at the promised time, counts down, and never shows less than 1 minute", async () => {
+    const { repo, advance, at } = setup();
+    const order = await repo.place(input({ promisedMins: 8 }));
+    expect(etaMinutes(order, at())).toBe(8);
+    advance(DEMO_TIMELINE.delivered / 2);
+    expect(etaMinutes(order, at())).toBe(4);
+    advance(DEMO_TIMELINE.delivered); // well past delivery
+    expect(etaMinutes(order, at())).toBe(1);
+  });
+
+  it("reports journey progress from 0 to 1 and clamps outside that", async () => {
     const { repo, advance, at } = setup();
     const order = await repo.place(input());
-    const start = etaMinutes(order, at());
-    advance(60);
-    expect(etaMinutes(order, at())).toBeLessThan(start);
-    advance(60);
-    expect(etaMinutes(order, at())).toBe(1);
+    expect(journeyProgress(order, at())).toBe(0);
+    advance(DEMO_TIMELINE.delivered / 2);
+    expect(journeyProgress(order, at())).toBeCloseTo(0.5, 5);
+    advance(10_000);
+    expect(journeyProgress(order, at())).toBe(1);
+  });
+
+  it("refuses an order with no promised delivery time", async () => {
+    const { repo } = setup();
+    expect(
+      (await failure(repo.place(input({ idempotencyKey: "np", promisedMins: 0 })))).reason,
+    ).toBe("INVALID_ITEM");
+  });
+});
+
+describe("rider progress", () => {
+  const order = { placedAt: "2026-11-12T10:00:00.000Z", cancelledAt: null };
+  const at = (seconds: number) => new Date(Date.parse(order.placedAt) + seconds * 1000);
+
+  it("keeps the rider at the store until the order is out for delivery", () => {
+    expect(riderProgress(order, at(0))).toBe(0);
+    expect(riderProgress(order, at(DEMO_TIMELINE.on_the_way - 1))).toBe(0);
+  });
+
+  it("moves the rider along the route and stops at the door", () => {
+    const mid = (DEMO_TIMELINE.on_the_way + DEMO_TIMELINE.delivered) / 2;
+    expect(riderProgress(order, at(mid))).toBeCloseTo(0.5, 5);
+    expect(riderProgress(order, at(DEMO_TIMELINE.delivered + 500))).toBe(1);
+  });
+
+  it("does not move a cancelled order's rider", () => {
+    expect(riderProgress({ ...order, cancelledAt: "2026-11-12T10:00:05.000Z" }, at(100))).toBe(0);
   });
 });

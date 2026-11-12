@@ -112,12 +112,6 @@ export default function TabsLayout() {
             ),
           }}
         />
-        <Tabs.Screen
-          name="account"
-          options={{
-            href: null,
-          }}
-        />
       </Tabs>
 
       <CartBar bottomOffset={TAB_RESERVE} />

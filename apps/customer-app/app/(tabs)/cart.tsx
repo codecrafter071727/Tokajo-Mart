@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { TAB_BAR_CONTENT } from "../../src/theme/tabs";
+import { useServiceability } from "../../src/lib/queries";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { AddButton } from "../../src/components/AddButton";
 import { useCartStore } from "../../src/store/cart";
@@ -21,6 +23,7 @@ export default function CartScreen() {
   const setTip = useCartStore((s) => s.setTip);
 
   // One pricing function for the cart, checkout and the order, so the totals always agree
+  const eta = useServiceability().data;
   const bill = priceCart(toPriceLines(items), tipRupees * 100);
 
   const suggestedProducts = getSuggestedProducts(items.map((i) => i.id));
@@ -67,7 +70,11 @@ export default function CartScreen() {
               <Ionicons name="flash" size={18} color={Colors.brandText} />
             </View>
             <View>
-              <Text style={styles.deliveryTimeText}>Delivery in 10 minutes</Text>
+              <Text style={styles.deliveryTimeText}>
+                {eta?.serviceable
+                  ? `Delivery in ${eta.etaMins} minutes`
+                  : "Delivery time unavailable"}
+              </Text>
               <Text style={styles.shipmentText}>
                 Shipment of {totalItems} item{totalItems !== 1 ? "s" : ""}
               </Text>
@@ -237,7 +244,16 @@ export default function CartScreen() {
       </ScrollView>
 
       {/* Bottom bar - address + total + proceed */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing[8] }]}>
+      <View
+        style={[
+          styles.bottomBar,
+          // The tab bar floats over the screen on Android and web, so lift the bar above it.
+          // On iOS the native tab bar is already part of the safe area.
+          Platform.OS === "ios"
+            ? { paddingBottom: insets.bottom + Spacing[8] }
+            : { paddingBottom: Spacing[8], marginBottom: TAB_BAR_CONTENT + insets.bottom },
+        ]}
+      >
         {/* Address row */}
         <Pressable style={styles.bottomAddressRow}>
           <Ionicons name="location" size={18} color={Colors.brandText} />

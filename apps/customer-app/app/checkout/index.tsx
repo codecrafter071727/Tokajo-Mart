@@ -6,6 +6,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src
 import { useCartStore } from "../../src/store/cart";
 import { formatPaise, priceCart, toPriceLines } from "../../src/lib/pricing";
 import { usePlaceOrder } from "../../src/lib/orderQueries";
+import { useServiceability } from "../../src/lib/queries";
 import { OrderError, type OrderItem } from "../../src/lib/orders";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductImage } from "../../src/components/ProductImage";
@@ -15,7 +16,7 @@ import { ProductImage } from "../../src/components/ProductImage";
 interface Address {
   id: string;
   tag: string;
-  emoji: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
   line1: string;
   line2: string;
 }
@@ -26,31 +27,31 @@ const SAVED_ADDRESSES: Address[] = [
   {
     id: "a1",
     tag: "Home",
-    emoji: "🏠",
+    icon: "home",
     line1: "123, MG Road, Indiranagar",
     line2: "Bengaluru - 560038",
   },
   {
     id: "a2",
     tag: "Work",
-    emoji: "🏢",
+    icon: "business",
     line1: "45, HSR Layout, Sector 6",
     line2: "Bengaluru - 560102",
   },
   {
     id: "a3",
     tag: "Parents",
-    emoji: "🏡",
+    icon: "people",
     line1: "7B, Jayanagar 4th Block",
     line2: "Bengaluru - 560041",
   },
 ];
 
 const PAYMENT_METHODS = [
-  { id: "upi", label: "UPI / GPay / PhonePe", emoji: "📲" },
-  { id: "card", label: "Credit / Debit Card", emoji: "💳" },
-  { id: "cod", label: "Cash on Delivery", emoji: "💵" },
-  { id: "wallet", label: "Tokajo Wallet", emoji: "👛" },
+  { id: "upi", label: "UPI / GPay / PhonePe", icon: "phone-portrait-outline" as const },
+  { id: "card", label: "Credit / Debit Card", icon: "card-outline" as const },
+  { id: "cod", label: "Cash on Delivery", icon: "cash-outline" as const },
+  { id: "wallet", label: "Tokajo Wallet", icon: "wallet-outline" as const },
 ];
 
 // ─── Address Bottom Sheet ─────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ function AddressSheet({
             <View style={sheetStyles.radioOuter}>
               {selectedId === addr.id && <View style={sheetStyles.radioInner} />}
             </View>
-            <Text style={sheetStyles.addrEmoji}>{addr.emoji}</Text>
+            <Ionicons name={addr.icon} size={20} color={Colors.brandText} />
             <View style={sheetStyles.addrText}>
               <Text style={sheetStyles.addrTag}>{addr.tag}</Text>
               <Text style={sheetStyles.addrLine}>{addr.line1}</Text>
@@ -204,6 +205,7 @@ export default function CheckoutScreen() {
   // One key per checkout screen: a double tap or a retry returns the same order, never a second one
   const idempotencyKey = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const placeOrder = usePlaceOrder();
+  const eta = useServiceability().data;
   const [selectedAddressId, setSelectedAddressId] = useState("a1");
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
 
@@ -241,6 +243,7 @@ export default function CheckoutScreen() {
           line2: selectedAddress.line2,
         },
         payment: "cod",
+        promisedMins: eta?.etaMins ?? 10,
       },
       {
         onSuccess: (order) => {
@@ -289,7 +292,7 @@ export default function CheckoutScreen() {
             </Pressable>
           </View>
           <View style={styles.addrTagRow}>
-            <Text style={styles.addrEmoji}>{selectedAddress?.emoji}</Text>
+            <Ionicons name={selectedAddress?.icon ?? "home"} size={16} color={Colors.brandText} />
             <Text style={styles.addressName}>{selectedAddress?.tag}</Text>
           </View>
           <Text style={styles.addressDetail}>
@@ -297,7 +300,11 @@ export default function CheckoutScreen() {
             {selectedAddress?.line2}
           </Text>
           <View style={styles.addressTag}>
-            <Text style={styles.addressTagText}>Delivery in 10 minutes</Text>
+            <Text style={styles.addressTagText}>
+              {eta?.serviceable
+                ? `Delivery in ${eta.etaMins} minutes`
+                : "Delivery time unavailable"}
+            </Text>
           </View>
         </View>
 
@@ -348,9 +355,17 @@ export default function CheckoutScreen() {
                 <View style={styles.paymentRadio}>
                   {selectedPayment === method.id && <View style={styles.paymentRadioFill} />}
                 </View>
-                <Text style={styles.paymentEmoji}>{method.emoji}</Text>
+                <Ionicons
+                  name={method.icon}
+                  size={22}
+                  color={available ? Colors.brandText : Colors.textTertiary}
+                />
                 <Text style={styles.paymentLabel}>{method.label}</Text>
-                {!available ? <Text style={styles.soon}>Coming soon</Text> : null}
+                {!available ? (
+                  <Text style={styles.soon} numberOfLines={1}>
+                    Soon
+                  </Text>
+                ) : null}
               </Pressable>
             );
           })}

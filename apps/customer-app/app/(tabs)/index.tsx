@@ -49,6 +49,8 @@ export default function HomeScreen() {
   const { width: screenW } = useWindowDimensions();
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [bannerIdx, setBannerIdx] = useState(0);
+  // The header shrinks to the search bar once the page is scrolled (hysteresis avoids flicker)
+  const [compact, setCompact] = useState(false);
   const bannerRef = useRef<FlatList>(null);
   const isReturningUser = true;
 
@@ -110,54 +112,88 @@ export default function HomeScreen() {
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: insets.top + Spacing[8] }]}
       >
-        <View style={styles.headerRow}>
-          <View style={styles.headerLeft}>
-            <View style={styles.etaLabelRow}>
-              <Ionicons name="flash" size={12} color={colors.accent[500]} />
-              <Text style={styles.etaLabel}>Delivery in</Text>
-            </View>
-            {serviceability.isPending ? (
-              <Skeleton width={150} height={34} borderRadius={Radius.sm} />
-            ) : serviceability.isError ? (
-              <Text style={styles.etaValue}>-- mins</Text>
-            ) : eta?.serviceable ? (
-              <Text style={styles.etaValue}>{eta.etaMins} minutes</Text>
-            ) : (
-              <Text style={styles.etaValue}>Not available</Text>
-            )}
-            <Pressable
-              style={styles.addressRow}
-              hitSlop={6}
-              accessibilityLabel="Change delivery address"
+        {compact ? (
+          <View style={styles.compactRow}>
+            <View
+              style={styles.etaChip}
+              accessibilityLabel={`Delivery in ${eta?.etaMins ?? "--"} minutes`}
             >
-              <Text style={styles.addressText} numberOfLines={1}>
-                {eta && !eta.serviceable
-                  ? "We do not deliver to this area yet"
-                  : DEFAULT_LOCATION.label}
+              <Ionicons name="flash" size={13} color={colors.accent[500]} />
+              <Text style={styles.etaChipText}>
+                {eta?.serviceable ? `${eta.etaMins} min` : "--"}
               </Text>
-              <Ionicons name="chevron-down" size={14} color={Colors.brandTint} />
+            </View>
+            <Pressable
+              style={[styles.searchBar, styles.searchBarCompact]}
+              onPress={() => router.push("/search")}
+              accessibilityLabel="Search products"
+            >
+              <Ionicons name="search" size={18} color={Colors.brandText} />
+              <Text style={styles.searchPlaceholder} numberOfLines={1}>
+                {SEARCH_PLACEHOLDERS[placeholderIdx]}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.avatarBtn, styles.avatarBtnSmall]}
+              onPress={() => router.push("/account")}
+              accessibilityLabel="Account"
+            >
+              <Ionicons name="person" size={18} color={Colors.brandText} />
             </Pressable>
           </View>
-          <Pressable
-            style={styles.avatarBtn}
-            onPress={() => router.push("/(tabs)/account")}
-            accessibilityLabel="Account"
-          >
-            <Ionicons name="person" size={20} color={Colors.brandText} />
-          </Pressable>
-        </View>
+        ) : null}
+        {!compact ? (
+          <>
+            <View style={styles.headerRow}>
+              <View style={styles.headerLeft}>
+                <View style={styles.etaLabelRow}>
+                  <Ionicons name="flash" size={12} color={colors.accent[500]} />
+                  <Text style={styles.etaLabel}>Delivery in</Text>
+                </View>
+                {serviceability.isPending ? (
+                  <Skeleton width={150} height={34} borderRadius={Radius.sm} />
+                ) : serviceability.isError ? (
+                  <Text style={styles.etaValue}>-- mins</Text>
+                ) : eta?.serviceable ? (
+                  <Text style={styles.etaValue}>{eta.etaMins} minutes</Text>
+                ) : (
+                  <Text style={styles.etaValue}>Not available</Text>
+                )}
+                <Pressable
+                  style={styles.addressRow}
+                  hitSlop={6}
+                  accessibilityLabel="Change delivery address"
+                >
+                  <Text style={styles.addressText} numberOfLines={1}>
+                    {eta && !eta.serviceable
+                      ? "We do not deliver to this area yet"
+                      : DEFAULT_LOCATION.label}
+                  </Text>
+                  <Ionicons name="chevron-down" size={14} color={Colors.brandTint} />
+                </Pressable>
+              </View>
+              <Pressable
+                style={styles.avatarBtn}
+                onPress={() => router.push("/account")}
+                accessibilityLabel="Account"
+              >
+                <Ionicons name="person" size={20} color={Colors.brandText} />
+              </Pressable>
+            </View>
 
-        <Pressable
-          style={styles.searchBar}
-          onPress={() => router.push("/search")}
-          accessibilityLabel="Search products"
-        >
-          <Ionicons name="search" size={20} color={Colors.brandText} />
-          <Text style={styles.searchPlaceholder}>{SEARCH_PLACEHOLDERS[placeholderIdx]}</Text>
-          <View style={styles.micWrap}>
-            <Ionicons name="mic-outline" size={18} color={Colors.textSecondary} />
-          </View>
-        </Pressable>
+            <Pressable
+              style={styles.searchBar}
+              onPress={() => router.push("/search")}
+              accessibilityLabel="Search products"
+            >
+              <Ionicons name="search" size={20} color={Colors.brandText} />
+              <Text style={styles.searchPlaceholder}>{SEARCH_PLACEHOLDERS[placeholderIdx]}</Text>
+              <View style={styles.micWrap}>
+                <Ionicons name="mic-outline" size={18} color={Colors.textSecondary} />
+              </View>
+            </Pressable>
+          </>
+        ) : null}
       </LinearGradient>
 
       <ScrollView
@@ -167,6 +203,11 @@ export default function HomeScreen() {
           { paddingBottom: TAB_RESERVE + 100 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          setCompact((was) => (was ? y > 20 : y > 90));
+        }}
       >
         {isReturningUser ? (
           <SectionRail
@@ -203,14 +244,34 @@ export default function HomeScreen() {
                   <View style={styles.bannerCircleLg} />
                   <View style={styles.bannerCircleSm} />
                   <View style={styles.bannerContent}>
-                    <Text style={styles.bannerTitle}>{item.title}</Text>
+                    <Text style={styles.bannerTitle}>
+                      {item.title.replace(
+                        "{eta}",
+                        eta?.serviceable ? String(eta.etaMins) : "a few",
+                      )}
+                    </Text>
                     <Text style={styles.bannerSubtitle}>{item.subtitle}</Text>
                     <View style={styles.bannerCta}>
                       <Text style={styles.bannerCtaText}>{item.cta}</Text>
                       <Ionicons name="arrow-forward" size={14} color={colors.ink[900]} />
                     </View>
                   </View>
-                  <Text style={styles.bannerEmoji}>{item.image}</Text>
+                  <View style={styles.bannerPhotos}>
+                    {item.images.slice(0, 3).map((uri: string, i: number) => (
+                      <View
+                        key={uri || i}
+                        style={[styles.bannerPhoto, { top: i * 30, right: (i % 2) * 38 }]}
+                      >
+                        <ProductImage
+                          imageUrl={uri || undefined}
+                          fit="cover"
+                          emoji={item.image}
+                          emojiSize={28}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      </View>
+                    ))}
+                  </View>
                 </LinearGradient>
               </Pressable>
             )}
@@ -496,7 +557,30 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: Colors.accentText,
   },
-  bannerEmoji: { fontSize: 64 },
+  bannerPhotos: { width: 110, height: 100 },
+  bannerPhoto: {
+    position: "absolute",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.9)",
+    backgroundColor: Colors.surface,
+  },
+  compactRow: { flexDirection: "row", alignItems: "center", gap: Spacing[8] },
+  etaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing[10],
+    height: 40,
+  },
+  etaChipText: { ...typography.bodyStrong, fontWeight: "800", color: Colors.surface },
+  searchBarCompact: { flex: 1, height: 40 },
+  avatarBtnSmall: { width: 36, height: 36, borderRadius: 18 },
   dotsRow: {
     flexDirection: "row",
     justifyContent: "center",

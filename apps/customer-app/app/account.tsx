@@ -2,9 +2,9 @@ import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
+import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../src/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuthStore } from "../../src/store/auth";
+import { useAuthStore } from "../src/store/auth";
 
 const MENU_ITEMS = [
   {

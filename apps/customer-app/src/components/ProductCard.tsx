@@ -87,9 +87,7 @@ export function ProductCard({ product }: ProductCardProps) {
         </Text>
         {lowStock ? <Text style={styles.lowStock}>Only {stock?.remaining} left</Text> : null}
         <Text style={styles.unit} numberOfLines={1}>
-          {product.optionsCount && product.optionsCount > 1
-            ? `${product.optionsCount} options`
-            : product.unit}
+          {product.unit}
         </Text>
         <View style={styles.priceRow}>
           <Text style={styles.price}>₹{product.price}</Text>

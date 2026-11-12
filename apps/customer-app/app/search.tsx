@@ -9,6 +9,7 @@ import { useProducts } from "../src/lib/queries";
 import { useDebouncedValue } from "../src/lib/useDebouncedValue";
 import { ErrorState, ProductGridSkeleton } from "../src/components/StateViews";
 import { Ionicons } from "@expo/vector-icons";
+import { noWebOutline } from "../src/theme/web";
 
 const RECENT_SEARCHES = ["milk", "banana", "bread", "cola", "onion"];
 
@@ -35,7 +36,7 @@ export default function SearchScreen() {
         <View style={styles.searchBarWrapper}>
           <Ionicons name="search" size={18} color={Colors.brandText} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, noWebOutline]}
             value={query}
             onChangeText={setQuery}
             placeholder='Search "milk", "bread"...'

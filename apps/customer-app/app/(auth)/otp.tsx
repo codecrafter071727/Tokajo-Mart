@@ -13,6 +13,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
 import { DEMO_OTP, useAuthStore } from "../../src/store/auth";
 import { Ionicons } from "@expo/vector-icons";
+import { noWebOutline } from "../../src/theme/web";
+import { applyOtpInput } from "../../src/lib/otp";
 
 const OTP_LENGTH = 4;
 
@@ -47,16 +49,10 @@ export default function OtpScreen() {
 
   const handleOtpChange = (value: string, index: number) => {
     setError(null);
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-    if (value && index < OTP_LENGTH - 1) {
-      inputs.current[index + 1]?.focus();
-    }
-    // Auto-verify when all filled
-    if (newOtp.every((d) => d !== "") && newOtp.join("").length === OTP_LENGTH) {
-      verify(newOtp.join(""));
-    }
+    const next = applyOtpInput(otp, value, index);
+    setOtp(next.digits);
+    if (next.complete) verify(next.digits.join(""));
+    else inputs.current[next.focusIndex]?.focus();
   };
 
   const handleKeyPress = (key: string, index: number) => {
@@ -102,12 +98,14 @@ export default function OtpScreen() {
               ref={(ref) => {
                 inputs.current[i] = ref;
               }}
-              style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
+              style={[styles.otpInput, digit ? styles.otpInputFilled : null, noWebOutline]}
               value={digit}
               onChangeText={(v) => handleOtpChange(v.slice(-1), i)}
               onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
               keyboardType="number-pad"
-              maxLength={1}
+              maxLength={i === 0 ? OTP_LENGTH : 1}
+              textContentType="oneTimeCode"
+              autoComplete="sms-otp"
               textAlign="center"
               autoFocus={i === 0}
             />

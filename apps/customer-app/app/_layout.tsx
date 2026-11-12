@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "../src/lib/queryClient";
-import { useAuthStore } from "../src/store/auth";
+import { useAuthHydrated, useAuthStore } from "../src/store/auth";
 import { colors } from "../src/theme/tokens";
 
 /**
@@ -16,7 +16,8 @@ function useAuthGuard() {
   const router = useRouter();
   const segments = useSegments();
   const navigationReady = Boolean(useRootNavigationState()?.key);
-  const { isAuthenticated, hasSeenOnboarding, hasHydrated } = useAuthStore();
+  const { isAuthenticated, hasSeenOnboarding } = useAuthStore();
+  const hasHydrated = useAuthHydrated();
 
   useEffect(() => {
     if (!navigationReady || !hasHydrated) return;
@@ -57,6 +58,7 @@ export default function RootLayout() {
           />
           <Stack.Screen name="orders/[id]" options={{ headerShown: false, presentation: "card" }} />
           <Stack.Screen name="orders/list" options={{ headerShown: false, presentation: "card" }} />
+          <Stack.Screen name="account" options={{ headerShown: false, presentation: "card" }} />
           <Stack.Screen name="search" options={{ headerShown: false, presentation: "card" }} />
         </Stack>
         {/* Cover the screens until the saved session is read, so nothing flashes */}

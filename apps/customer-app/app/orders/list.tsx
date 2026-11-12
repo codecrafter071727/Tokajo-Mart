@@ -9,6 +9,7 @@ import { statusAt, type Order, type OrderStatus } from "../../src/lib/orders";
 import { formatPaise } from "../../src/lib/pricing";
 import { useCartStore } from "../../src/store/cart";
 import { ErrorState } from "../../src/components/StateViews";
+import { ProductImage } from "../../src/components/ProductImage";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -103,12 +104,26 @@ function OrderCard({ order, now }: { order: Order; now: Date }) {
 
       <View style={styles.divider} />
 
-      <Text style={styles.itemsPreview} numberOfLines={2}>
-        {order.items
-          .slice(0, 3)
-          .map((i) => `${i.emoji} ${i.name}`)
-          .join("  ·  ")}
-        {order.items.length > 3 ? `  +${order.items.length - 3} more` : ""}
+      <View style={styles.thumbRow}>
+        {order.items.slice(0, 4).map((i) => (
+          <View key={i.productId} style={styles.thumb}>
+            <ProductImage
+              imageUrl={i.imageUrl}
+              fit="contain"
+              emoji={i.emoji}
+              emojiSize={20}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        ))}
+        {order.items.length > 4 ? (
+          <View style={[styles.thumb, styles.thumbMore]}>
+            <Text style={styles.thumbMoreText}>+{order.items.length - 4}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.itemsPreview} numberOfLines={1}>
+        {order.items.map((i) => i.name).join("  ·  ")}
       </Text>
 
       <View style={styles.cardFooter}>
@@ -205,6 +220,20 @@ export default function OrdersListScreen() {
 }
 
 const styles = StyleSheet.create({
+  thumbRow: { flexDirection: "row", gap: Spacing[8] },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbMore: { backgroundColor: Colors.canvas },
+  thumbMoreText: { fontSize: FontSize.caption, fontWeight: "800", color: Colors.textSecondary },
   root: {
     flex: 1,
     backgroundColor: Colors.canvas,

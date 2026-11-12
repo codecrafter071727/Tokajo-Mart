@@ -29,6 +29,8 @@ export type Order = PriceBreakdown & {
   address: DeliveryAddress;
   /** The customer tells this to the rider at the door */
   deliveryCode: string;
+  /** The delivery time promised at checkout, in minutes (from the serviceability check) */
+  promisedMins: number;
   /** Set when the order was cancelled, so its status never advances */
   cancelledAt: string | null;
 };
@@ -40,6 +42,8 @@ export type PlaceOrderInput = {
   tipPaise: number;
   address: DeliveryAddress;
   payment: "cod";
+  /** The ETA shown at checkout, kept on the order so tracking never contradicts it */
+  promisedMins: number;
 };
 
 export class OrderError extends Error {
@@ -75,10 +79,33 @@ export function statusAt(order: Pick<Order, "placedAt" | "cancelledAt">, now: Da
   return "placed";
 }
 
-/** Whole minutes left until the demo delivery time, never below 1 while the order is in flight. */
-export function etaMinutes(order: Pick<Order, "placedAt">, now: Date): number {
-  const remaining = DEMO_TIMELINE.delivered - (now.getTime() - Date.parse(order.placedAt)) / 1000;
-  return Math.max(1, Math.ceil(remaining / 60));
+/**
+ * Minutes left, counted down from the time promised at checkout. The demo timeline is compressed
+ * (about two minutes), so the promise is scaled by how far through it we are: an 8 minute promise
+ * reads 8 at the start and 1 just before delivery. Never below 1 while the order is in flight.
+ */
+export function etaMinutes(order: Pick<Order, "placedAt" | "promisedMins">, now: Date): number {
+  const elapsed = (now.getTime() - Date.parse(order.placedAt)) / 1000;
+  const fractionLeft = Math.max(0, 1 - elapsed / DEMO_TIMELINE.delivered);
+  return Math.max(1, Math.ceil(order.promisedMins * fractionLeft));
+}
+
+/** How far through the journey, 0 at placing and 1 at the door, for drawing progress. */
+export function journeyProgress(order: Pick<Order, "placedAt" | "cancelledAt">, now: Date): number {
+  const elapsed = (now.getTime() - Date.parse(order.placedAt)) / 1000;
+  return Math.min(1, Math.max(0, elapsed / DEMO_TIMELINE.delivered));
+}
+
+/**
+ * Where the rider is on the way to the customer: 0 at the store, 1 at the door. The rider stays
+ * at the store until the order is out for delivery, then moves along the route.
+ */
+export function riderProgress(order: Pick<Order, "placedAt" | "cancelledAt">, now: Date): number {
+  if (order.cancelledAt) return 0;
+  const elapsed = (now.getTime() - Date.parse(order.placedAt)) / 1000;
+  const start = DEMO_TIMELINE.on_the_way;
+  const end = DEMO_TIMELINE.delivered;
+  return Math.min(1, Math.max(0, (elapsed - start) / (end - start)));
 }
 
 const toLine = (i: OrderItem): PriceLine => ({
@@ -106,6 +133,9 @@ export function createInMemoryOrderRepository(
       if (input.items.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) {
         throw new OrderError("INVALID_ITEM", "Each item needs a quantity of at least 1.");
       }
+      if (!Number.isInteger(input.promisedMins) || input.promisedMins < 1) {
+        throw new OrderError("INVALID_ITEM", "A delivery time is needed to place an order.");
+      }
       if (!Number.isInteger(input.tipPaise) || input.tipPaise < 0) {
         throw new OrderError("INVALID_TIP", "The tip must be zero or more.");
       }
@@ -120,6 +150,7 @@ export function createInMemoryOrderRepository(
         payment: input.payment,
         address: input.address,
         deliveryCode: String(1000 + ((counter * 7919) % 9000)),
+        promisedMins: input.promisedMins,
         cancelledAt: null,
       };
       orders.unshift(order);

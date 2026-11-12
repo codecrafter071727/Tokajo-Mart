@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { noWebOutline } from "../../src/theme/web";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -28,8 +29,8 @@ export default function LoginScreen() {
     >
       <View style={[styles.heroSection, { paddingTop: insets.top + Spacing[24] }]}>
         <Ionicons name="flash" size={40} color={Colors.surface} />
-        <Text style={styles.appName}>Dash</Text>
-        <Text style={styles.tagline}>Delivery in 9 minutes</Text>
+        <Text style={styles.appName}>Tokajo Mart</Text>
+        <Text style={styles.tagline}>Groceries in minutes</Text>
       </View>
 
       <ScrollView
@@ -50,7 +51,7 @@ export default function LoginScreen() {
             <Ionicons name="chevron-down" size={14} color={Colors.textSecondary} />
           </View>
           <TextInput
-            style={styles.phoneInput}
+            style={[styles.phoneInput, noWebOutline]}
             value={phone}
             onChangeText={setPhone}
             placeholder="Enter mobile number"
@@ -76,19 +77,6 @@ export default function LoginScreen() {
           <Text style={[styles.continueBtnText, !isValid && styles.continueBtnTextDisabled]}>
             Continue
           </Text>
-        </Pressable>
-
-        {/* Divider */}
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Google sign in */}
-        <Pressable style={styles.googleBtn}>
-          <Text style={styles.googleIcon}>G</Text>
-          <Text style={styles.googleText}>Continue with Google</Text>
         </Pressable>
 
         {/* Terms */}

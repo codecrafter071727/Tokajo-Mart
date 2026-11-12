@@ -13,30 +13,44 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
 import { AnimatedView } from "../src/components/AnimatedView";
 import { useAuthStore } from "../src/store/auth";
 import { Ionicons } from "@expo/vector-icons";
+import { products } from "../src/lib/mockData";
+import { ProductImage } from "../src/components/ProductImage";
 
 const { width: SCREEN_W } = Dimensions.get("window");
+
+/** Positions of the three overlapping product photos in the hero */
+const CLUSTER = [
+  { left: 0, top: 38 },
+  { left: 78, top: 0 },
+  { left: 156, top: 38 },
+] as const;
+
+const photo = (id: string) => products.find((p) => p.id === id)?.imageUrl;
 
 const SLIDES = [
   {
     id: "1",
     emoji: "⚡",
+    photos: [photo("p5"), photo("p1"), photo("p9")],
     title: "Delivery in\n10 minutes",
     subtitle:
       'Get groceries, snacks, and daily essentials at your doorstep faster than you can say "hunger".',
     bg: Colors.brandTint,
-    accent: Colors.brandGreen,
+    accent: Colors.brandText,
   },
   {
     id: "2",
     emoji: "🥦",
+    photos: [photo("p2"), photo("p4"), photo("p3")],
     title: "Fresh products,\nevery time",
     subtitle: "Sourced from the best farms and brands. Quality guaranteed or your money back.",
     bg: Colors.greenTint,
-    accent: Colors.brandGreen,
+    accent: Colors.brandText,
   },
   {
     id: "3",
     emoji: "💰",
+    photos: [photo("p17"), photo("p13"), photo("p20")],
     title: "Best prices\nin the market",
     subtitle: "Save more with daily deals, coupons, and up to 40% off on 500+ products.",
     bg: Colors.yellowTint,
@@ -102,7 +116,7 @@ export default function OnboardingScreen() {
       {/* Logo */}
       <AnimatedView style={[styles.logoSection, logoStyle]}>
         <View style={styles.logoCircle}>
-          <Ionicons name="flash" size={28} color={Colors.surface} />
+          <Ionicons name="flash" size={28} color={Colors.brandText} />
         </View>
         <Text style={styles.appName}>Tokajo Mart</Text>
       </AnimatedView>
@@ -119,7 +133,19 @@ export default function OnboardingScreen() {
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => (
             <View style={styles.slide}>
-              <Text style={styles.slideEmoji}>{item.emoji}</Text>
+              <View style={styles.photoCluster}>
+                {item.photos.map((uri: string | undefined, i: number) => (
+                  <View key={i} style={[styles.clusterPhoto, CLUSTER[i]]}>
+                    <ProductImage
+                      imageUrl={uri}
+                      fit="cover"
+                      emoji={item.emoji}
+                      emojiSize={40}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  </View>
+                ))}
+              </View>
               <Text style={[styles.slideTitle, { color: item.accent }]}>{item.title}</Text>
               <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
             </View>
@@ -200,7 +226,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: "rgba(255,255,255,0.6)",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -225,9 +251,16 @@ const styles = StyleSheet.create({
     gap: Spacing[16],
     paddingTop: Spacing[24],
   },
-  slideEmoji: {
-    fontSize: 80,
-    marginBottom: Spacing[8],
+  photoCluster: { width: 252, height: 150, marginBottom: Spacing[8] },
+  clusterPhoto: {
+    position: "absolute",
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    overflow: "hidden",
+    borderWidth: 4,
+    borderColor: Colors.surface,
+    backgroundColor: Colors.surface,
   },
   slideTitle: {
     fontSize: 26,

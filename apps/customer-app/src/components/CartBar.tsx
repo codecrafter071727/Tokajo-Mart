@@ -9,6 +9,7 @@ import { AnimatedView } from "./AnimatedView";
 import { Colors, Radius, Shadow, Spacing, typography, Motion } from "../theme";
 import { colors } from "../theme/tokens";
 import { useCartStore } from "../store/cart";
+import { formatPaise } from "../lib/pricing";
 import { ProductImage } from "./ProductImage";
 
 interface CartBarProps {
@@ -64,17 +65,21 @@ export function CartBar({ bottomOffset = 0 }: CartBarProps) {
       pointerEvents="box-none"
     >
       <View style={styles.progressWrap}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-        <Ionicons
-          name={remaining > 0 ? "bicycle" : "checkmark-circle"}
-          size={14}
-          color={Colors.brandPressed}
-        />
-        <Text style={styles.progressText}>
-          {remaining > 0
-            ? `Add ₹${remaining} more for free delivery`
-            : "You've unlocked free delivery"}
-        </Text>
+        <View style={styles.progressRow}>
+          <Ionicons
+            name={remaining > 0 ? "bicycle" : "checkmark-circle"}
+            size={14}
+            color={Colors.brandPressed}
+          />
+          <Text style={styles.progressText}>
+            {remaining > 0
+              ? `Add ${formatPaise(remaining * 100)} more for free delivery`
+              : "You've unlocked free delivery"}
+          </Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+        </View>
       </View>
 
       <Pressable
@@ -134,23 +139,25 @@ const styles = StyleSheet.create({
   },
   progressWrap: {
     backgroundColor: Colors.brandTint,
-    borderRadius: Radius.pill,
+    borderRadius: Radius.lg,
     overflow: "hidden",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingTop: 7,
+    gap: 6,
+  },
+  progressRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+    paddingHorizontal: 12,
   },
-  progressFill: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: Colors.brandTint,
-    borderRightWidth: 2,
-    borderRightColor: Colors.brandActive,
+  progressTrack: {
+    height: 4,
+    backgroundColor: colors.brand[200],
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: Colors.brandGreen,
   },
   progressText: {
     ...typography.caption,

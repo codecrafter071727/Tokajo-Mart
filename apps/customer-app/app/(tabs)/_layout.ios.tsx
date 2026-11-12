@@ -43,9 +43,6 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Label>Cart</NativeTabs.Trigger.Label>
           {cartBadge ? <NativeTabs.Trigger.Badge>{cartBadge}</NativeTabs.Trigger.Badge> : null}
         </NativeTabs.Trigger>
-
-        {/* Reachable from the header avatar, not shown in the bar */}
-        <NativeTabs.Trigger name="account" hidden />
       </NativeTabs>
 
       <CartBar bottomOffset={TAB_RESERVE} />

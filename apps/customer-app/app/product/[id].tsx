@@ -119,13 +119,6 @@ export default function ProductDetailScreen() {
               style={StyleSheet.absoluteFill}
             />
           </View>
-
-          {/* Carousel dots (single image) */}
-          <View style={styles.dotsRow}>
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
         </View>
 
         {/* Product info */}
@@ -317,19 +310,22 @@ const styles = StyleSheet.create({
   },
 
   // Image section
+  // Edge to edge hero: cancels the scroll content padding so the photo runs to the screen edges
   imageSection: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing[16],
+    marginHorizontal: -Spacing[12],
+    marginTop: -Spacing[12],
+    paddingVertical: Spacing[16],
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
     position: "relative",
   },
   discountBadge: {
     position: "absolute",
+    zIndex: 2,
     top: 12,
-    left: 12,
+    left: 16,
     backgroundColor: Colors.brandGreen,
     borderRadius: Radius.xs,
     paddingHorizontal: Spacing[8],
@@ -342,8 +338,10 @@ const styles = StyleSheet.create({
   },
   deliveryPill: {
     position: "absolute",
+    zIndex: 2,
     top: 12,
-    right: 12,
+    right: 16,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: Radius.pill,
@@ -357,8 +355,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   imageArea: {
-    width: SCREEN_W * 0.7,
-    height: SCREEN_W * 0.7,
+    width: Math.min(SCREEN_W * 0.82, 360),
+    height: Math.min(SCREEN_W * 0.82, 360),
     borderRadius: Radius.lg,
     overflow: "hidden",
     backgroundColor: Colors.surface,

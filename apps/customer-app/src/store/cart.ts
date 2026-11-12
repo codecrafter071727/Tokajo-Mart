@@ -1,4 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 export interface CartItem {
   id: string;
@@ -29,61 +31,71 @@ export interface CartState {
   totalSavings: () => number;
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
-  items: [],
-  tipRupees: 0,
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      tipRupees: 0,
 
-  setTip: (rupees) => set({ tipRupees: Math.max(0, Math.round(rupees)) }),
+      setTip: (rupees) => set({ tipRupees: Math.max(0, Math.round(rupees)) }),
 
-  addItem: (product) => {
-    set((state) => {
-      const existing = state.items.find((i) => i.id === product.id);
-      if (existing) {
-        return {
-          items: state.items.map((i) =>
-            i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i,
-          ),
-        };
-      }
-      return { items: [...state.items, { ...product, quantity: 1 }] };
-    });
-  },
+      addItem: (product) => {
+        set((state) => {
+          const existing = state.items.find((i) => i.id === product.id);
+          if (existing) {
+            return {
+              items: state.items.map((i) =>
+                i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i,
+              ),
+            };
+          }
+          return { items: [...state.items, { ...product, quantity: 1 }] };
+        });
+      },
 
-  removeItem: (id) => {
-    set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
-  },
+      removeItem: (id) => {
+        set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
+      },
 
-  incrementItem: (id) => {
-    set((state) => ({
-      items: state.items.map((i) => (i.id === id ? { ...i, quantity: i.quantity + 1 } : i)),
-    }));
-  },
+      incrementItem: (id) => {
+        set((state) => ({
+          items: state.items.map((i) => (i.id === id ? { ...i, quantity: i.quantity + 1 } : i)),
+        }));
+      },
 
-  decrementItem: (id) => {
-    set((state) => {
-      const item = state.items.find((i) => i.id === id);
-      if (!item) return state;
-      if (item.quantity <= 1) {
-        return { items: state.items.filter((i) => i.id !== id) };
-      }
-      return {
-        items: state.items.map((i) => (i.id === id ? { ...i, quantity: i.quantity - 1 } : i)),
-      };
-    });
-  },
+      decrementItem: (id) => {
+        set((state) => {
+          const item = state.items.find((i) => i.id === id);
+          if (!item) return state;
+          if (item.quantity <= 1) {
+            return { items: state.items.filter((i) => i.id !== id) };
+          }
+          return {
+            items: state.items.map((i) => (i.id === id ? { ...i, quantity: i.quantity - 1 } : i)),
+          };
+        });
+      },
 
-  clearCart: () => set({ items: [], tipRupees: 0 }),
+      clearCart: () => set({ items: [], tipRupees: 0 }),
 
-  getQuantity: (id) => {
-    const item = get().items.find((i) => i.id === id);
-    return item ? item.quantity : 0;
-  },
+      getQuantity: (id) => {
+        const item = get().items.find((i) => i.id === id);
+        return item ? item.quantity : 0;
+      },
 
-  totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
+      totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
 
-  totalPrice: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+      totalPrice: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
 
-  totalMrp: () => get().items.reduce((sum, i) => sum + i.mrp * i.quantity, 0),
+      totalMrp: () => get().items.reduce((sum, i) => sum + i.mrp * i.quantity, 0),
 
-  totalSavings: () => get().items.reduce((sum, i) => sum + (i.mrp - i.price) * i.quantity, 0),
-}));
+      totalSavings: () => get().items.reduce((sum, i) => sum + (i.mrp - i.price) * i.quantity, 0),
+    }),
+    {
+      name: "qc-customer-cart",
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only the contents survive a restart; the derived getters are rebuilt
+      partialize: (state) => ({ items: state.items, tipRupees: state.tipRupees }),
+    },
+  ),
+);

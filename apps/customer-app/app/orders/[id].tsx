@@ -5,7 +5,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useNow, useOrder } from "../../src/lib/orderQueries";
-import { etaMinutes, statusAt, type OrderStatus } from "../../src/lib/orders";
+import { etaMinutes, riderProgress, statusAt, type OrderStatus } from "../../src/lib/orders";
+import { RouteProgress } from "../../src/components/RouteProgress";
 import { formatPaise } from "../../src/lib/pricing";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -73,20 +74,31 @@ export default function OrderTrackingScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Map placeholder */}
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={48} color={Colors.brandText} />
-          <Text style={styles.mapText}>Live tracking map</Text>
-          <Text style={styles.mapSubtext}>
-            {status === "on_the_way"
-              ? `Your rider is about ${eta} min away`
+        {/* Route: store to home with the rider moving along it */}
+        <RouteProgress
+          progress={riderProgress(order, now)}
+          cancelled={cancelled}
+          title={
+            cancelled
+              ? "Order cancelled"
               : delivered
                 ? "Delivered"
-                : cancelled
-                  ? "This order was cancelled"
-                  : "We will show your rider once they pick up your order"}
-          </Text>
-        </View>
+                : status === "on_the_way"
+                  ? `${DEMO_RIDER.name} is on the way`
+                  : status === "picking"
+                    ? "Packing your order"
+                    : "Getting your order ready"
+          }
+          subtitle={
+            cancelled
+              ? "No charge for this order"
+              : delivered
+                ? "Enjoy your order"
+                : status === "on_the_way"
+                  ? `About ${eta} min away`
+                  : "We will show your rider once they pick up your order"
+          }
+        />
 
         {/* ETA card */}
         <View style={[styles.card, styles.etaCard]}>
@@ -139,7 +151,7 @@ export default function OrderTrackingScreen() {
                 </View>
               </View>
               <Pressable style={styles.callBtn}>
-                <Ionicons name="call" size={16} color={Colors.surface} />
+                <Ionicons name="call" size={16} color={Colors.brandText} />
                 <Text style={styles.callBtnText}>Call</Text>
               </Pressable>
             </View>
