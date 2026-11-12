@@ -135,6 +135,60 @@ export const adminOrdersQuerySchema = z.object({
 export const adminOrdersResponseSchema = z.object({ items: z.array(adminOrderSchema) });
 export type AdminOrdersResponse = z.infer<typeof adminOrdersResponseSchema>;
 
+// --- Reports ----------------------------------------------------------------------------------
+
+const dayString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-13");
+
+/** Days are India local days. Both ends are included. Default is the last 7 days up to today. */
+export const orderSummaryQuerySchema = z.object({
+  from: dayString.optional(),
+  to: dayString.optional(),
+  /** Admins may pick one warehouse. Managers always get their own. */
+  warehouseId: z.string().min(1).optional(),
+});
+
+export const orderSummarySchema = z.object({
+  from: dayString,
+  to: dayString,
+  warehouseId: z.string().nullable(),
+  totals: z.object({
+    orders: z.number().int(),
+    delivered: z.number().int(),
+    cancelled: z.number().int(),
+    /** Placed and not yet delivered or cancelled */
+    active: z.number().int(),
+    /** Value of delivered orders only */
+    gmvPaise: z.number().int(),
+    /** GMV divided by delivered orders, 0 when none */
+    averageOrderPaise: z.number().int(),
+    /** Cancelled as a share of all orders, one decimal */
+    cancelRatePercent: z.number(),
+    /** Placed to delivered, over delivered orders. Null when none. */
+    averageDeliveryMins: z.number().nullable(),
+    /** Delivered within the promised time, share of delivered orders. Null when none. */
+    onTimePercent: z.number().nullable(),
+  }),
+  byStatus: z.record(z.string(), z.number().int()),
+  /** One entry per day in the range, zero filled. GMV is delivered orders only. */
+  daily: z.array(
+    z.object({ date: dayString, orders: z.number().int(), gmvPaise: z.number().int() }),
+  ),
+  /** Top 10 by revenue among orders that were not cancelled, failed or expired */
+  topProducts: z.array(
+    z.object({
+      productId: z.string(),
+      name: z.string(),
+      quantity: z.number().int(),
+      revenuePaise: z.number().int(),
+    }),
+  ),
+  /** Admin only, empty for managers */
+  byWarehouse: z.array(
+    z.object({ warehouseId: z.string(), orders: z.number().int(), gmvPaise: z.number().int() }),
+  ),
+});
+export type OrderSummary = z.infer<typeof orderSummarySchema>;
+
 export const pickItemBodySchema = z.object({ picked: z.boolean() });
 export const pickItemParamsSchema = z.object({ id: z.uuid(), productId: z.string().min(1) });
 

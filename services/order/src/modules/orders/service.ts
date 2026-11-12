@@ -6,6 +6,7 @@ import {
   type Order,
   type OrderItem,
   type OrderStatus,
+  type OrderSummary,
   type PlaceOrderBody,
   type QueueOrder,
 } from "@qc/contracts";
@@ -541,6 +542,125 @@ export class OrderService {
       ...rest,
       customerName: names.get(rest.id) ?? "",
     }));
+  }
+
+  /**
+   * Numbers for the admin dashboard. All counting is done in SQL. Days are India local days, so an
+   * order placed at 11pm India time counts on that day, not the next one in UTC.
+   */
+  async summary(
+    identity: Identity,
+    query: { from?: string; to?: string; warehouseId?: string },
+  ): Promise<OrderSummary> {
+    let warehouseId: string | null;
+    if (identity.role === "admin") {
+      warehouseId = query.warehouseId ?? null;
+    } else {
+      if (!identity.warehouseId) throw forbidden("You are not assigned to a warehouse.");
+      warehouseId = identity.warehouseId;
+    }
+
+    const DAY = 86_400_000;
+    const IST = 5.5 * 3_600_000;
+    const dayOf = (date: Date) => new Date(date.getTime() + IST).toISOString().slice(0, 10);
+    const startOf = (day: string) => new Date(`${day}T00:00:00+05:30`);
+    const to = query.to ?? dayOf(this.now());
+    const from = query.from ?? dayOf(new Date(startOf(to).getTime() - 6 * DAY));
+    if (Number.isNaN(startOf(from).getTime()) || Number.isNaN(startOf(to).getTime())) {
+      throw badRequest("Those dates are not valid.");
+    }
+    if (from > to) throw badRequest("The start date must not be after the end date.");
+    const days = Math.round((startOf(to).getTime() - startOf(from).getTime()) / DAY) + 1;
+    if (days > 366) throw badRequest("Pick a range of one year or less.");
+    const start = startOf(from);
+    const end = new Date(startOf(to).getTime() + DAY);
+
+    const scope = (alias: string) =>
+      sql`${sql.raw(alias)}.placed_at >= ${start} and ${sql.raw(alias)}.placed_at < ${end}
+          ${warehouseId ? sql`and ${sql.raw(alias)}.warehouse_id = ${warehouseId}` : sql``}`;
+
+    // The database client camel-cases raw column names too (product_id arrives as productId)
+    const [statusRows, deliveredRows, dailyRows, productRows, warehouseRows] = await Promise.all([
+      sql<{ status: string; n: string }>`
+        select o.status, count(*) as n from orders.orders o where ${scope("o")} group by o.status
+      `.execute(this.db),
+      sql<{ gmv: string; avgMins: string | null; onTime: string }>`
+        select coalesce(sum(o.total_paise), 0) as gmv,
+               avg(extract(epoch from (o.delivered_at - o.placed_at)) / 60) as avg_mins,
+               count(*) filter (
+                 where o.delivered_at <= o.placed_at + make_interval(mins => o.promised_mins)
+               ) as on_time
+        from orders.orders o where o.status = 'delivered' and ${scope("o")}
+      `.execute(this.db),
+      sql<{ day: string; orders: string; gmv: string }>`
+        select to_char((o.placed_at at time zone 'Asia/Kolkata')::date, 'YYYY-MM-DD') as day,
+               count(*) as orders,
+               coalesce(sum(o.total_paise) filter (where o.status = 'delivered'), 0) as gmv
+        from orders.orders o where ${scope("o")} group by 1
+      `.execute(this.db),
+      sql<{ productId: string; name: string; quantity: string; revenue: string }>`
+        select i.product_id, max(i.name) as name, sum(i.quantity) as quantity,
+               sum(i.quantity * i.unit_price_paise) as revenue
+        from orders.order_items i join orders.orders o on o.id = i.order_id
+        where o.status not in ('cancelled', 'payment_failed', 'expired') and ${scope("o")}
+        group by i.product_id order by revenue desc, i.product_id limit 10
+      `.execute(this.db),
+      identity.role === "admin"
+        ? sql<{ warehouseId: string; orders: string; gmv: string }>`
+            select o.warehouse_id, count(*) as orders,
+                   coalesce(sum(o.total_paise) filter (where o.status = 'delivered'), 0) as gmv
+            from orders.orders o where ${scope("o")} group by o.warehouse_id order by o.warehouse_id
+          `.execute(this.db)
+        : Promise.resolve({ rows: [] as { warehouseId: string; orders: string; gmv: string }[] }),
+    ]);
+
+    const byStatus: Record<string, number> = {};
+    for (const r of statusRows.rows) byStatus[r.status] = Number(r.n);
+    const total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+    const delivered = byStatus.delivered ?? 0;
+    const cancelled = byStatus.cancelled ?? 0;
+    const terminal =
+      delivered + cancelled + (byStatus.payment_failed ?? 0) + (byStatus.expired ?? 0);
+    const d = deliveredRows.rows[0];
+    const gmv = Number(d?.gmv ?? 0);
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+
+    const perDay = new Map(dailyRows.rows.map((r) => [r.day, r]));
+    const daily = Array.from({ length: days }, (_, i) => {
+      const date = dayOf(new Date(start.getTime() + i * DAY));
+      const row = perDay.get(date);
+      return { date, orders: Number(row?.orders ?? 0), gmvPaise: Number(row?.gmv ?? 0) };
+    });
+
+    return {
+      from,
+      to,
+      warehouseId,
+      totals: {
+        orders: total,
+        delivered,
+        cancelled,
+        active: total - terminal,
+        gmvPaise: gmv,
+        averageOrderPaise: delivered > 0 ? Math.round(gmv / delivered) : 0,
+        cancelRatePercent: total > 0 ? round1((cancelled / total) * 100) : 0,
+        averageDeliveryMins: delivered > 0 && d?.avgMins != null ? round1(Number(d.avgMins)) : null,
+        onTimePercent: delivered > 0 ? round1((Number(d?.onTime ?? 0) / delivered) * 100) : null,
+      },
+      byStatus,
+      daily,
+      topProducts: productRows.rows.map((r) => ({
+        productId: r.productId,
+        name: r.name,
+        quantity: Number(r.quantity),
+        revenuePaise: Number(r.revenue),
+      })),
+      byWarehouse: warehouseRows.rows.map((r) => ({
+        warehouseId: r.warehouseId,
+        orders: Number(r.orders),
+        gmvPaise: Number(r.gmv),
+      })),
+    };
   }
 
   private async staffRow(identity: Identity, id: string): Promise<OrderRow> {

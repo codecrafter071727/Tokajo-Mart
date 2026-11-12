@@ -3,6 +3,8 @@ import {
   adminOrdersResponseSchema,
   cancelOrderBodySchema,
   listOrdersQuerySchema,
+  orderSummaryQuerySchema,
+  orderSummarySchema,
   listOrdersResponseSchema,
   orderParamsSchema,
   orderSchema,
@@ -91,6 +93,21 @@ export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void
         request.query,
       ),
     }),
+  );
+
+  app.get(
+    "/v1/orders/admin/summary",
+    {
+      schema: {
+        tags: ["admin"],
+        summary:
+          "Sales and delivery numbers for a date range (admin, or a manager for their warehouse)",
+        querystring: orderSummaryQuerySchema,
+        response: { 200: orderSummarySchema },
+      },
+    },
+    async (request) =>
+      orders.summary(requireRole(request, "admin", "warehouse_manager"), request.query),
   );
 
   app.get(

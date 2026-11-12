@@ -5,11 +5,28 @@
 
 import type { ColumnType } from "kysely";
 
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface CatalogBanners {
+  active: Generated<boolean>;
+  color: Generated<string>;
+  createdAt: Generated<Timestamp>;
+  endsAt: Timestamp | null;
+  id: Generated<string>;
+  imageUrl: string | null;
+  linkTarget: string | null;
+  linkType: Generated<string>;
+  sortOrder: Generated<number>;
+  startsAt: Timestamp | null;
+  subtitle: Generated<string>;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+}
 
 export interface CatalogCategories {
   color: Generated<string>;
@@ -43,6 +60,7 @@ export interface CatalogProducts {
 }
 
 export interface DB {
+  "catalog.banners": CatalogBanners;
   "catalog.categories": CatalogCategories;
   "catalog.products": CatalogProducts;
 }

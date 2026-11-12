@@ -14,11 +14,14 @@ import {
 import type { ServiceApp } from "@qc/service-kit";
 import { z } from "zod";
 import { DEFAULT_MAX_PER_ORDER, etaMinutes, stockStatus } from "./domain";
+import { registerStaffRoutes } from "./staff-routes";
 import { coveringWarehouses, resolveBasket, type InventoryRepository } from "./repository";
 
 const idParams = z.object({ id: z.string().min(1) });
 
 export function registerInventoryRoutes(app: ServiceApp, repository: InventoryRepository): void {
+  registerStaffRoutes(app, repository);
+
   // ---------------------------------------------------------------------------------------
   // Public (through the gateway)
   // ---------------------------------------------------------------------------------------

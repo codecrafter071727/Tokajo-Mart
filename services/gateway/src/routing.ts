@@ -23,10 +23,22 @@ const RULES: Rule[] = [
   { prefix: "/v1/identity/admin/", route: { service: "identity", access: ["admin"] } },
   { prefix: "/v1/identity/", route: { service: "identity", access: "authenticated" } },
 
+  { prefix: "/v1/catalog/admin/", route: { service: "catalog", access: ["admin"] } },
   { prefix: "/v1/catalog/", methods: READ, route: { service: "catalog", access: "public" } },
   { prefix: "/v1/catalog/", route: { service: "catalog", access: ["admin"] } },
 
-  { prefix: "/v1/inventory/", methods: READ, route: { service: "inventory", access: "public" } },
+  // Customers may ask whether they are served and whether items are in stock. Everything else under
+  // inventory (stock levels, receiving, adjustments, the ledger, warehouses) is for staff only.
+  {
+    prefix: "/v1/inventory/serviceability/",
+    methods: READ,
+    route: { service: "inventory", access: "public" },
+  },
+  {
+    prefix: "/v1/inventory/availability/",
+    methods: READ,
+    route: { service: "inventory", access: "public" },
+  },
   { prefix: "/v1/inventory/", route: { service: "inventory", access: STAFF } },
 
   // The order service decides what each role may see or do. The gateway only needs a signed in user

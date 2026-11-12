@@ -5,7 +5,11 @@
 
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { seedCategories, seedProducts } from "../services/catalog/src/modules/catalog/seed";
+import {
+  seedBanners,
+  seedCategories,
+  seedProducts,
+} from "../services/catalog/src/modules/catalog/seed";
 import {
   seedStock,
   seedWarehouses,
@@ -32,6 +36,11 @@ for (const c of seedCategories) {
 for (const p of seedProducts) {
   lines.push(
     `insert into catalog.products (id, category_id, name, unit, price_paise, mrp_paise, emoji, image_url, image_fit, delivery_mins, options_count, description) values (${q(p.id)}, ${q(p.categoryId)}, ${q(p.name)}, ${q(p.unit)}, ${p.pricePaise}, ${p.mrpPaise}, ${q(p.emoji)}, ${q(p.imageUrl)}, ${q(p.imageFit)}, ${p.deliveryMins}, ${q(p.optionsCount)}, ${q(p.description)}) on conflict (id) do nothing;`,
+  );
+}
+for (const b of seedBanners) {
+  lines.push(
+    `insert into catalog.banners (id, title, subtitle, image_url, link_type, link_target, color, sort_order, active, starts_at, ends_at) values (${q(b.id)}, ${q(b.title)}, ${q(b.subtitle)}, ${q(b.imageUrl)}, ${q(b.linkType)}, ${q(b.linkTarget)}, ${q(b.color)}, ${b.sortOrder}, ${b.active}, ${q(b.startsAt)}, ${q(b.endsAt)}) on conflict (id) do nothing;`,
   );
 }
 

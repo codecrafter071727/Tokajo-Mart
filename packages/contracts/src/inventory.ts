@@ -110,3 +110,154 @@ export const warehouseSchema = z.object({
   open: z.boolean(),
 });
 export type Warehouse = z.infer<typeof warehouseSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Warehouse tools: stock list, receiving, adjustments, ledger, warehouses (staff and admin only)
+// ---------------------------------------------------------------------------------------------
+
+const warehouseIdField = z.string().min(1).max(60);
+
+export const stockRowSchema = z.object({
+  productId: z.string(),
+  warehouseId: z.string(),
+  onHand: z.number().int().nonnegative(),
+  reserved: z.number().int().nonnegative(),
+  /** What can still be sold: on hand minus what is held for orders */
+  available: z.number().int().nonnegative(),
+  maxPerOrder: z.number().int().positive().nullable(),
+  rackLocation: z.string().nullable(),
+  updatedAt: z.string(),
+});
+export type StockRow = z.infer<typeof stockRowSchema>;
+
+export const stockListQuerySchema = z.object({
+  /** Staff always see their own warehouse. Admins must say which one. */
+  warehouseId: warehouseIdField.optional(),
+  /** Matches part of the product id */
+  q: z.string().trim().min(1).max(60).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().min(1).optional(),
+});
+export const stockListResponseSchema = z.object({
+  items: z.array(stockRowSchema),
+  nextCursor: z.string().nullable(),
+});
+export type StockListResponse = z.infer<typeof stockListResponseSchema>;
+
+export const receiveStockBodySchema = z.object({
+  warehouseId: warehouseIdField.optional(),
+  /** For example a supplier invoice or GRN number */
+  reference: z.string().trim().min(1).max(100).optional(),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        quantity: z.number().int().min(1).max(100_000),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+export type ReceiveStockBody = z.input<typeof receiveStockBodySchema>;
+export const receiveStockResponseSchema = z.object({ items: z.array(stockRowSchema) });
+
+export const stockAdjustmentTypeSchema = z.enum(["adjustment", "damage", "expiry"]);
+export const adjustStockBodySchema = z
+  .object({
+    warehouseId: warehouseIdField.optional(),
+    productId: z.string().min(1),
+    type: stockAdjustmentTypeSchema,
+    /** Positive adds stock (a recount found more), negative removes it */
+    quantityDelta: z
+      .number()
+      .int()
+      .refine((n) => n !== 0, "The change cannot be zero."),
+    reason: z.string().trim().min(3).max(200),
+  })
+  .refine((b) => b.type === "adjustment" || b.quantityDelta < 0, {
+    message: "Damage and expiry remove stock, so the change must be negative.",
+    path: ["quantityDelta"],
+  });
+export type AdjustStockBody = z.input<typeof adjustStockBodySchema>;
+
+export const updateStockBodySchema = z
+  .object({
+    warehouseId: warehouseIdField.optional(),
+    maxPerOrder: z.number().int().min(1).max(1000).nullable().optional(),
+    rackLocation: z.string().trim().max(40).nullable().optional(),
+  })
+  .refine((b) => b.maxPerOrder !== undefined || b.rackLocation !== undefined, {
+    message: "Send maxPerOrder or rackLocation.",
+  });
+export type UpdateStockBody = z.input<typeof updateStockBodySchema>;
+export const stockProductParamsSchema = z.object({ productId: z.string().min(1) });
+
+export const stockMovementTypeSchema = z.enum([
+  "grn",
+  "sale",
+  "adjustment",
+  "damage",
+  "expiry",
+  "return",
+]);
+export const stockMovementSchema = z.object({
+  id: z.string(),
+  warehouseId: z.string(),
+  productId: z.string(),
+  type: stockMovementTypeSchema,
+  quantityDelta: z.number().int(),
+  reason: z.string().nullable(),
+  reference: z.string().nullable(),
+  actorId: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type StockMovement = z.infer<typeof stockMovementSchema>;
+
+export const stockMovementsQuerySchema = z.object({
+  warehouseId: warehouseIdField.optional(),
+  productId: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().min(1).optional(),
+});
+export const stockMovementsResponseSchema = z.object({
+  items: z.array(stockMovementSchema),
+  nextCursor: z.string().nullable(),
+});
+export type StockMovementsResponse = z.infer<typeof stockMovementsResponseSchema>;
+
+export const adminWarehouseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  radiusKm: z.number(),
+  open: z.boolean(),
+});
+export type AdminWarehouse = z.infer<typeof adminWarehouseSchema>;
+export const adminWarehousesResponseSchema = z.object({ items: z.array(adminWarehouseSchema) });
+
+export const createWarehouseBodySchema = z.object({
+  id: z
+    .string()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Use lowercase letters, numbers and dashes.")
+    .max(60),
+  name: z.string().trim().min(2).max(100),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  radiusKm: z.number().min(0.5).max(50),
+  open: z.boolean().default(true),
+});
+export type CreateWarehouseBody = z.input<typeof createWarehouseBodySchema>;
+
+export const updateWarehouseBodySchema = z
+  .object({
+    name: z.string().trim().min(2).max(100).optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    radiusKm: z.number().min(0.5).max(50).optional(),
+    open: z.boolean().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: "Send at least one field to change." });
+export type UpdateWarehouseBody = z.infer<typeof updateWarehouseBodySchema>;
+export const warehouseParamsSchema = z.object({ id: z.string().min(1) });

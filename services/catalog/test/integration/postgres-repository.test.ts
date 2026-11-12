@@ -11,6 +11,12 @@ const suite = url ? describe : describe.skip;
 suite("Postgres catalog repository", () => {
   const db = createDb<DB>(url as string, 2);
   afterAll(async () => {
+    // The contract tests archive what they create. Remove it for good so runs stay repeatable.
+    await db.deleteFrom("catalog.products").where("id", "like", "p-%").execute();
+    await db.deleteFrom("catalog.categories").where("id", "like", "test-cat-%").execute();
+    await db.deleteFrom("catalog.categories").where("id", "like", "edit-cat-%").execute();
+    await db.deleteFrom("catalog.categories").where("id", "like", "full-cat-%").execute();
+    await db.deleteFrom("catalog.banners").where("sortOrder", ">=", 900).execute();
     await db.destroy();
   });
 

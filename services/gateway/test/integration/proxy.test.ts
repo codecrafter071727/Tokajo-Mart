@@ -121,6 +121,22 @@ describe("gateway", () => {
     ).toBe(403);
   });
 
+  it("keeps stock tools for staff but leaves availability public", async () => {
+    expect(
+      (await call("GET", "/v1/inventory/availability?warehouseId=w&productIds=p1")).statusCode,
+    ).toBe(200);
+    expect((await call("GET", "/v1/inventory/stock")).statusCode).toBe(401);
+    expect(
+      (await call("GET", "/v1/inventory/stock", { token: await token("customer") })).statusCode,
+    ).toBe(403);
+    expect(
+      (await call("GET", "/v1/inventory/warehouses", { token: await token("rider") })).statusCode,
+    ).toBe(403);
+    expect(
+      (await call("GET", "/v1/inventory/stock", { token: await token("admin") })).statusCode,
+    ).toBe(200);
+  });
+
   it("forwards bodies and idempotency keys untouched", async () => {
     const res = await call("POST", "/v1/orders", {
       token: await token("customer"),

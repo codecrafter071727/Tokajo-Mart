@@ -1,4 +1,10 @@
-import type { Reservation, ResolveResponse, StockLine } from "@qc/contracts";
+import type {
+  Reservation,
+  ResolveResponse,
+  StockLine,
+  StockMovement,
+  StockRow,
+} from "@qc/contracts";
 import {
   DEFAULT_MAX_PER_ORDER,
   distanceKm,
@@ -9,8 +15,11 @@ import {
 import {
   InsufficientStockError,
   LimitExceededError,
+  NotFoundError,
   ReservationStateError,
+  StockChangeError,
   WarehouseClosedError,
+  WarehouseExistsError,
 } from "./errors";
 
 export type ServingWarehouse = { warehouse: Warehouse; distanceKm: number };
@@ -22,6 +31,37 @@ export type ReserveInput = {
   ttlSeconds: number;
   now: Date;
 };
+
+export type StockListFilter = { warehouseId: string; q?: string; limit: number; offset: number };
+export type StockPage = { items: StockRow[]; nextOffset: number | null };
+export type MovementFilter = {
+  warehouseId: string;
+  productId?: string;
+  limit: number;
+  /** Only rows with an id below this, for paging newest first */
+  beforeId?: number;
+};
+export type MovementPage = { items: StockMovement[]; nextBeforeId: number | null };
+
+export type ReceiveInput = {
+  warehouseId: string;
+  reference?: string;
+  items: StockLine[];
+  actorId: string | null;
+};
+export type AdjustInput = {
+  warehouseId: string;
+  productId: string;
+  type: "adjustment" | "damage" | "expiry";
+  quantityDelta: number;
+  reason: string;
+  actorId: string | null;
+};
+export type WarehousePatch = Partial<Omit<Warehouse, "id">>;
+
+/** The message for a removal that would take stock below what is held for orders. */
+export const removalMessage = (remove: number, onHand: number, reserved: number) =>
+  `Cannot remove ${remove}: ${onHand - reserved} free (${onHand} on hand, ${reserved} held for orders).`;
 
 /**
  * Data access for the inventory module. The in-memory implementation serves seed data for tests;
@@ -43,6 +83,22 @@ export interface InventoryRepository {
   release(reference: string, as?: "released" | "expired"): Promise<Reservation | null>;
   /** Take a sold order's stock back after a cancellation. Safe to repeat. Null when unknown. */
   restock(reference: string): Promise<Reservation | null>;
+  /** Stock rows of one warehouse, by product id. */
+  listStock(filter: StockListFilter): Promise<StockPage>;
+  /** Add received stock for every line or none. Creates a stock row for a new product. */
+  receiveStock(input: ReceiveInput): Promise<StockRow[]>;
+  /** Correct, write off or expire stock. Never goes below zero or below what is held. */
+  adjustStock(input: AdjustInput): Promise<StockRow>;
+  /** Change the per order limit or rack location. Null when the product has no stock row. */
+  updateStockSettings(
+    warehouseId: string,
+    productId: string,
+    patch: { maxPerOrder?: number | null; rackLocation?: string | null },
+  ): Promise<StockRow | null>;
+  /** The stock ledger, newest first. */
+  listMovements(filter: MovementFilter): Promise<MovementPage>;
+  createWarehouse(warehouse: Warehouse): Promise<Warehouse>;
+  updateWarehouse(id: string, patch: WarehousePatch): Promise<Warehouse | null>;
   /** Release every hold whose time is up. Returns how many were released. */
   expireDue(now: Date): Promise<number>;
 }
@@ -165,7 +221,13 @@ export function checkLines(
 // In memory implementation
 // -------------------------------------------------------------------------------------------
 
-type MemoryStock = { onHand: number; reserved: number; maxPerOrder: number | null };
+type MemoryStock = {
+  onHand: number;
+  reserved: number;
+  maxPerOrder: number | null;
+  rackLocation: string | null;
+  updatedAt: string;
+};
 type MemoryReservation = Reservation & { lines: StockLine[] };
 
 export function createInMemoryInventoryRepository(
@@ -175,9 +237,45 @@ export function createInMemoryInventoryRepository(
   const items = new Map<string, MemoryStock>(
     stock.map((s) => [
       `${s.warehouseId}/${s.productId}`,
-      { onHand: s.available, reserved: 0, maxPerOrder: s.maxPerOrder },
+      {
+        onHand: s.available,
+        reserved: 0,
+        maxPerOrder: s.maxPerOrder,
+        rackLocation: null,
+        updatedAt: new Date(0).toISOString(),
+      },
     ]),
   );
+  const ledger: StockMovement[] = [];
+  const record = (
+    warehouseId: string,
+    productId: string,
+    type: StockMovement["type"],
+    quantityDelta: number,
+    extra: { reason?: string | null; reference?: string | null; actorId?: string | null } = {},
+  ) => {
+    ledger.push({
+      id: String(ledger.length + 1),
+      warehouseId,
+      productId,
+      type,
+      quantityDelta,
+      reason: extra.reason ?? null,
+      reference: extra.reference ?? null,
+      actorId: extra.actorId ?? null,
+      createdAt: new Date().toISOString(),
+    });
+  };
+  const row = (warehouseId: string, productId: string, s: MemoryStock): StockRow => ({
+    productId,
+    warehouseId,
+    onHand: s.onHand,
+    reserved: s.reserved,
+    available: s.onHand - s.reserved,
+    maxPerOrder: s.maxPerOrder,
+    rackLocation: s.rackLocation,
+    updatedAt: s.updatedAt,
+  });
   const reservations = new Map<string, MemoryReservation>();
   const key = (warehouseId: string, productId: string) => `${warehouseId}/${productId}`;
 
@@ -264,6 +362,7 @@ export function createInMemoryInventoryRepository(
         const s = items.get(key(r.warehouseId, line.productId))!;
         s.onHand -= line.quantity;
         s.reserved -= line.quantity;
+        record(r.warehouseId, line.productId, "sale", -line.quantity, { reference });
       }
       r.status = "committed";
       return view(r);
@@ -279,6 +378,87 @@ export function createInMemoryInventoryRepository(
       return view(r);
     },
 
+    async listStock({ warehouseId, q, limit, offset }) {
+      const needle = q?.toLowerCase();
+      const all = [...items]
+        .filter(([k]) => k.startsWith(`${warehouseId}/`))
+        .map(([k, s]) => row(warehouseId, k.slice(warehouseId.length + 1), s))
+        .filter((r) => !needle || r.productId.toLowerCase().includes(needle))
+        .sort((a, b) => a.productId.localeCompare(b.productId, "en", { numeric: true }));
+      const page = all.slice(offset, offset + limit);
+      return { items: page, nextOffset: offset + limit < all.length ? offset + limit : null };
+    },
+
+    async receiveStock({ warehouseId, reference, items: lines, actorId }) {
+      const merged = mergeLines(lines);
+      const now = new Date().toISOString();
+      for (const line of merged) {
+        const k = key(warehouseId, line.productId);
+        const s = items.get(k) ?? {
+          onHand: 0,
+          reserved: 0,
+          maxPerOrder: null,
+          rackLocation: null,
+          updatedAt: now,
+        };
+        s.onHand += line.quantity;
+        s.updatedAt = now;
+        items.set(k, s);
+        record(warehouseId, line.productId, "grn", line.quantity, { reference, actorId });
+      }
+      return merged.map((l) =>
+        row(warehouseId, l.productId, items.get(key(warehouseId, l.productId))!),
+      );
+    },
+
+    async adjustStock({ warehouseId, productId, type, quantityDelta, reason, actorId }) {
+      const s = items.get(key(warehouseId, productId));
+      if (!s) throw new NotFoundError("That product has no stock record in this warehouse.");
+      if (s.onHand + quantityDelta < s.reserved) {
+        throw new StockChangeError(removalMessage(-quantityDelta, s.onHand, s.reserved));
+      }
+      s.onHand += quantityDelta;
+      s.updatedAt = new Date().toISOString();
+      record(warehouseId, productId, type, quantityDelta, { reason, actorId });
+      return row(warehouseId, productId, s);
+    },
+
+    async updateStockSettings(warehouseId, productId, patch) {
+      const s = items.get(key(warehouseId, productId));
+      if (!s) return null;
+      if (patch.maxPerOrder !== undefined) s.maxPerOrder = patch.maxPerOrder;
+      if (patch.rackLocation !== undefined) s.rackLocation = patch.rackLocation || null;
+      s.updatedAt = new Date().toISOString();
+      return row(warehouseId, productId, s);
+    },
+
+    async listMovements({ warehouseId, productId, limit, beforeId }) {
+      const rows = ledger
+        .filter((m) => m.warehouseId === warehouseId)
+        .filter((m) => !productId || m.productId === productId)
+        .filter((m) => beforeId === undefined || Number(m.id) < beforeId)
+        .sort((a, b) => Number(b.id) - Number(a.id));
+      const page = rows.slice(0, limit);
+      return {
+        items: page,
+        nextBeforeId: rows.length > limit ? Number(page[page.length - 1]!.id) : null,
+      };
+    },
+
+    async createWarehouse(warehouse) {
+      if (warehouses.some((w) => w.id === warehouse.id))
+        throw new WarehouseExistsError(warehouse.id);
+      warehouses.push({ ...warehouse });
+      return { ...warehouse };
+    },
+
+    async updateWarehouse(id, patch) {
+      const w = warehouses.find((x) => x.id === id);
+      if (!w) return null;
+      Object.assign(w, patch);
+      return { ...w };
+    },
+
     async restock(reference) {
       const r = reservations.get(reference);
       if (!r) return null;
@@ -289,6 +469,7 @@ export function createInMemoryInventoryRepository(
       }
       for (const line of r.lines) {
         items.get(key(r.warehouseId, line.productId))!.onHand += line.quantity;
+        record(r.warehouseId, line.productId, "return", line.quantity, { reference });
       }
       r.status = "released";
       return view(r);

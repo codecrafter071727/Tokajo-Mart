@@ -1,3 +1,4 @@
+export { CatalogError } from "./errors";
 export { registerCatalogRoutes } from "./routes";
 export {
   createInMemoryCatalogRepository,
@@ -7,4 +8,4 @@ export {
   type ProductPage,
 } from "./repository";
 export { createPostgresCatalogRepository, escapeLike } from "./postgres-repository";
-export { seedCategories, seedProducts } from "./seed";
+export { seedBanners, seedCategories, seedProducts } from "./seed";

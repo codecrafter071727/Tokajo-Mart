@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  NotFoundError,
+  StockChangeError,
+  WarehouseExistsError,
   InsufficientStockError,
   LimitExceededError,
   ReservationStateError,
@@ -163,6 +166,210 @@ export function inventoryRepositoryContract(
         serviceable: false,
         reason: "OUTSIDE_SERVICE_AREA",
         warehouseId: null,
+      });
+    });
+
+    describe("stock tools", () => {
+      const ACTOR = "99999999-0000-4000-8000-000000000009";
+
+      it("lists a warehouse's stock with available worked out, paged and searchable", async () => {
+        const repo = await make();
+        await reserve(repo, "list-1", [{ productId: "p1", quantity: 2 }]);
+        const page = await repo.listStock({ warehouseId: WH, limit: 5, offset: 0 });
+        expect(page.items).toHaveLength(5);
+        expect(page.nextOffset).toBe(5);
+        const p1 = page.items.find((r) => r.productId === "p1")!;
+        expect(p1.reserved).toBe(2);
+        expect(p1.available).toBe(p1.onHand - 2);
+        // Natural order: p2 comes before p10
+        const ids = (await repo.listStock({ warehouseId: WH, limit: 20, offset: 0 })).items.map(
+          (r) => r.productId,
+        );
+        expect(ids.indexOf("p2")).toBeLessThan(ids.indexOf("p10"));
+        const found = await repo.listStock({ warehouseId: WH, q: "P1", limit: 50, offset: 0 });
+        expect(found.items.map((r) => r.productId)).toContain("p10");
+        expect(found.items.every((r) => r.productId.toLowerCase().includes("p1"))).toBe(true);
+        expect(
+          (
+            await repo.listStock({ warehouseId: "wh-indiranagar", limit: 50, offset: 0 })
+          ).items.every((r) => r.warehouseId === "wh-indiranagar"),
+        ).toBe(true);
+      });
+
+      it("receives stock for several lines, creating a row for a new product, and logs each line", async () => {
+        const repo = await make();
+        const before = await available(repo, "p1");
+        const rows = await repo.receiveStock({
+          warehouseId: WH,
+          reference: "INV-77",
+          actorId: ACTOR,
+          items: [
+            { productId: "p1", quantity: 10 },
+            { productId: "p1", quantity: 5 },
+            { productId: "brand-new", quantity: 7 },
+          ],
+        });
+        expect(rows.map((r) => [r.productId, r.onHand])).toEqual([
+          ["p1", before + 15],
+          ["brand-new", 7],
+        ]);
+        expect(await available(repo, "p1")).toBe(before + 15);
+        const log = await repo.listMovements({ warehouseId: WH, limit: 10 });
+        expect(
+          log.items
+            .filter((m) => m.type === "grn")
+            .map((m) => [m.productId, m.quantityDelta, m.reference, m.actorId]),
+        ).toEqual([
+          ["brand-new", 7, "INV-77", ACTOR],
+          ["p1", 15, "INV-77", ACTOR],
+        ]);
+      });
+
+      it("adjusts stock with a reason, and never below what is held or below zero", async () => {
+        const repo = await make();
+        const start = (
+          await repo.listStock({ warehouseId: WH, q: "p1", limit: 50, offset: 0 })
+        ).items.find((r) => r.productId === "p1")!;
+        await reserve(repo, "adj-1", [{ productId: "p1", quantity: 3 }]);
+        const row = await repo.adjustStock({
+          warehouseId: WH,
+          productId: "p1",
+          type: "damage",
+          quantityDelta: -2,
+          reason: "Crushed in rack",
+          actorId: ACTOR,
+        });
+        expect(row.onHand).toBe(start.onHand - 2);
+        expect(row.available).toBe(start.onHand - 2 - 3);
+
+        // Removing everything that is free is fine, one more is not
+        const free = row.available;
+        const tooMany = await repo
+          .adjustStock({
+            warehouseId: WH,
+            productId: "p1",
+            type: "adjustment",
+            quantityDelta: -(free + 1),
+            reason: "Recount",
+            actorId: ACTOR,
+          })
+          .catch((e) => e);
+        expect(tooMany).toBeInstanceOf(StockChangeError);
+        expect(tooMany.message).toMatch(/held for orders/);
+        const all = await repo.adjustStock({
+          warehouseId: WH,
+          productId: "p1",
+          type: "expiry",
+          quantityDelta: -free,
+          reason: "Expired",
+          actorId: ACTOR,
+        });
+        expect(all.available).toBe(0);
+        expect(all.onHand).toBe(3);
+
+        const up = await repo.adjustStock({
+          warehouseId: WH,
+          productId: "p1",
+          type: "adjustment",
+          quantityDelta: 4,
+          reason: "Found a box",
+          actorId: ACTOR,
+        });
+        expect(up.onHand).toBe(7);
+        await expect(
+          repo.adjustStock({
+            warehouseId: WH,
+            productId: "nope",
+            type: "damage",
+            quantityDelta: -1,
+            reason: "Missing",
+            actorId: ACTOR,
+          }),
+        ).rejects.toBeInstanceOf(NotFoundError);
+
+        const log = (await repo.listMovements({ warehouseId: WH, productId: "p1", limit: 10 }))
+          .items;
+        expect(log.map((m) => [m.type, m.quantityDelta, m.reason])).toEqual([
+          ["adjustment", 4, "Found a box"],
+          ["expiry", -free, "Expired"],
+          ["damage", -2, "Crushed in rack"],
+        ]);
+      });
+
+      it("pages the ledger newest first", async () => {
+        const repo = await make();
+        for (let i = 1; i <= 5; i += 1) {
+          await repo.receiveStock({
+            warehouseId: WH,
+            actorId: ACTOR,
+            reference: `r${i}`,
+            items: [{ productId: "p2", quantity: i }],
+          });
+        }
+        const first = await repo.listMovements({ warehouseId: WH, productId: "p2", limit: 2 });
+        expect(first.items.map((m) => m.reference)).toEqual(["r5", "r4"]);
+        expect(first.nextBeforeId).not.toBeNull();
+        const second = await repo.listMovements({
+          warehouseId: WH,
+          productId: "p2",
+          limit: 2,
+          beforeId: first.nextBeforeId!,
+        });
+        expect(second.items.map((m) => m.reference)).toEqual(["r3", "r2"]);
+        const last = await repo.listMovements({
+          warehouseId: WH,
+          productId: "p2",
+          limit: 5,
+          beforeId: second.nextBeforeId!,
+        });
+        expect(last.items.map((m) => m.reference)).toEqual(["r1"]);
+        expect(last.nextBeforeId).toBeNull();
+      });
+
+      it("changes the per order limit and rack location, and clears them with null", async () => {
+        const repo = await make();
+        const row = await repo.updateStockSettings(WH, "p1", {
+          maxPerOrder: 3,
+          rackLocation: "A-12",
+        });
+        expect(row).toMatchObject({ maxPerOrder: 3, rackLocation: "A-12" });
+        const cleared = await repo.updateStockSettings(WH, "p1", {
+          maxPerOrder: null,
+          rackLocation: null,
+        });
+        expect(cleared).toMatchObject({ maxPerOrder: null, rackLocation: null });
+        expect(await repo.updateStockSettings(WH, "ghost", { maxPerOrder: 1 })).toBeNull();
+      });
+
+      it("adds a warehouse once, edits it, and reports unknown ids", async () => {
+        const repo = await make();
+        const w = {
+          id: "wh-test-1",
+          name: "Test Hub",
+          lat: 19.07,
+          lng: 72.87,
+          radiusKm: 4,
+          open: true,
+        };
+        expect(await repo.createWarehouse(w)).toEqual(w);
+        await expect(repo.createWarehouse(w)).rejects.toBeInstanceOf(WarehouseExistsError);
+        expect(await repo.updateWarehouse("wh-test-1", { open: false, radiusKm: 6 })).toEqual({
+          ...w,
+          open: false,
+          radiusKm: 6,
+        });
+        expect((await repo.getWarehouse("wh-test-1"))?.open).toBe(false);
+        expect(await repo.updateWarehouse("nope", { open: false })).toBeNull();
+        // A closed warehouse refuses new holds
+        await expect(
+          repo.reserve({
+            warehouseId: "wh-test-1",
+            reference: "x",
+            items: [{ productId: "p1", quantity: 1 }],
+            ttlSeconds: 60,
+            now: NOW,
+          }),
+        ).rejects.toBeDefined();
       });
     });
   });

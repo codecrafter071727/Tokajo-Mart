@@ -23,10 +23,12 @@ suite("Postgres inventory repository", () => {
   async function fresh() {
     await db.deleteFrom("inventory.reservations").execute(); // lines go with them
     await db.deleteFrom("inventory.stockMovements").execute();
+    await db.deleteFrom("inventory.stockItems").where("productId", "=", "brand-new").execute();
+    await db.deleteFrom("inventory.warehouses").where("id", "like", "wh-test-%").execute();
     for (const s of seedStock) {
       await db
         .updateTable("inventory.stockItems")
-        .set({ onHand: s.available, reserved: 0, maxPerOrder: s.maxPerOrder })
+        .set({ onHand: s.available, reserved: 0, maxPerOrder: s.maxPerOrder, rackLocation: null })
         .where("warehouseId", "=", s.warehouseId)
         .where("productId", "=", s.productId)
         .execute();

@@ -1,5 +1,5 @@
 // Generated once from the customer app mock data. Replaced by the database (catalog schema) later.
-import type { Category, Product } from "@qc/contracts";
+import type { Banner, Category, Product } from "@qc/contracts";
 
 export const seedCategories: Category[] = [
   {
@@ -404,5 +404,47 @@ export const seedProducts: Product[] = [
     deliveryMins: 10,
     optionsCount: null,
     description: null,
+  },
+];
+
+export const seedBanners: Banner[] = [
+  {
+    id: "b0000000-0000-4000-8000-000000000001",
+    title: "Fresh fruits and veggies",
+    subtitle: "Picked this morning, at your door in minutes",
+    imageUrl: null,
+    linkType: "category",
+    linkTarget: "fruits",
+    color: "#E8F5E9",
+    sortOrder: 0,
+    active: true,
+    startsAt: null,
+    endsAt: null,
+  },
+  {
+    id: "b0000000-0000-4000-8000-000000000002",
+    title: "Breakfast sorted",
+    subtitle: "Milk, bread and eggs, delivered before you are hungry",
+    imageUrl: null,
+    linkType: "category",
+    linkTarget: "dairy",
+    color: "#FFF8E1",
+    sortOrder: 1,
+    active: true,
+    startsAt: null,
+    endsAt: null,
+  },
+  {
+    id: "b0000000-0000-4000-8000-000000000003",
+    title: "Snack time",
+    subtitle: "Chips, chocolates and more",
+    imageUrl: null,
+    linkType: "category",
+    linkTarget: "snacks",
+    color: "#FCE4EC",
+    sortOrder: 2,
+    active: true,
+    startsAt: null,
+    endsAt: null,
   },
 ];

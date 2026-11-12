@@ -36,7 +36,7 @@ suite("identity: sign in and sessions", async () => {
   const app = await buildApp({ db, sender, now: () => clock });
 
   const call = (
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PATCH",
     path: string,
     body?: object,
     headers: Record<string, string> = {},
@@ -445,6 +445,170 @@ suite("identity: sign in and sessions", async () => {
       ).toBe(403);
       await call("POST", `/v1/identity/admin/users/${session.user.id}/unblock`, undefined, asAdmin);
       expect((await signInCustomer()).statusCode).toBe(200);
+    });
+  });
+
+  describe("user administration", () => {
+    const list = (qs = "", headers = asAdmin) =>
+      call("GET", `/v1/identity/admin/users${qs}`, undefined, headers);
+    const customerHeaders = () =>
+      signIdentityHeaders(
+        { userId: ADMIN.userId, role: "customer", warehouseId: null },
+        DEV_INTERNAL_KEY,
+      );
+
+    it("is closed to everyone but admins", async () => {
+      expect((await list("", customerHeaders())).statusCode).toBe(403);
+      expect((await call("GET", "/v1/identity/admin/users")).statusCode).toBe(401);
+    });
+
+    it("lists users with rider details, filters by role and searches", async () => {
+      const riders = (await list("?role=rider")).json();
+      expect(riders.items.length).toBeGreaterThanOrEqual(3);
+      expect(riders.items[0]).toMatchObject({ role: "rider", warehouseId: "wh-noida-62" });
+      expect(typeof riders.items[0].vehicle).toBe("string");
+      expect(typeof riders.items[0].rating).toBe("number");
+      expect(riders.items[0]).not.toHaveProperty("passwordHash");
+      const found = (await list("?q=ravi")).json().items;
+      expect(found.map((u: { name: string }) => u.name)).toContain("Ravi Kumar");
+      const byPhone = (await list("?q=9810000012")).json().items;
+      expect(byPhone).toHaveLength(1);
+      expect((await list("?q=%25")).json().items).toEqual([]); // wildcards are not wildcards
+      expect((await list("?role=admin")).json().items[0].email).toBe("admin@tokajo.dev");
+    });
+
+    it("pages with a cursor without repeating or skipping anyone", async () => {
+      const all = (await list("?limit=100")).json().items.map((u: { id: string }) => u.id);
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: { items: { id: string }[]; nextCursor: string | null } = (
+          await list(`?limit=2${cursor ? `&cursor=${cursor}` : ""}`)
+        ).json();
+        seen.push(...page.items.map((u: { id: string }) => u.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      expect(seen).toEqual(all);
+      expect((await list("?cursor=garbage")).statusCode).toBe(400);
+    });
+
+    it("edits a rider and refuses unknown fields, empty bodies and non riders", async () => {
+      const rider = (await list("?q=9810000013")).json().items[0];
+      const patch = (id: string, body: object) =>
+        call("PATCH", `/v1/identity/admin/riders/${id}`, body, asAdmin);
+      expect((await patch(rider.id, { name: "Sunil Y", vehicle: "Scooter" })).statusCode).toBe(200);
+      const after = (await list("?q=9810000013")).json().items[0];
+      expect(after).toMatchObject({
+        name: "Sunil Y",
+        vehicle: "Scooter",
+        warehouseId: "wh-noida-62",
+      });
+      await patch(rider.id, { name: rider.name, vehicle: rider.vehicle });
+      expect((await patch(rider.id, {})).statusCode).toBe(400);
+      expect((await patch(rider.id, { role: "admin" })).statusCode).toBe(400);
+      const manager = (await list("?role=warehouse_manager")).json().items[0];
+      expect((await patch(manager.id, { name: "x" })).statusCode).toBe(404);
+      expect(
+        (
+          await call(
+            "PATCH",
+            `/v1/identity/admin/riders/${rider.id}`,
+            { name: "x" },
+            customerHeaders(),
+          )
+        ).statusCode,
+      ).toBe(403);
+    });
+
+    it("edits staff, but never an admin, a rider or yourself", async () => {
+      const created = (
+        await call(
+          "POST",
+          "/v1/identity/admin/staff",
+          {
+            name: "Test Packer",
+            email: "test-packer@example.com",
+            password: "a-long-enough-password",
+            role: "warehouse_staff",
+            warehouseId: "wh-noida-62",
+          },
+          asAdmin,
+        )
+      ).json();
+      const patch = (id: string, body: object, headers = asAdmin) =>
+        call("PATCH", `/v1/identity/admin/staff/${id}`, body, headers);
+      expect(
+        (await patch(created.id, { role: "warehouse_manager", warehouseId: "wh-indiranagar" }))
+          .statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await call("POST", "/v1/identity/auth/login", {
+            email: "test-packer@example.com",
+            password: "a-long-enough-password",
+          })
+        ).json().user,
+      ).toMatchObject({ role: "warehouse_manager", warehouseId: "wh-indiranagar" });
+      expect((await patch(created.id, { role: "admin" })).statusCode).toBe(400);
+      const rider = (await list("?role=rider")).json().items[0];
+      expect((await patch(rider.id, { name: "x" })).statusCode).toBe(404);
+      const adminRow = (await list("?role=admin")).json().items[0];
+      expect((await patch(adminRow.id, { name: "x" })).statusCode).toBe(409);
+    });
+
+    it("resets a staff password and ends their sessions", async () => {
+      const email = "test-reset@example.com";
+      const created = (
+        await call(
+          "POST",
+          "/v1/identity/admin/staff",
+          {
+            name: "Test Reset",
+            email,
+            password: "old-password-123",
+            role: "warehouse_staff",
+            warehouseId: "wh-noida-62",
+          },
+          asAdmin,
+        )
+      ).json();
+      const session = (
+        await call("POST", "/v1/identity/auth/login", { email, password: "old-password-123" })
+      ).json();
+      const reset = (body: object, id = created.id) =>
+        call("POST", `/v1/identity/admin/users/${id}/reset-password`, body, asAdmin);
+      expect((await reset({ password: "short" })).statusCode).toBe(400);
+      expect((await reset({ password: "brand-new-password-1" })).statusCode).toBe(200);
+      expect(
+        (await call("POST", "/v1/identity/auth/refresh", { refreshToken: session.refreshToken }))
+          .statusCode,
+      ).toBe(401);
+      expect(
+        (await call("POST", "/v1/identity/auth/login", { email, password: "old-password-123" }))
+          .statusCode,
+      ).toBe(401);
+      expect(
+        (await call("POST", "/v1/identity/auth/login", { email, password: "brand-new-password-1" }))
+          .statusCode,
+      ).toBe(200);
+      const rider = (await list("?role=rider")).json().items[0];
+      expect((await reset({ password: "brand-new-password-1" }, rider.id)).statusCode).toBe(404);
+    });
+
+    it("will not let an admin block their own account", async () => {
+      const adminRow = (await list("?role=admin")).json().items[0];
+      const own = signIdentityHeaders(
+        { userId: adminRow.id, role: "admin", warehouseId: null },
+        DEV_INTERNAL_KEY,
+      );
+      expect(
+        (await call("POST", `/v1/identity/admin/users/${adminRow.id}/block`, undefined, own))
+          .statusCode,
+      ).toBe(409);
+      expect(
+        (await call("PATCH", `/v1/identity/admin/staff/${adminRow.id}`, { name: "x" }, own))
+          .statusCode,
+      ).toBe(409);
     });
   });
 

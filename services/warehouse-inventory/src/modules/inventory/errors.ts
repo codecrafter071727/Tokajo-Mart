@@ -38,3 +38,28 @@ export class ReservationStateError extends Error {
     this.name = "ReservationStateError";
   }
 }
+
+/** A stock change that would break the numbers, for example removing more than is free. */
+export class StockChangeError extends Error {
+  readonly statusCode = 409;
+  constructor(message: string) {
+    super(message);
+    this.name = "StockChangeError";
+  }
+}
+
+export class NotFoundError extends Error {
+  readonly statusCode = 404;
+  constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
+export class WarehouseExistsError extends Error {
+  readonly statusCode = 409;
+  constructor(id: string) {
+    super(`A warehouse with the id "${id}" already exists.`);
+    this.name = "WarehouseExistsError";
+  }
+}

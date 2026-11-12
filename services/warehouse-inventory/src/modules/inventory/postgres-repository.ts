@@ -1,9 +1,15 @@
-import type { Reservation } from "@qc/contracts";
+import type { Reservation, StockMovement, StockRow } from "@qc/contracts";
 import { sql, type Kysely, type Transaction } from "kysely";
 import type { DB } from "../../db/types.generated";
 import { type StockRecord, type Warehouse } from "./domain";
-import { ReservationStateError, WarehouseClosedError } from "./errors";
-import { checkLines, mergeLines, type InventoryRepository } from "./repository";
+import {
+  NotFoundError,
+  ReservationStateError,
+  StockChangeError,
+  WarehouseClosedError,
+  WarehouseExistsError,
+} from "./errors";
+import { checkLines, mergeLines, removalMessage, type InventoryRepository } from "./repository";
 
 type Reader = Kysely<DB> | Transaction<DB>;
 
@@ -45,6 +51,53 @@ async function readStock(
     maxPerOrder: r.maxPerOrder,
   }));
 }
+
+const escapeLike = (value: string) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+const STOCK_COLUMNS = [
+  "productId",
+  "warehouseId",
+  "onHand",
+  "reserved",
+  "maxPerOrder",
+  "rackLocation",
+  "updatedAt",
+] as const;
+
+const toStockRow = (r: {
+  productId: string;
+  warehouseId: string;
+  onHand: number;
+  reserved: number;
+  maxPerOrder: number | null;
+  rackLocation: string | null;
+  updatedAt: Date | string;
+}): StockRow => ({
+  productId: r.productId,
+  warehouseId: r.warehouseId,
+  onHand: r.onHand,
+  reserved: r.reserved,
+  available: r.onHand - r.reserved,
+  maxPerOrder: r.maxPerOrder,
+  rackLocation: r.rackLocation,
+  updatedAt: new Date(r.updatedAt).toISOString(),
+});
+
+const toWarehouse = (r: {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusKm: string | number;
+  open: boolean;
+}): Warehouse => ({
+  id: r.id,
+  name: r.name,
+  lat: r.lat,
+  lng: r.lng,
+  radiusKm: Number(r.radiusKm),
+  open: r.open,
+});
 
 async function linesOf(db: Reader, reservationId: string) {
   return db
@@ -241,6 +294,166 @@ export function createPostgresInventoryRepository(db: Kysely<DB>): InventoryRepo
         }
         return toReservation(row);
       });
+    },
+
+    async listStock({ warehouseId, q, limit, offset }) {
+      let query = db
+        .selectFrom("inventory.stockItems")
+        .select([...STOCK_COLUMNS])
+        .where("warehouseId", "=", warehouseId);
+      if (q) query = query.where("productId", "ilike", `%${escapeLike(q)}%`);
+      const rows = await query
+        // Numeric aware: p2 before p10
+        .orderBy(sql`regexp_replace(product_id, '[0-9]+', '', 'g')`)
+        .orderBy(sql`nullif(regexp_replace(product_id, '[^0-9]', '', 'g'), '')::numeric`)
+        .orderBy("productId")
+        .limit(limit + 1)
+        .offset(offset)
+        .execute();
+      return {
+        items: rows.slice(0, limit).map(toStockRow),
+        nextOffset: rows.length > limit ? offset + limit : null,
+      };
+    },
+
+    async receiveStock({ warehouseId, reference, items, actorId }) {
+      const lines = mergeLines(items);
+      return db.transaction().execute(async (trx) => {
+        const out: StockRow[] = [];
+        for (const line of lines) {
+          const row = await trx
+            .insertInto("inventory.stockItems")
+            .values({ warehouseId, productId: line.productId, onHand: line.quantity })
+            .onConflict((oc) =>
+              oc.columns(["warehouseId", "productId"]).doUpdateSet({
+                onHand: sql`inventory.stock_items.on_hand + ${line.quantity}`,
+              }),
+            )
+            .returning([...STOCK_COLUMNS])
+            .executeTakeFirstOrThrow();
+          await trx
+            .insertInto("inventory.stockMovements")
+            .values({
+              warehouseId,
+              productId: line.productId,
+              type: "grn",
+              quantityDelta: line.quantity,
+              reference: reference ?? null,
+              actorId,
+            })
+            .execute();
+          out.push(toStockRow(row));
+        }
+        return out;
+      });
+    },
+
+    async adjustStock({ warehouseId, productId, type, quantityDelta, reason, actorId }) {
+      return db.transaction().execute(async (trx) => {
+        // One conditional UPDATE: the new on hand must stay at or above what is held for orders
+        const updated = await trx
+          .updateTable("inventory.stockItems")
+          .set({ onHand: sql`on_hand + ${quantityDelta}` })
+          .where("warehouseId", "=", warehouseId)
+          .where("productId", "=", productId)
+          .where(sql<boolean>`on_hand + ${quantityDelta} >= reserved`)
+          .where(sql<boolean>`on_hand + ${quantityDelta} >= 0`)
+          .returning([...STOCK_COLUMNS])
+          .executeTakeFirst();
+        if (!updated) {
+          const current = await trx
+            .selectFrom("inventory.stockItems")
+            .select(["onHand", "reserved"])
+            .where("warehouseId", "=", warehouseId)
+            .where("productId", "=", productId)
+            .executeTakeFirst();
+          if (!current)
+            throw new NotFoundError("That product has no stock record in this warehouse.");
+          throw new StockChangeError(
+            removalMessage(-quantityDelta, current.onHand, current.reserved),
+          );
+        }
+        await trx
+          .insertInto("inventory.stockMovements")
+          .values({ warehouseId, productId, type, quantityDelta, reason, actorId })
+          .execute();
+        return toStockRow(updated);
+      });
+    },
+
+    async updateStockSettings(warehouseId, productId, patch) {
+      const set: { maxPerOrder?: number | null; rackLocation?: string | null } = {};
+      if (patch.maxPerOrder !== undefined) set.maxPerOrder = patch.maxPerOrder;
+      if (patch.rackLocation !== undefined) set.rackLocation = patch.rackLocation || null;
+      const row = await db
+        .updateTable("inventory.stockItems")
+        .set(set)
+        .where("warehouseId", "=", warehouseId)
+        .where("productId", "=", productId)
+        .returning([...STOCK_COLUMNS])
+        .executeTakeFirst();
+      return row ? toStockRow(row) : null;
+    },
+
+    async listMovements({ warehouseId, productId, limit, beforeId }) {
+      let query = db
+        .selectFrom("inventory.stockMovements")
+        .selectAll()
+        .where("warehouseId", "=", warehouseId);
+      if (productId) query = query.where("productId", "=", productId);
+      if (beforeId !== undefined) query = query.where("id", "<", String(beforeId));
+      const rows = await query
+        .orderBy("id", "desc")
+        .limit(limit + 1)
+        .execute();
+      const page = rows.slice(0, limit).map((m): StockMovement => ({
+        id: String(m.id),
+        warehouseId: m.warehouseId,
+        productId: m.productId,
+        type: m.type as StockMovement["type"],
+        quantityDelta: m.quantityDelta,
+        reason: m.reason,
+        reference: m.reference,
+        actorId: m.actorId,
+        createdAt: new Date(m.createdAt).toISOString(),
+      }));
+      return {
+        items: page,
+        nextBeforeId: rows.length > limit ? Number(page[page.length - 1]!.id) : null,
+      };
+    },
+
+    async createWarehouse(warehouse) {
+      try {
+        const row = await db
+          .insertInto("inventory.warehouses")
+          .values({
+            id: warehouse.id,
+            name: warehouse.name,
+            lat: warehouse.lat,
+            lng: warehouse.lng,
+            radiusKm: warehouse.radiusKm,
+            open: warehouse.open,
+          })
+          .returning(["id", "name", "lat", "lng", "radiusKm", "open"])
+          .executeTakeFirstOrThrow();
+        return toWarehouse(row);
+      } catch (error) {
+        if ((error as { code?: string }).code === "23505")
+          throw new WarehouseExistsError(warehouse.id);
+        throw error;
+      }
+    },
+
+    async updateWarehouse(id, patch) {
+      if (Object.keys(patch).length === 0) return repo.getWarehouse(id);
+      const row = await db
+        .updateTable("inventory.warehouses")
+        .set(patch)
+        .where("id", "=", id)
+        .returning(["id", "name", "lat", "lng", "radiusKm", "open"])
+        .executeTakeFirst();
+      return row ? toWarehouse(row) : null;
     },
 
     async restock(reference) {

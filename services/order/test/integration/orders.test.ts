@@ -355,6 +355,203 @@ suite("order service", async () => {
     });
   });
 
+  describe("reports", () => {
+    const WH_A = "wh-rpt-a";
+    const WH_B = "wh-rpt-b";
+    const summary = (qs: string, headers = admin) => get(`/v1/orders/admin/summary${qs}`, headers);
+    const RANGE = "from=2026-11-10&to=2026-11-13";
+
+    const seed = async (
+      n: number,
+      o: {
+        status: string;
+        placed: string;
+        delivered?: string;
+        total: number;
+        promised?: number;
+        wh?: string;
+      },
+      items: { id: string; qty: number; unit: number }[],
+    ) => {
+      const row = await db
+        .insertInto("orders.orders")
+        .values({
+          number: `QC-RPT-${n}`,
+          userId: ALICE,
+          warehouseId: o.wh ?? WH_A,
+          status: o.status,
+          paymentMethod: "cod",
+          itemTotalPaise: o.total,
+          mrpTotalPaise: o.total,
+          savingsPaise: 0,
+          deliveryFeePaise: 0,
+          handlingFeePaise: 0,
+          tipPaise: 0,
+          totalPaise: o.total,
+          promisedMins: o.promised ?? 10,
+          deliveryCode: "1234",
+          addressTag: "Home",
+          addressLine1: "x",
+          idempotencyKey: `rpt-${n}-${Date.now()}`,
+          placedAt: new Date(o.placed),
+          deliveredAt: o.delivered ? new Date(o.delivered) : null,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto("orders.orderItems")
+        .values(
+          items.map((i) => ({
+            orderId: row.id,
+            productId: i.id,
+            name: `Product ${i.id}`,
+            quantity: i.qty,
+            unitPricePaise: i.unit,
+            mrpPaise: i.unit,
+          })),
+        )
+        .execute();
+    };
+
+    beforeEach(async () => {
+      // 23:59 India time on 10 Nov is 18:29 UTC, and 00:01 on 11 Nov is 18:31 UTC
+      await seed(
+        1,
+        {
+          status: "delivered",
+          placed: "2026-11-10T18:29:00Z",
+          delivered: "2026-11-10T18:39:00Z",
+          total: 10000,
+        },
+        [{ id: "pA", qty: 2, unit: 1000 }],
+      );
+      await seed(
+        2,
+        {
+          status: "delivered",
+          placed: "2026-11-10T18:31:00Z",
+          delivered: "2026-11-10T18:51:00Z",
+          total: 20000,
+        },
+        [
+          { id: "pA", qty: 1, unit: 1000 },
+          { id: "pB", qty: 3, unit: 2000 },
+        ],
+      );
+      await seed(3, { status: "cancelled", placed: "2026-11-12T06:00:00Z", total: 5000 }, [
+        { id: "pC", qty: 9, unit: 9999 },
+      ]);
+      await seed(4, { status: "confirmed", placed: "2026-11-12T07:00:00Z", total: 3000 }, [
+        { id: "pB", qty: 1, unit: 2000 },
+      ]);
+      await seed(
+        5,
+        {
+          status: "delivered",
+          placed: "2026-11-12T07:00:00Z",
+          delivered: "2026-11-12T07:05:00Z",
+          total: 7000,
+          wh: WH_B,
+        },
+        [{ id: "pA", qty: 1, unit: 1000 }],
+      );
+    });
+
+    it("counts, totals and rates for a warehouse", async () => {
+      const res = await summary(`?${RANGE}&warehouseId=${WH_A}`);
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toMatchObject({ from: "2026-11-10", to: "2026-11-13", warehouseId: WH_A });
+      expect(body.totals).toEqual({
+        orders: 4,
+        delivered: 2,
+        cancelled: 1,
+        active: 1,
+        gmvPaise: 30000,
+        averageOrderPaise: 15000,
+        cancelRatePercent: 25,
+        averageDeliveryMins: 15,
+        onTimePercent: 50, // 10 minutes is on time (exactly the promise), 20 minutes is late
+      });
+      expect(body.byStatus).toEqual({ delivered: 2, cancelled: 1, confirmed: 1 });
+    });
+
+    it("zero fills days and buckets by India local day", async () => {
+      const { daily } = (await summary(`?${RANGE}&warehouseId=${WH_A}`)).json();
+      expect(daily).toEqual([
+        { date: "2026-11-10", orders: 1, gmvPaise: 10000 },
+        { date: "2026-11-11", orders: 1, gmvPaise: 20000 },
+        { date: "2026-11-12", orders: 2, gmvPaise: 0 },
+        { date: "2026-11-13", orders: 0, gmvPaise: 0 },
+      ]);
+      // The same two orders are split by the India midnight, not the UTC one
+      const first = (await summary(`?from=2026-11-10&to=2026-11-10&warehouseId=${WH_A}`)).json();
+      const second = (await summary(`?from=2026-11-11&to=2026-11-11&warehouseId=${WH_A}`)).json();
+      expect(first.totals.orders).toBe(1);
+      expect(first.totals.gmvPaise).toBe(10000);
+      expect(second.totals.orders).toBe(1);
+      expect(second.totals.gmvPaise).toBe(20000);
+    });
+
+    it("ranks top products by revenue and leaves out cancelled orders", async () => {
+      const { topProducts } = (await summary(`?${RANGE}&warehouseId=${WH_A}`)).json();
+      expect(topProducts).toEqual([
+        { productId: "pB", name: "Product pB", quantity: 4, revenuePaise: 8000 },
+        { productId: "pA", name: "Product pA", quantity: 3, revenuePaise: 3000 },
+      ]);
+    });
+
+    it("gives admins a per warehouse split and an empty result for an empty range", async () => {
+      const all = (await summary(`?${RANGE}`)).json();
+      expect(all.warehouseId).toBeNull();
+      const split = Object.fromEntries(
+        all.byWarehouse.map((w: { warehouseId: string }) => [w.warehouseId, w]),
+      );
+      expect(split[WH_A]).toMatchObject({ orders: 4, gmvPaise: 30000 });
+      expect(split[WH_B]).toMatchObject({ orders: 1, gmvPaise: 7000 });
+      const none = (await summary(`?from=2026-01-01&to=2026-01-03&warehouseId=${WH_A}`)).json();
+      expect(none.totals).toMatchObject({
+        orders: 0,
+        gmvPaise: 0,
+        averageOrderPaise: 0,
+        cancelRatePercent: 0,
+        averageDeliveryMins: null,
+        onTimePercent: null,
+      });
+      expect(none.daily).toHaveLength(3);
+      expect(none.topProducts).toEqual([]);
+    });
+
+    it("forces a manager to their own warehouse and hides the split", async () => {
+      const managerA = as(ADMIN, "warehouse_manager", WH_A);
+      const mine = (await summary(`?${RANGE}&warehouseId=${WH_B}`, managerA)).json(); // asks for B, gets A
+      expect(mine.warehouseId).toBe(WH_A);
+      expect(mine.totals.orders).toBe(4);
+      expect(mine.byWarehouse).toEqual([]);
+      const managerB = as(ADMIN, "warehouse_manager", WH_B);
+      expect((await summary(`?${RANGE}`, managerB)).json().totals.orders).toBe(1);
+    });
+
+    it("is closed to customers and staff, and rejects bad ranges", async () => {
+      expect((await summary("", alice)).statusCode).toBe(403);
+      expect((await summary("", staff)).statusCode).toBe(403);
+      expect(
+        (await app.inject({ method: "GET", url: "/v1/orders/admin/summary" })).statusCode,
+      ).toBe(401);
+      expect((await summary("?from=yesterday")).statusCode).toBe(400);
+      expect((await summary("?from=2026-11-13&to=2026-11-10")).statusCode).toBe(400);
+      expect((await summary("?from=2024-01-01&to=2026-01-01")).statusCode).toBe(400);
+      expect((await summary("?from=2026-13-45&to=2026-13-46")).statusCode).toBe(400);
+    });
+
+    it("defaults to the last seven days ending today", async () => {
+      const { daily, from, to } = (await summary(`?warehouseId=${WH_A}`)).json();
+      expect(daily).toHaveLength(7);
+      expect(daily[0].date).toBe(from);
+      expect(daily[6].date).toBe(to);
+    });
+  });
+
   describe("cancelling", () => {
     it("lets the customer cancel before packing, and puts the stock back", async () => {
       const order = (await place()).json();

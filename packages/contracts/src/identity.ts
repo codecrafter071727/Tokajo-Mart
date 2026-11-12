@@ -86,3 +86,62 @@ export const GATEWAY_HEADERS = {
   /** HMAC of the three headers above, proving they came from the gateway */
   signature: "x-gateway-signature",
 } as const;
+
+// --- Admin: user administration ---------------------------------------------------------------
+
+export const userStatusSchema = z.enum(["active", "blocked", "pending"]);
+
+export const adminUsersQuerySchema = z.object({
+  role: roleSchema.optional(),
+  status: userStatusSchema.optional(),
+  /** Matches part of a name, phone number or email */
+  q: z.string().trim().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  /** Opaque cursor from the previous page */
+  cursor: z.string().min(1).max(200).optional(),
+});
+
+export const adminUserSchema = z.object({
+  id: z.uuid(),
+  role: roleSchema,
+  name: z.string(),
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  status: userStatusSchema,
+  warehouseId: z.string().nullable(),
+  createdAt: z.string(),
+  /** Only for riders */
+  vehicle: z.string().nullable(),
+  rating: z.number().nullable(),
+});
+export type AdminUser = z.infer<typeof adminUserSchema>;
+
+export const adminUsersResponseSchema = z.object({
+  items: z.array(adminUserSchema),
+  nextCursor: z.string().nullable(),
+});
+export type AdminUsersResponse = z.infer<typeof adminUsersResponseSchema>;
+
+export const updateRiderBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    vehicle: z.string().trim().max(80).optional(),
+    warehouseId: z.string().min(1).optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send at least one field to change.",
+  });
+
+export const updateStaffBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    role: z.enum(["warehouse_staff", "warehouse_manager"]).optional(),
+    warehouseId: z.string().min(1).optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send at least one field to change.",
+  });
+
+export const resetPasswordBodySchema = z.object({ password: z.string().min(10).max(200) });
