@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsup",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
@@ -49,6 +50,7 @@
     "eslint": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "@types/pg": "catalog:"
+    "@types/pg": "catalog:",
+    "vitest": "catalog:"
   }
 }

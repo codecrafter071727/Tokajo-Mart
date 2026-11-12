@@ -6,7 +6,11 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { seedCategories, seedProducts } from "../services/catalog/src/modules/catalog/seed";
-import { seedStock, seedWarehouses } from "../services/warehouse-inventory/src/modules/inventory/seed";
+import {
+  seedStock,
+  seedWarehouses,
+} from "../services/warehouse-inventory/src/modules/inventory/seed";
+import { hashPassword } from "../services/identity/src/modules/auth/password";
 
 const q = (value: string | number | boolean | null | undefined): string => {
   if (value === null || value === undefined) return "null";
@@ -43,5 +47,69 @@ for (const s of seedStock) {
   );
 }
 
-writeFileSync(path.resolve(import.meta.dirname, "..", "supabase", "seed.sql"), lines.join("\n") + "\n");
-console.log(`seed.sql: ${seedCategories.length} categories, ${seedProducts.length} products, ${seedWarehouses.length} warehouses, ${seedStock.length} stock rows`);
+// ---- identity: dev accounts. The password is for local development only.
+const DEV_PASSWORD = "tokajo-dev";
+const salt = Buffer.from("tokajo-dev-seed-salt-1234567890!".slice(0, 16));
+const passwordHash = await hashPassword(DEV_PASSWORD, salt);
+const WH = "wh-noida-62";
+const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+lines.push(
+  "",
+  "-- identity (dev accounts: staff and admin sign in with the password " + DEV_PASSWORD + ")",
+);
+const staff = [
+  { id: uid(1), role: "admin", name: "Admin", email: "admin@tokajo.dev", wh: null },
+  {
+    id: uid(2),
+    role: "warehouse_manager",
+    name: "Noida Manager",
+    email: "manager@tokajo.dev",
+    wh: WH,
+  },
+  { id: uid(3), role: "warehouse_staff", name: "Noida Packer", email: "packer@tokajo.dev", wh: WH },
+];
+for (const u of staff) {
+  lines.push(
+    `insert into identity.users (id, role, name, email, password_hash, warehouse_id) values (${q(u.id)}, ${q(u.role)}, ${q(u.name)}, ${q(u.email)}, ${q(passwordHash)}, ${q(u.wh)}) on conflict (id) do nothing;`,
+  );
+}
+const riders = [
+  {
+    id: uid(11),
+    name: "Ravi Kumar",
+    phone: "+919810000011",
+    vehicle: "Bike, DL 8S 4521",
+    rating: 4.8,
+  },
+  {
+    id: uid(12),
+    name: "Sunil Yadav",
+    phone: "+919810000012",
+    vehicle: "Bike, UP 16 AB 7710",
+    rating: 4.6,
+  },
+  {
+    id: uid(13),
+    name: "Imran Ali",
+    phone: "+919810000013",
+    vehicle: "Scooter, UP 14 CD 2231",
+    rating: 4.9,
+  },
+];
+for (const r of riders) {
+  lines.push(
+    `insert into identity.users (id, role, name, phone) values (${q(r.id)}, 'rider', ${q(r.name)}, ${q(r.phone)}) on conflict (id) do nothing;`,
+  );
+  lines.push(
+    `insert into identity.rider_profiles (user_id, vehicle, rating, warehouse_id) values (${q(r.id)}, ${q(r.vehicle)}, ${r.rating}, ${q(WH)}) on conflict (user_id) do nothing;`,
+  );
+}
+
+writeFileSync(
+  path.resolve(import.meta.dirname, "..", "supabase", "seed.sql"),
+  lines.join("\n") + "\n",
+);
+console.log(
+  `seed.sql: ${staff.length} staff, ${riders.length} riders, ${seedCategories.length} categories, ${seedProducts.length} products, ${seedWarehouses.length} warehouses, ${seedStock.length} stock rows`,
+);

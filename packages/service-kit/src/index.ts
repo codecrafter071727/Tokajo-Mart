@@ -26,3 +26,20 @@ export {
   type InternalClient,
   type InternalClientOptions,
 } from "./internal-client";
+export {
+  assertWarehouseScope,
+  AuthError,
+  createTokenVerifier,
+  DEV_INTERNAL_KEY,
+  DEV_JWT_SECRET,
+  readIdentityHeaders,
+  registerGatewayIdentity,
+  requireIdentity,
+  requireRole,
+  signAccessToken,
+  signIdentityHeaders,
+  TokenError,
+  type AccessTokenInput,
+  type Identity,
+  type TokenVerifier,
+} from "./auth";

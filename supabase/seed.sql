@@ -73,3 +73,14 @@ insert into inventory.stock_items (warehouse_id, product_id, on_hand, max_per_or
 insert into inventory.stock_items (warehouse_id, product_id, on_hand, max_per_order) values ('wh-indiranagar', 'p18', 25, null) on conflict (warehouse_id, product_id) do nothing;
 insert into inventory.stock_items (warehouse_id, product_id, on_hand, max_per_order) values ('wh-indiranagar', 'p19', 25, null) on conflict (warehouse_id, product_id) do nothing;
 insert into inventory.stock_items (warehouse_id, product_id, on_hand, max_per_order) values ('wh-indiranagar', 'p20', 25, null) on conflict (warehouse_id, product_id) do nothing;
+
+-- identity (dev accounts: staff and admin sign in with the password tokajo-dev)
+insert into identity.users (id, role, name, email, password_hash, warehouse_id) values ('00000000-0000-4000-8000-000000000001', 'admin', 'Admin', 'admin@tokajo.dev', 'scrypt$16384$8$1$746f6b616a6f2d6465762d736565642d$ca097c7bd46f08a50a115677d43fd4243e11f4bd32670d8662429eb7f13a1ae2', null) on conflict (id) do nothing;
+insert into identity.users (id, role, name, email, password_hash, warehouse_id) values ('00000000-0000-4000-8000-000000000002', 'warehouse_manager', 'Noida Manager', 'manager@tokajo.dev', 'scrypt$16384$8$1$746f6b616a6f2d6465762d736565642d$ca097c7bd46f08a50a115677d43fd4243e11f4bd32670d8662429eb7f13a1ae2', 'wh-noida-62') on conflict (id) do nothing;
+insert into identity.users (id, role, name, email, password_hash, warehouse_id) values ('00000000-0000-4000-8000-000000000003', 'warehouse_staff', 'Noida Packer', 'packer@tokajo.dev', 'scrypt$16384$8$1$746f6b616a6f2d6465762d736565642d$ca097c7bd46f08a50a115677d43fd4243e11f4bd32670d8662429eb7f13a1ae2', 'wh-noida-62') on conflict (id) do nothing;
+insert into identity.users (id, role, name, phone) values ('00000000-0000-4000-8000-000000000011', 'rider', 'Ravi Kumar', '+919810000011') on conflict (id) do nothing;
+insert into identity.rider_profiles (user_id, vehicle, rating, warehouse_id) values ('00000000-0000-4000-8000-000000000011', 'Bike, DL 8S 4521', 4.8, 'wh-noida-62') on conflict (user_id) do nothing;
+insert into identity.users (id, role, name, phone) values ('00000000-0000-4000-8000-000000000012', 'rider', 'Sunil Yadav', '+919810000012') on conflict (id) do nothing;
+insert into identity.rider_profiles (user_id, vehicle, rating, warehouse_id) values ('00000000-0000-4000-8000-000000000012', 'Bike, UP 16 AB 7710', 4.6, 'wh-noida-62') on conflict (user_id) do nothing;
+insert into identity.users (id, role, name, phone) values ('00000000-0000-4000-8000-000000000013', 'rider', 'Imran Ali', '+919810000013') on conflict (id) do nothing;
+insert into identity.rider_profiles (user_id, vehicle, rating, warehouse_id) values ('00000000-0000-4000-8000-000000000013', 'Scooter, UP 14 CD 2231', 4.9, 'wh-noida-62') on conflict (user_id) do nothing;

@@ -20,6 +20,7 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import type { BaseEnv } from "./env";
+import { registerGatewayIdentity } from "./auth";
 import { registerErrorHandler } from "./errors";
 import { registerHealthRoutes } from "./health";
 import { registerInternalAuth } from "./internal-auth";
@@ -105,6 +106,7 @@ export async function createService(options: CreateServiceOptions): Promise<Serv
     apiKey: env.INTERNAL_API_KEY,
     production: env.NODE_ENV === "production",
   });
+  registerGatewayIdentity(app, { key: env.INTERNAL_API_KEY });
   registerErrorHandler(app);
   registerHealthRoutes(app, { service: name, readinessCheck });
 

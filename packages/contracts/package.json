@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsup",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "zod": "catalog:"
@@ -29,6 +30,7 @@
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
