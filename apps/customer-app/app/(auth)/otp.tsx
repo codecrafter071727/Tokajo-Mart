@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
-import { useAuthStore } from "../../src/store/auth";
+import { DEMO_OTP, useAuthStore } from "../../src/store/auth";
 import { Ionicons } from "@expo/vector-icons";
 
 const OTP_LENGTH = 4;
@@ -31,8 +31,22 @@ export default function OtpScreen() {
   }, [countdown]);
 
   const login = useAuthStore((s) => s.login);
+  const [error, setError] = useState<string | null>(null);
+
+  const verify = (code: string) => {
+    if (code !== DEMO_OTP) {
+      setError("That code is not right. Try again.");
+      setOtp(["", "", "", ""]);
+      inputs.current[0]?.focus();
+      return;
+    }
+    setError(null);
+    login(phone ?? "98765 43210");
+    // The route guard in the root layout moves a signed in user to the app
+  };
 
   const handleOtpChange = (value: string, index: number) => {
+    setError(null);
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
@@ -41,8 +55,7 @@ export default function OtpScreen() {
     }
     // Auto-verify when all filled
     if (newOtp.every((d) => d !== "") && newOtp.join("").length === OTP_LENGTH) {
-      login(phone ?? "98765 43210");
-      setTimeout(() => router.replace("/(tabs)"), 400);
+      verify(newOtp.join(""));
     }
   };
 
@@ -114,14 +127,18 @@ export default function OtpScreen() {
           )}
         </View>
 
+        {error ? (
+          <Text style={styles.errorText} accessibilityRole="alert">
+            {error}
+          </Text>
+        ) : null}
+        <Text style={styles.demoHint}>Demo mode: the code is {DEMO_OTP}.</Text>
+
         {/* Verify button */}
         <Pressable
           style={[styles.verifyBtn, !isComplete && styles.verifyBtnDisabled]}
           onPress={() => {
-            if (isComplete) {
-              login(phone ?? "98765 43210");
-              router.replace("/(tabs)");
-            }
+            if (isComplete) verify(otp.join(""));
           }}
         >
           <Text style={[styles.verifyBtnText, !isComplete && styles.verifyBtnTextDisabled]}>
@@ -138,6 +155,19 @@ export default function OtpScreen() {
 }
 
 const styles = StyleSheet.create({
+  errorText: {
+    fontSize: FontSize.body,
+    fontWeight: "700",
+    color: Colors.danger,
+    textAlign: "center",
+    marginBottom: Spacing[8],
+  },
+  demoHint: {
+    fontSize: FontSize.caption,
+    color: Colors.textTertiary,
+    textAlign: "center",
+    marginBottom: Spacing[12],
+  },
   root: {
     flex: 1,
     backgroundColor: Colors.surface,
