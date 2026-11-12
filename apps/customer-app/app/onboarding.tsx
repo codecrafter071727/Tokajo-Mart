@@ -2,15 +2,15 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Dimensions, FlatList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import Animated, {
+import {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withSpring,
   withDelay,
-  interpolate,
 } from "react-native-reanimated";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
+import { AnimatedView } from "../src/components/AnimatedView";
 import { useAuthStore } from "../src/store/auth";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -49,7 +49,6 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const completeOnboarding = useAuthStore((s) => s.completeOnboarding);
   const flatListRef = useRef<FlatList>(null);
-  const currentIdx = useRef(0);
   const [activeIdx, setActiveIdx] = React.useState(0);
 
   const logoScale = useSharedValue(0);
@@ -88,7 +87,6 @@ export default function OnboardingScreen() {
   };
 
   const activeSlide = (SLIDES[activeIdx] ?? SLIDES[0])!;
-  const AnimatedView = Animated.View as any;
 
   return (
     <View style={[styles.root, { backgroundColor: activeSlide.bg }]}>

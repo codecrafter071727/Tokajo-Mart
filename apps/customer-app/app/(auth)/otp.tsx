@@ -22,7 +22,7 @@ export default function OtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [countdown, setCountdown] = useState(30);
-  const inputs = useRef<any[]>([]);
+  const inputs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>([]);
 
   useEffect(() => {
     if (countdown <= 0) return;

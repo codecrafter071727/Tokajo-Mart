@@ -1,15 +1,11 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  withSpring,
-} from "react-native-reanimated";
+import { useAnimatedStyle, useSharedValue, withTiming, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { AnimatedView } from "./AnimatedView";
 import { Colors, Radius, Shadow, Spacing, typography, Motion } from "../theme";
 import { colors } from "../theme/tokens";
 import { useCartStore } from "../store/cart";
@@ -60,7 +56,6 @@ export function CartBar({ bottomOffset = 0 }: CartBarProps) {
   const remaining = Math.max(0, FREE_DELIVERY_MIN - totalPrice);
   const progress = Math.min(1, totalPrice / FREE_DELIVERY_MIN);
   const bottomInset = insets.bottom + bottomOffset + Spacing[8];
-  const AnimatedView = Animated.View as any;
   const previews = items.slice(-3).reverse();
 
   return (

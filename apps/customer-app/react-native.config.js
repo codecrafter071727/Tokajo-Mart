@@ -1,3 +1,5 @@
+// Loaded by the React Native CLI as CommonJS, so require() is correct here
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require("node:fs");
 const path = require("node:path");
 

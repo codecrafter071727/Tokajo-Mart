@@ -23,6 +23,10 @@ interface AddButtonProps {
   optionsCount?: number;
 }
 
+// The workspace has two copies of @types/react (18 for the web apps, 19 for mobile) and Reanimated's
+// types resolve to the wrong one, so Pressable cannot be typed exactly. Remove this cast once the
+// versions are unified.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable as any);
 
 function tap() {

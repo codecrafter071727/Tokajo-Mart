@@ -35,3 +35,16 @@ onlyBuiltDependencies:
   - esbuild
   - protobufjs
   - supabase
+
+# Security patches for transitive dependencies. These live here, not in package.json: this pnpm
+# version ignores the "pnpm" field in package.json.
+overrides:
+  "@grpc/grpc-js": ">=1.13.6"
+  postcss: ">=8.5.18"
+  zod: ">=4.6.6"
+  follow-redirects: ">=1.16.2"
+  node-forge: ">=1.4.1"
+
+auditConfig:
+  ignoreGhsas:
+    - GHSA-86w9-cpqp-85rv

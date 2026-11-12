@@ -1,12 +1,13 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import Animated, {
+import {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { AnimatedView } from "./AnimatedView";
 import { Colors, Radius } from "../theme";
 
 interface SkeletonProps {
@@ -30,8 +31,6 @@ export function Skeleton({ width = "100%", height = 16, borderRadius = 4, style 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
   }));
-
-  const AnimatedView = Animated.View as any;
 
   return (
     <AnimatedView
