@@ -6,7 +6,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors, Spacing, Radius, typography } from "../../src/theme";
 import { TAB_RESERVE } from "../../src/theme/tabs";
 import { ProductCard } from "../../src/components/ProductCard";
-import { categories, getFeaturedProducts, getProductsByCategory } from "../../src/lib/mockData";
+import { useCategories, useProducts } from "../../src/lib/queries";
+import { EmptyState, ErrorState, ProductGridSkeleton } from "../../src/components/StateViews";
+import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
 
 const SIDEBAR_W = 84;
@@ -23,25 +25,24 @@ export default function CategoriesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ categoryId?: string }>();
-  const [activeCategory, setActiveCategory] = useState<string>(
-    params.categoryId ?? categories[0]?.id ?? "fruits",
-  );
+  const categoriesQuery = useCategories();
+  const categories = categoriesQuery.data ?? [];
+  const [selected, setSelected] = useState<string | undefined>(params.categoryId);
+  // Until the user picks one, show the first category once the list has loaded
+  const activeCategory = selected ?? categories[0]?.id;
   const [activeChip, setActiveChip] = useState("Filters");
   const [gridW, setGridW] = useState(0);
 
   useEffect(() => {
-    if (params.categoryId) setActiveCategory(params.categoryId);
+    if (params.categoryId) setSelected(params.categoryId);
   }, [params.categoryId]);
 
-  const matched = getProductsByCategory(activeCategory);
-  const products = matched.length > 0 ? matched : getFeaturedProducts();
-  const activeCat = categories.find((c) => c.id === activeCategory) ??
-    categories[0] ?? {
-      id: "fruits",
-      name: "Fruits",
-      image: "🥦",
-      color: "#E8F5E9",
-    };
+  const productsQuery = useProducts(
+    { categoryId: activeCategory, limit: 100 },
+    { enabled: activeCategory !== undefined },
+  );
+  const products = productsQuery.data ?? [];
+  const activeCat = categories.find((c) => c.id === activeCategory);
 
   // With the sidebar the grid pane is ~300px on phones; 3 columns would make ~90px cards
   const numColumns = gridW >= 420 ? 3 : 2;
@@ -68,7 +69,7 @@ export default function CategoriesScreen() {
         >
           <Ionicons name="search" size={18} color={Colors.brandText} />
           <Text style={styles.searchPlaceholder} numberOfLines={1}>
-            Search in {labelFor(activeCat.name)}
+            {activeCat ? `Search in ${labelFor(activeCat.name)}` : "Search products"}
           </Text>
         </Pressable>
       </View>
@@ -82,6 +83,14 @@ export default function CategoriesScreen() {
               { paddingBottom: TAB_RESERVE + 80 + insets.bottom },
             ]}
           >
+            {categoriesQuery.isPending
+              ? Array.from({ length: 6 }, (_, i) => (
+                  <View key={i} style={styles.sidebarItem}>
+                    <Skeleton width={56} height={56} borderRadius={Radius.md} />
+                    <Skeleton width={48} height={10} style={{ marginTop: Spacing[4] }} />
+                  </View>
+                ))
+              : null}
             {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
@@ -89,7 +98,7 @@ export default function CategoriesScreen() {
                   key={cat.id}
                   style={[styles.sidebarItem, isActive && styles.sidebarItemActive]}
                   onPress={() => {
-                    setActiveCategory(cat.id);
+                    setSelected(cat.id);
                     setActiveChip("Filters");
                   }}
                   accessibilityRole="button"
@@ -157,7 +166,25 @@ export default function CategoriesScreen() {
             })}
           </ScrollView>
 
-          {cardW > 0 ? (
+          {categoriesQuery.isError ? (
+            <ErrorState
+              error={categoriesQuery.error}
+              title="Could not load categories"
+              onRetry={() => void categoriesQuery.refetch()}
+            />
+          ) : cardW === 0 ? (
+            <View style={styles.gridPlaceholder} />
+          ) : productsQuery.isPending ? (
+            <View style={styles.skeletonWrap}>
+              <ProductGridSkeleton columns={numColumns} rows={3} />
+            </View>
+          ) : productsQuery.isError ? (
+            <ErrorState
+              error={productsQuery.error}
+              title="Could not load products"
+              onRetry={() => void productsQuery.refetch()}
+            />
+          ) : (
             <FlatList
               data={products}
               keyExtractor={(p) => p.id}
@@ -168,7 +195,7 @@ export default function CategoriesScreen() {
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
                   <Text style={styles.gridTitle} numberOfLines={1}>
-                    {labelFor(activeCat.name)}
+                    {activeCat ? labelFor(activeCat.name) : ""}
                   </Text>
                   <Text style={styles.gridCount}>{products.length} items</Text>
                 </View>
@@ -180,10 +207,11 @@ export default function CategoriesScreen() {
               }}
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Ionicons name="bag-outline" size={48} color={Colors.textTertiary} />
-                  <Text style={styles.emptyText}>No products yet</Text>
-                </View>
+                <EmptyState
+                  icon="bag-outline"
+                  title="Nothing here yet"
+                  message="New items are added every day. Try another category."
+                />
               }
               renderItem={({ item }) => (
                 <View style={{ width: cardW }}>
@@ -191,8 +219,6 @@ export default function CategoriesScreen() {
                 </View>
               )}
             />
-          ) : (
-            <View style={styles.gridPlaceholder} />
           )}
         </View>
       </View>
@@ -367,6 +393,10 @@ const styles = StyleSheet.create({
   gridCount: {
     ...typography.caption,
     color: Colors.textTertiary,
+  },
+  skeletonWrap: {
+    paddingHorizontal: GRID_PAD,
+    paddingTop: Spacing[12],
   },
   gridPlaceholder: {
     flex: 1,

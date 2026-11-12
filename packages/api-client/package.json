@@ -19,10 +19,12 @@
     "build": "tsup",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript ../../docs/api/openapi.json -o src/generated/schema.ts"
+    "gen:api": "openapi-typescript ../../docs/api/openapi.json -o src/generated/schema.ts",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "openapi-fetch": "^0.17.0"
+    "openapi-fetch": "^0.17.0",
+    "@qc/contracts": "workspace:*"
   },
   "devDependencies": {
     "@qc/eslint-config": "workspace:*",
@@ -31,6 +33,7 @@
     "eslint": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "openapi-typescript": "^7.13.0"
+    "openapi-typescript": "^7.13.0",
+    "vitest": "catalog:"
   }
 }

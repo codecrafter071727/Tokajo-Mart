@@ -17,13 +17,10 @@ import { Colors, Spacing, Radius, typography } from "../../src/theme";
 import { colors } from "../../src/theme/tokens";
 import { TAB_RESERVE } from "../../src/theme/tabs";
 import { SectionRail } from "../../src/components/SectionRail";
-import {
-  categories,
-  banners,
-  getFeaturedProducts,
-  getProductsByCategory,
-  getRecentlyViewedProducts,
-} from "../../src/lib/mockData";
+import { banners } from "../../src/lib/mockData";
+import { useCategories, useProducts } from "../../src/lib/queries";
+import { ErrorState, RailSkeleton } from "../../src/components/StateViews";
+import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
 
 const BANNER_GAP = Spacing[12];
@@ -86,13 +83,21 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const buyAgain = getRecentlyViewedProducts();
-  const featured = getFeaturedProducts();
-  const dairy = getProductsByCategory("dairy");
-  const snacks = getProductsByCategory("snacks");
-  const beverages = getProductsByCategory("beverages");
+  // One catalog read feeds every rail. A gateway "home" endpoint replaces this later.
+  const categoriesQuery = useCategories();
+  const productsQuery = useProducts({ limit: 100 });
+  const categories = categoriesQuery.data ?? [];
+  const all = productsQuery.data ?? [];
+
+  const inCategory = (categoryId: string) => all.filter((p) => p.categoryId === categoryId);
+  // Personalisation stub until order history exists: a fixed handful of items
+  const buyAgain = [4, 0, 8, 12, 1].flatMap((i) => (all[i] ? [all[i]] : []));
+  const featured = all.slice(0, 8);
+  const dairy = inCategory("dairy");
+  const snacks = inCategory("snacks");
+  const beverages = inCategory("beverages");
   const timeRail = getTimeOfDayRail();
-  const timeProducts = getProductsByCategory(timeRail.categoryId);
+  const timeProducts = inCategory(timeRail.categoryId);
 
   return (
     <View style={styles.root}>
@@ -154,6 +159,7 @@ export default function HomeScreen() {
           <SectionRail
             title="Buy again"
             products={buyAgain}
+            loading={productsQuery.isPending}
             onSeeAll={() => router.push("/(tabs)/categories")}
           />
         ) : null}
@@ -210,7 +216,25 @@ export default function HomeScreen() {
               <Text style={styles.seeAll}>See all</Text>
             </Pressable>
           </View>
+          {categoriesQuery.isError ? (
+            <ErrorState
+              compact
+              error={categoriesQuery.error}
+              title="Could not load categories"
+              onRetry={() => void categoriesQuery.refetch()}
+            />
+          ) : null}
           <View style={styles.categoryGrid}>
+            {categoriesQuery.isPending
+              ? Array.from({ length: catCols * 2 }, (_, i) => (
+                  <View key={i} style={[styles.categoryTile, { width: catTileW }]}>
+                    <Skeleton
+                      style={{ width: "100%", aspectRatio: 1, height: undefined }}
+                      borderRadius={Radius.lg}
+                    />
+                  </View>
+                ))
+              : null}
             {categories.slice(0, catCols * 2).map((cat) => (
               <Pressable
                 key={cat.id}
@@ -239,55 +263,71 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <SectionRail
-          title={timeRail.title}
-          products={timeProducts}
-          onSeeAll={() =>
-            router.push({
-              pathname: "/(tabs)/categories",
-              params: { categoryId: timeRail.categoryId },
-            })
-          }
-        />
+        {productsQuery.isPending ? (
+          <>
+            <RailSkeleton />
+            <RailSkeleton />
+            <RailSkeleton />
+          </>
+        ) : productsQuery.isError ? (
+          <ErrorState
+            error={productsQuery.error}
+            title="Could not load products"
+            onRetry={() => void productsQuery.refetch()}
+          />
+        ) : (
+          <>
+            <SectionRail
+              title={timeRail.title}
+              products={timeProducts}
+              onSeeAll={() =>
+                router.push({
+                  pathname: "/(tabs)/categories",
+                  params: { categoryId: timeRail.categoryId },
+                })
+              }
+            />
 
-        <SectionRail
-          title="Bestsellers"
-          products={featured}
-          onSeeAll={() => router.push("/(tabs)/categories")}
-        />
+            <SectionRail
+              title="Bestsellers"
+              products={featured}
+              onSeeAll={() => router.push("/(tabs)/categories")}
+            />
 
-        <SectionRail
-          title="Dairy & breakfast"
-          products={dairy}
-          onSeeAll={() =>
-            router.push({
-              pathname: "/(tabs)/categories",
-              params: { categoryId: "dairy" },
-            })
-          }
-        />
+            <SectionRail
+              title="Dairy & breakfast"
+              products={dairy}
+              onSeeAll={() =>
+                router.push({
+                  pathname: "/(tabs)/categories",
+                  params: { categoryId: "dairy" },
+                })
+              }
+            />
 
-        <SectionRail
-          title="Snacks & munchies"
-          products={snacks}
-          onSeeAll={() =>
-            router.push({
-              pathname: "/(tabs)/categories",
-              params: { categoryId: "snacks" },
-            })
-          }
-        />
+            <SectionRail
+              title="Snacks & munchies"
+              products={snacks}
+              onSeeAll={() =>
+                router.push({
+                  pathname: "/(tabs)/categories",
+                  params: { categoryId: "snacks" },
+                })
+              }
+            />
 
-        <SectionRail
-          title="Cold drinks & juices"
-          products={beverages}
-          onSeeAll={() =>
-            router.push({
-              pathname: "/(tabs)/categories",
-              params: { categoryId: "beverages" },
-            })
-          }
-        />
+            <SectionRail
+              title="Cold drinks & juices"
+              products={beverages}
+              onSeeAll={() =>
+                router.push({
+                  pathname: "/(tabs)/categories",
+                  params: { categoryId: "beverages" },
+                })
+              }
+            />
+          </>
+        )}
 
         <View style={styles.footer}>
           <Ionicons name="flash" size={20} color={Colors.border} />

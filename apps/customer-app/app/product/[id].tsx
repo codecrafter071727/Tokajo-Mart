@@ -5,7 +5,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { AddButton } from "../../src/components/AddButton";
 import { ProductCard } from "../../src/components/ProductCard";
-import { getProductById, products } from "../../src/lib/mockData";
+import { isNotFound, useProduct, useProducts } from "../../src/lib/queries";
+import { ErrorState } from "../../src/components/StateViews";
+import { Skeleton } from "../../src/components/Skeleton";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductImage } from "../../src/components/ProductImage";
 
@@ -24,23 +26,52 @@ export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
-  const product = getProductById(id ?? "");
-  const similarProducts = products
-    .filter((p) => p.categoryId === product?.categoryId && p.id !== product?.id)
-    .slice(0, 6);
+  const productQuery = useProduct(id);
+  const product = productQuery.data;
+  const similarQuery = useProducts(
+    { categoryId: product?.categoryId, limit: 8 },
+    { enabled: product !== undefined },
+  );
+  const similarProducts = (similarQuery.data ?? []).filter((p) => p.id !== product?.id).slice(0, 6);
 
   if (!product) {
+    const missing = productQuery.isError && isNotFound(productQuery.error);
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backBtnText}>Go back</Text>
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
         </View>
-        <View style={styles.notFound}>
-          <Text style={styles.notFoundEmoji}>😕</Text>
-          <Text style={styles.notFoundText}>Product not found</Text>
-        </View>
+        {productQuery.isPending ? (
+          <View style={styles.loadingBox}>
+            <Skeleton
+              style={{ width: SCREEN_W * 0.7, aspectRatio: 1, height: undefined }}
+              borderRadius={Radius.lg}
+            />
+            <Skeleton width={SCREEN_W * 0.6} height={20} />
+            <Skeleton width={SCREEN_W * 0.3} height={14} />
+            <Skeleton width={SCREEN_W * 0.25} height={24} />
+          </View>
+        ) : productQuery.isError && !missing ? (
+          <ErrorState
+            error={productQuery.error}
+            title="Could not load this product"
+            onRetry={() => void productQuery.refetch()}
+          />
+        ) : (
+          <View style={styles.notFound}>
+            <Ionicons name="search-outline" size={56} color={Colors.border} />
+            <Text style={styles.notFoundText}>We could not find that product</Text>
+            <Pressable style={styles.backHome} onPress={() => router.replace("/(tabs)")}>
+              <Text style={styles.backHomeText}>Back to home</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     );
   }
@@ -226,6 +257,23 @@ export default function ProductDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingBox: {
+    alignItems: "center",
+    gap: Spacing[12],
+    paddingTop: Spacing[24],
+  },
+  backHome: {
+    marginTop: Spacing[12],
+    backgroundColor: Colors.brandGreen,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing[20],
+    paddingVertical: Spacing[10],
+  },
+  backHomeText: {
+    fontSize: FontSize.body,
+    fontWeight: "800",
+    color: Colors.surface,
+  },
   root: {
     flex: 1,
     backgroundColor: Colors.canvas,

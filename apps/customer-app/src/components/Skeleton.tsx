@@ -49,18 +49,17 @@ export function Skeleton({ width = "100%", height = 16, borderRadius = 4, style 
   );
 }
 
+/** Same footprint as ProductCard so the layout does not jump when data arrives. */
 export function ProductCardSkeleton() {
   return (
     <View style={styles.card}>
-      <View style={styles.image}>
-        <Skeleton width={80} height={80} borderRadius={8} />
-      </View>
+      <Skeleton style={{ ...styles.image, height: undefined }} borderRadius={Radius.md} />
       <View style={styles.info}>
-        <Skeleton width="90%" height={12} />
-        <View style={{ height: 4 }} />
-        <Skeleton width="60%" height={12} />
-        <View style={{ height: 8 }} />
+        <Skeleton width="45%" height={10} />
+        <Skeleton width="95%" height={12} />
+        <Skeleton width="70%" height={12} />
         <Skeleton width="40%" height={10} />
+        <Skeleton width="35%" height={14} />
       </View>
     </View>
   );
@@ -68,18 +67,14 @@ export function ProductCardSkeleton() {
 
 const styles = StyleSheet.create({
   card: {
-    width: 144,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 8,
+    width: "100%",
   },
   image: {
-    alignItems: "center",
-    marginBottom: 8,
+    width: "100%",
+    aspectRatio: 1,
+    marginBottom: 18,
   },
   info: {
-    paddingHorizontal: 4,
+    gap: 6,
   },
 });

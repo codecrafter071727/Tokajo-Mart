@@ -1,11 +1,13 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
 import { ProductCard } from "../src/components/ProductCard";
 import { CartBar } from "../src/components/CartBar";
-import { products } from "../src/lib/mockData";
+import { useProducts } from "../src/lib/queries";
+import { useDebouncedValue } from "../src/lib/useDebouncedValue";
+import { ErrorState, ProductGridSkeleton } from "../src/components/StateViews";
 import { Ionicons } from "@expo/vector-icons";
 
 const RECENT_SEARCHES = ["milk", "banana", "bread", "cola", "onion"];
@@ -15,13 +17,13 @@ export default function SearchScreen() {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.unit.toLowerCase().includes(q),
-    );
-  }, [query]);
+  // Search as you type, but only ask once typing pauses (DESIGN.md: 200ms)
+  const term = useDebouncedValue(query.trim(), 200);
+  const productsQuery = useProducts(
+    { q: term, limit: 100 },
+    { enabled: term.length > 0, keepPrevious: true },
+  );
+  const results = productsQuery.data ?? [];
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -78,12 +80,22 @@ export default function SearchScreen() {
             ))}
           </View>
         </View>
+      ) : productsQuery.isPending ? (
+        <View style={styles.skeletonWrap}>
+          <ProductGridSkeleton columns={3} rows={3} />
+        </View>
+      ) : productsQuery.isError ? (
+        <ErrorState
+          error={productsQuery.error}
+          title="Search is not working"
+          onRetry={() => void productsQuery.refetch()}
+        />
       ) : results.length === 0 ? (
         /* Empty state */
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={56} color={Colors.border} />
           <Text style={styles.emptyTitle}>No results for "{query}"</Text>
-          <Text style={styles.emptySubtitle}>Try searching with different keywords</Text>
+          <Text style={styles.emptySubtitle}>Try a shorter word, or browse the categories.</Text>
         </View>
       ) : (
         /* Results grid - 3 columns */
@@ -206,6 +218,11 @@ const styles = StyleSheet.create({
 
   micIcon: {
     fontSize: 16,
+  },
+
+  skeletonWrap: {
+    paddingHorizontal: Spacing[8],
+    paddingTop: Spacing[12],
   },
 
   // Results

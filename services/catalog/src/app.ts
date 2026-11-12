@@ -1,8 +1,20 @@
 import { createDatabaseReadinessCheck, createService } from "@qc/service-kit";
 import { env } from "./config/env";
+import {
+  createInMemoryCatalogRepository,
+  registerCatalogRoutes,
+  seedCategories,
+  seedProducts,
+  type CatalogRepository,
+} from "./modules/catalog";
 
-export async function buildApp() {
-  return createService({
+export type BuildAppOptions = {
+  /** Defaults to the seeded in-memory repository until the catalog schema exists */
+  repository?: CatalogRepository;
+};
+
+export async function buildApp(options: BuildAppOptions = {}) {
+  const app = await createService({
     name: "catalog",
     env,
     readinessCheck: createDatabaseReadinessCheck({
@@ -10,4 +22,11 @@ export async function buildApp() {
       enabled: env.NODE_ENV !== "test",
     }),
   });
+
+  registerCatalogRoutes(
+    app,
+    options.repository ?? createInMemoryCatalogRepository(seedCategories, seedProducts),
+  );
+
+  return app;
 }

@@ -3,17 +3,42 @@ import { View, Text, Pressable, StyleSheet, FlatList } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Spacing, typography } from "../theme";
 import { ProductCard } from "./ProductCard";
+import { ErrorState, RailSkeleton } from "./StateViews";
 import type { Product } from "../lib/mockData";
 
 interface SectionRailProps {
   title: string;
   products: Product[];
   onSeeAll?: () => void;
+  /** Show a skeleton instead of cards */
+  loading?: boolean;
+  /** Show an inline retry instead of cards */
+  error?: unknown;
+  onRetry?: () => void;
 }
 
 const Separator = () => <View style={{ width: Spacing[8] }} />;
 
-export function SectionRail({ title, products, onSeeAll }: SectionRailProps) {
+export function SectionRail({
+  title,
+  products,
+  onSeeAll,
+  loading,
+  error,
+  onRetry,
+}: SectionRailProps) {
+  if (loading) return <RailSkeleton />;
+  if (error && onRetry) {
+    return (
+      <View style={styles.container}>
+        <Text style={[styles.title, styles.errorTitle]}>{title}</Text>
+        <ErrorState compact error={error} title="Could not load" onRetry={onRetry} />
+      </View>
+    );
+  }
+  // An empty rail is just noise: hide it
+  if (products.length === 0) return null;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -62,6 +87,9 @@ const styles = StyleSheet.create({
     ...typography.title,
     fontWeight: "800",
     color: Colors.textPrimary,
+  },
+  errorTitle: {
+    paddingHorizontal: Spacing[16],
   },
   seeAllBtn: {
     flexDirection: "row",
