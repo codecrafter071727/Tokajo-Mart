@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BigButton } from "../../src/components/BigButton";
 import { DEMO_OTP, SignInError, useSession } from "../../src/store/session";
 import { colors, radius, space, typography } from "../../src/theme";
+import { noWebOutline } from "../../src/theme/web";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -32,88 +33,104 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[
-        styles.root,
-        { paddingTop: insets.top + space[10], paddingBottom: insets.bottom + space[4] },
-      ]}
+      style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.logo}>
-        <Ionicons name="bicycle" size={36} color={colors.ink[900]} />
-      </View>
-      <Text style={styles.title}>Rider login</Text>
-      <Text style={styles.subtitle}>
-        {step === "phone"
-          ? "Enter your mobile number to get a code."
-          : `Enter the code sent to +91 ${phone}.`}
-      </Text>
-
-      {step === "phone" ? (
-        <TextInput
-          key="phone"
-          style={styles.input}
-          value={phone}
-          onChangeText={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
-          placeholder="10 digit mobile number"
-          placeholderTextColor={colors.ink[500]}
-          keyboardType="number-pad"
-          autoFocus
-          accessibilityLabel="Mobile number"
-        />
-      ) : (
-        <TextInput
-          key="otp"
-          style={[styles.input, styles.otp]}
-          value={otp}
-          onChangeText={(v) => setOtp(v.replace(/\D/g, "").slice(0, 6))}
-          placeholder="------"
-          placeholderTextColor={colors.line[300]}
-          keyboardType="number-pad"
-          autoFocus
-          accessibilityLabel="Six digit code"
-        />
-      )}
-
-      {error ? (
-        <Text style={styles.error} accessibilityRole="alert">
-          {error}
-        </Text>
-      ) : null}
-      {step === "otp" ? <Text style={styles.hint}>Demo mode: the code is {DEMO_OTP}.</Text> : null}
-
-      <View style={styles.spacer} />
-      <BigButton
-        label={step === "phone" ? "Send code" : "Sign in"}
-        onPress={next}
-        disabled={step === "phone" ? phone.length !== 10 : otp.length !== 6}
-      />
-      {step === "otp" ? (
-        <View style={styles.back}>
-          <BigButton
-            label="Change number"
-            variant="secondary"
-            onPress={() => {
-              setStep("phone");
-              setOtp("");
-              setError(null);
-            }}
-          />
+      <View style={[styles.hero, { paddingTop: insets.top + space[8] }]}>
+        <View style={styles.logo}>
+          <Ionicons name="bicycle" size={36} color={colors.brand[700]} />
         </View>
-      ) : null}
+        <Text style={styles.brand}>Tokajo Rider</Text>
+        <Text style={styles.tagline}>Deliver fast. Earn every ride.</Text>
+      </View>
+
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + space[4] }]}>
+        <Text style={styles.title}>Sign in</Text>
+        <Text style={styles.subtitle}>
+          {step === "phone"
+            ? "Enter your mobile number to get a code."
+            : `Enter the code sent to +91 ${phone}.`}
+        </Text>
+
+        {step === "phone" ? (
+          <TextInput
+            key="phone"
+            style={[styles.input, noWebOutline]}
+            value={phone}
+            onChangeText={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
+            placeholder="10 digit mobile number"
+            placeholderTextColor={colors.ink[500]}
+            keyboardType="number-pad"
+            autoFocus
+            accessibilityLabel="Mobile number"
+          />
+        ) : (
+          <TextInput
+            key="otp"
+            style={[styles.input, styles.otp, noWebOutline]}
+            value={otp}
+            onChangeText={(v) => setOtp(v.replace(/\D/g, "").slice(0, 6))}
+            placeholder="------"
+            placeholderTextColor={colors.line[300]}
+            keyboardType="number-pad"
+            autoFocus
+            accessibilityLabel="Six digit code"
+          />
+        )}
+
+        {error ? (
+          <Text style={styles.error} accessibilityRole="alert">
+            {error}
+          </Text>
+        ) : null}
+        {step === "otp" ? (
+          <Text style={styles.hint}>Demo mode: the code is {DEMO_OTP}.</Text>
+        ) : null}
+
+        <View style={styles.spacer} />
+        <BigButton
+          label={step === "phone" ? "Send code" : "Sign in"}
+          onPress={next}
+          disabled={step === "phone" ? phone.length !== 10 : otp.length !== 6}
+        />
+        {step === "otp" ? (
+          <View style={styles.back}>
+            <BigButton
+              label="Change number"
+              variant="secondary"
+              onPress={() => {
+                setStep("phone");
+                setOtp("");
+                setError(null);
+              }}
+            />
+          </View>
+        ) : null}
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface[0], paddingHorizontal: space[5] },
+  root: { flex: 1, backgroundColor: colors.brand[600] },
+  hero: { alignItems: "center", paddingBottom: space[8], gap: space[1] },
   logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.brand[600],
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.surface[0],
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: space[5],
+    marginBottom: space[3],
+  },
+  brand: { ...typography.titleLg, fontWeight: "800", color: colors.ink[900] },
+  tagline: { ...typography.body, color: colors.ink[900], opacity: 0.8 },
+  sheet: {
+    flex: 1,
+    backgroundColor: colors.surface[0],
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: space[5],
   },
   title: { ...typography.display, fontWeight: "800", color: colors.ink[900] },
   subtitle: {
