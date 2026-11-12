@@ -17,8 +17,8 @@ const MENU_ITEMS = [
   {
     icon: "location-outline" as const,
     label: "Saved Addresses",
-    subtitle: "Indiranagar, HSR Layout...",
-    route: null,
+    subtitle: "Home, work and more",
+    route: "/addresses",
   },
   {
     icon: "card-outline" as const,

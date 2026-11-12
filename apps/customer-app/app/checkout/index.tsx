@@ -12,50 +12,9 @@ import { describeOrderError } from "../../src/lib/orderMapping";
 import { OrderError } from "../../src/lib/orders";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductImage } from "../../src/components/ProductImage";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface Address {
-  id: string;
-  tag: string;
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  line1: string;
-  line2: string;
-  lat: number;
-  lng: number;
-}
-
-// ─── Data ────────────────────────────────────────────────────────────────────
-
-const SAVED_ADDRESSES: Address[] = [
-  {
-    id: "a1",
-    tag: "Home",
-    icon: "home",
-    line1: "B-12, Sector 62",
-    line2: "Noida - 201309",
-    lat: 28.6208,
-    lng: 77.3649,
-  },
-  {
-    id: "a2",
-    tag: "Work",
-    icon: "business",
-    line1: "Tower 3, Logix Cyber Park, Sector 62",
-    line2: "Noida - 201309",
-    lat: 28.6262,
-    lng: 77.3722,
-  },
-  {
-    id: "a3",
-    tag: "Parents",
-    icon: "people",
-    line1: "7B, Sector 63",
-    line2: "Noida - 201301",
-    lat: 28.6301,
-    lng: 77.3801,
-  },
-];
+import { addressSummary, addressTag, type SavedAddress } from "../../src/lib/addresses";
+import { useAddressStore, useSelectedAddress } from "../../src/store/addresses";
+import { KIND_ICON } from "../../src/lib/addressIcons";
 
 const PAYMENT_METHODS = [
   { id: "upi", label: "UPI / GPay / PhonePe", icon: "phone-portrait-outline" as const },
@@ -68,16 +27,17 @@ const PAYMENT_METHODS = [
 
 function AddressSheet({
   visible,
-  selectedId,
-  onSelect,
   onClose,
+  onAdd,
 }: {
   visible: boolean;
-  selectedId: string;
-  onSelect: (id: string) => void;
   onClose: () => void;
+  onAdd: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const addresses = useAddressStore((st) => st.addresses);
+  const selectedId = useAddressStore((st) => st.selectedId);
+  const select = useAddressStore((st) => st.select);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       {/* Scrim - tap to close */}
@@ -89,28 +49,31 @@ function AddressSheet({
 
         <Text style={sheetStyles.title}>Select delivery address</Text>
 
-        {SAVED_ADDRESSES.map((addr) => (
-          <Pressable
-            key={addr.id}
-            style={[sheetStyles.addrRow, selectedId === addr.id && sheetStyles.addrRowActive]}
-            onPress={() => {
-              onSelect(addr.id);
-              onClose();
-            }}
-          >
-            <View style={sheetStyles.radioOuter}>
-              {selectedId === addr.id && <View style={sheetStyles.radioInner} />}
-            </View>
-            <Ionicons name={addr.icon} size={20} color={Colors.brandText} />
-            <View style={sheetStyles.addrText}>
-              <Text style={sheetStyles.addrTag}>{addr.tag}</Text>
-              <Text style={sheetStyles.addrLine}>{addr.line1}</Text>
-              <Text style={sheetStyles.addrLine}>{addr.line2}</Text>
-            </View>
-          </Pressable>
-        ))}
+        {addresses.map((addr: SavedAddress) => {
+          const { line1, line2 } = addressSummary(addr);
+          return (
+            <Pressable
+              key={addr.id}
+              style={[sheetStyles.addrRow, selectedId === addr.id && sheetStyles.addrRowActive]}
+              onPress={() => {
+                select(addr.id);
+                onClose();
+              }}
+            >
+              <View style={sheetStyles.radioOuter}>
+                {selectedId === addr.id && <View style={sheetStyles.radioInner} />}
+              </View>
+              <Ionicons name={KIND_ICON[addr.kind]} size={20} color={Colors.brandText} />
+              <View style={sheetStyles.addrText}>
+                <Text style={sheetStyles.addrTag}>{addressTag(addr)}</Text>
+                <Text style={sheetStyles.addrLine}>{line1}</Text>
+                <Text style={sheetStyles.addrLine}>{line2}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
 
-        <Pressable style={sheetStyles.addNewBtn} onPress={onClose}>
+        <Pressable style={sheetStyles.addNewBtn} onPress={onAdd}>
           <Text style={sheetStyles.addNewText}>+ Add new address</Text>
         </Pressable>
       </View>
@@ -216,7 +179,6 @@ export default function CheckoutScreen() {
   const idempotencyKey = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const placeOrder = usePlaceOrder();
   const eta = useServiceability().data;
-  const [selectedAddressId, setSelectedAddressId] = useState("a1");
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
 
   const items = useCartStore((s) => s.items);
@@ -226,11 +188,13 @@ export default function CheckoutScreen() {
   // The same pricing the cart used, including the tip, so the total never changes at checkout
   const bill = priceCart(toPriceLines(items), tipRupees * 100);
 
-  const selectedAddress =
-    SAVED_ADDRESSES.find((a) => a.id === selectedAddressId) ?? SAVED_ADDRESSES[0];
+  const selectedAddress = useSelectedAddress();
+  const { line1: addressLine1, line2: addressLine2 } = addressSummary(selectedAddress);
+  // The server decides, but an address we know is outside every area never reaches checkout
+  const outsideArea = eta ? !eta.serviceable : false;
 
   const handlePlaceOrder = () => {
-    if (placeOrder.isPending || items.length === 0 || !selectedAddress) return;
+    if (placeOrder.isPending || items.length === 0 || outsideArea) return;
     setPlaceError(null);
     const orderItems: OrderItem[] = items.map((i) => ({
       productId: i.id,
@@ -248,11 +212,15 @@ export default function CheckoutScreen() {
         items: orderItems,
         tipPaise: tipRupees * 100,
         address: {
-          tag: selectedAddress.tag,
-          line1: selectedAddress.line1,
-          line2: selectedAddress.line2,
+          tag: addressTag(selectedAddress),
+          line1: addressLine1,
+          line2: addressLine2,
         },
-        location: { lat: selectedAddress.lat, lng: selectedAddress.lng },
+        location: {
+          lat: selectedAddress.lat,
+          lng: selectedAddress.lng,
+          instructions: selectedAddress.instructions || null,
+        },
         payment: "cod",
         promisedMins: eta?.etaMins ?? 10,
       },
@@ -276,9 +244,11 @@ export default function CheckoutScreen() {
       {/* Address sheet */}
       <AddressSheet
         visible={addressSheetVisible}
-        selectedId={selectedAddressId}
-        onSelect={setSelectedAddressId}
         onClose={() => setAddressSheetVisible(false)}
+        onAdd={() => {
+          setAddressSheetVisible(false);
+          router.push("/addresses/edit");
+        }}
       />
 
       {/* Header */}
@@ -303,18 +273,20 @@ export default function CheckoutScreen() {
             </Pressable>
           </View>
           <View style={styles.addrTagRow}>
-            <Ionicons name={selectedAddress?.icon ?? "home"} size={16} color={Colors.brandText} />
-            <Text style={styles.addressName}>{selectedAddress?.tag}</Text>
+            <Ionicons name={KIND_ICON[selectedAddress.kind]} size={16} color={Colors.brandText} />
+            <Text style={styles.addressName}>{addressTag(selectedAddress)}</Text>
           </View>
           <Text style={styles.addressDetail}>
-            {selectedAddress?.line1},{"\n"}
-            {selectedAddress?.line2}
+            {addressLine1},{"\n"}
+            {addressLine2}
           </Text>
-          <View style={styles.addressTag}>
-            <Text style={styles.addressTagText}>
-              {eta?.serviceable
-                ? `Delivery in ${eta.etaMins} minutes`
-                : "Delivery time unavailable"}
+          <View style={[styles.addressTag, outsideArea && styles.addressTagBlocked]}>
+            <Text style={[styles.addressTagText, outsideArea && styles.addressTagTextBlocked]}>
+              {outsideArea
+                ? "We do not deliver here yet. Choose another address."
+                : eta?.serviceable
+                  ? `Delivery in ${eta.etaMins} minutes`
+                  : "Delivery time unavailable"}
             </Text>
           </View>
         </View>
@@ -443,10 +415,11 @@ export default function CheckoutScreen() {
         <Pressable
           style={[
             styles.placeOrderBtn,
-            (placeOrder.isPending || items.length === 0) && styles.placeOrderBtnDisabled,
+            (placeOrder.isPending || items.length === 0 || outsideArea) &&
+              styles.placeOrderBtnDisabled,
           ]}
           onPress={handlePlaceOrder}
-          disabled={placeOrder.isPending || items.length === 0}
+          disabled={placeOrder.isPending || items.length === 0 || outsideArea}
           accessibilityRole="button"
           accessibilityLabel="Place order"
         >
@@ -562,6 +535,8 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: Spacing[4],
   },
+  addressTagBlocked: { backgroundColor: Colors.canvas },
+  addressTagTextBlocked: { color: Colors.danger },
   addressTagText: {
     fontSize: FontSize.caption,
     fontWeight: "700",

@@ -59,6 +59,14 @@ export default function RootLayout() {
           <Stack.Screen name="orders/[id]" options={{ headerShown: false, presentation: "card" }} />
           <Stack.Screen name="orders/list" options={{ headerShown: false, presentation: "card" }} />
           <Stack.Screen name="account" options={{ headerShown: false, presentation: "card" }} />
+          <Stack.Screen
+            name="addresses/index"
+            options={{ headerShown: false, presentation: "card" }}
+          />
+          <Stack.Screen
+            name="addresses/edit"
+            options={{ headerShown: false, presentation: "card" }}
+          />
           <Stack.Screen name="search" options={{ headerShown: false, presentation: "card" }} />
         </Stack>
         {/* Cover the screens until the saved session is read, so nothing flashes */}

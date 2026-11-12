@@ -19,7 +19,8 @@ import { TAB_RESERVE } from "../../src/theme/tabs";
 import { SectionRail } from "../../src/components/SectionRail";
 import { banners } from "../../src/lib/mockData";
 import { useCategories, useProducts, useServiceability } from "../../src/lib/queries";
-import { DEFAULT_LOCATION } from "../../src/lib/location";
+import { addressChip } from "../../src/lib/addresses";
+import { useSelectedAddress } from "../../src/store/addresses";
 import { ErrorState, RailSkeleton } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
@@ -49,6 +50,7 @@ export default function HomeScreen() {
   const { width: screenW } = useWindowDimensions();
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [bannerIdx, setBannerIdx] = useState(0);
+  const bannerIdxRef = useRef(0);
   // The header shrinks to the search bar once the page is scrolled (hysteresis avoids flicker)
   const [compact, setCompact] = useState(false);
   const bannerRef = useRef<FlatList>(null);
@@ -77,16 +79,22 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setBannerIdx((prev) => {
-        const next = (prev + 1) % banners.length;
+      // The scroll is a side effect, so it lives here and not inside the state updater (React may
+      // run an updater twice)
+      const next = (bannerIdxRef.current + 1) % banners.length;
+      bannerIdxRef.current = next;
+      setBannerIdx(next);
+      try {
         bannerRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
+      } catch {
+        // The banners are not laid out yet; the next tick tries again
+      }
     }, 5000);
     return () => clearInterval(timer);
   }, []);
 
   // One catalog read feeds every rail. A gateway "home" endpoint replaces this later.
+  const selectedAddress = useSelectedAddress();
   const serviceability = useServiceability();
   const eta = serviceability.data;
   const categoriesQuery = useCategories();
@@ -163,11 +171,12 @@ export default function HomeScreen() {
                   style={styles.addressRow}
                   hitSlop={6}
                   accessibilityLabel="Change delivery address"
+                  onPress={() => router.push("/addresses")}
                 >
                   <Text style={styles.addressText} numberOfLines={1}>
                     {eta && !eta.serviceable
                       ? "We do not deliver to this area yet"
-                      : DEFAULT_LOCATION.label}
+                      : addressChip(selectedAddress)}
                   </Text>
                   <Ionicons name="chevron-down" size={14} color={Colors.brandTint} />
                 </Pressable>
@@ -222,6 +231,8 @@ export default function HomeScreen() {
           <FlatList
             ref={bannerRef}
             data={banners}
+            // The auto-advance timer can fire before the banners are laid out; skipping a slide is fine
+            onScrollToIndexFailed={() => undefined}
             keyExtractor={(b) => b.id}
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -229,7 +240,8 @@ export default function HomeScreen() {
             decelerationRate="fast"
             onMomentumScrollEnd={(e) => {
               const idx = Math.round(e.nativeEvent.contentOffset.x / (bannerW + BANNER_GAP));
-              setBannerIdx(Math.min(idx, banners.length - 1));
+              bannerIdxRef.current = Math.min(idx, banners.length - 1);
+              setBannerIdx(bannerIdxRef.current);
             }}
             contentContainerStyle={{ paddingHorizontal: SECTION_PAD }}
             ItemSeparatorComponent={() => <View style={{ width: BANNER_GAP }} />}

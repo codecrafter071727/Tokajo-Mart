@@ -3,7 +3,9 @@ import { ApiClientError } from "@qc/api-client";
 import { api } from "./api";
 import type { AvailabilityItem, ServiceabilityResponse } from "@qc/contracts";
 import { toCategory, toProduct } from "./catalog";
-import { DEFAULT_LOCATION } from "./location";
+import { useAddressStore } from "../store/addresses";
+import { selectedOf } from "./addresses";
+import { coveringWarehouse } from "./serviceAreas";
 import {
   categories as fixtureCategories,
   products as fixtureProducts,
@@ -91,12 +93,12 @@ export function useProduct(id: string | undefined) {
 // ---------------------------------------------------------------------------------------------
 
 /** Mirrors the inventory service seed so the app looks the same with and without a backend. */
-const fixtureServiceability: ServiceabilityResponse = {
-  serviceable: true,
-  warehouseId: "wh-noida-62",
-  etaMins: 9,
-  reason: null,
-};
+function fixtureServiceability(lat: number, lng: number): ServiceabilityResponse {
+  const warehouseId = coveringWarehouse(lat, lng);
+  return warehouseId
+    ? { serviceable: true, warehouseId, etaMins: 9, reason: null }
+    : { serviceable: false, warehouseId: null, etaMins: null, reason: "OUTSIDE_SERVICE_AREA" };
+}
 
 const fixtureStock: Record<string, Partial<AvailabilityItem>> = {
   p3: { status: "low", remaining: 2 },
@@ -115,16 +117,14 @@ function fixtureAvailabilityFor(ids: string[]): AvailabilityItem[] {
   }));
 }
 
-/** Can we deliver to the current location, and how fast. */
+/** Can we deliver to the selected address, and how fast. */
 export function useServiceability() {
+  const { lat, lng } = useAddressStore((st) => selectedOf(st));
   return useQuery({
-    queryKey: queryKeys.serviceability(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng),
+    queryKey: queryKeys.serviceability(lat, lng),
     queryFn: async ({ signal }): Promise<ServiceabilityResponse> => {
-      if (!api) return fixtureServiceability;
-      return api.inventory.serviceability(
-        { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lng },
-        { signal },
-      );
+      if (!api) return fixtureServiceability(lat, lng);
+      return api.inventory.serviceability({ lat, lng }, { signal });
     },
     staleTime: 2 * 60_000,
   });

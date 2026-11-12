@@ -1,6 +1,6 @@
 /**
- * The delivery location the app uses. Fixed to the demo area until address capture and
- * expo-location land (week plan V5), then this comes from the selected address.
+ * Where the app falls back to when no address is selected. The selected address
+ * (src/store/addresses.ts) is what the app really uses.
  */
 export const DEFAULT_LOCATION = {
   lat: 28.628,
