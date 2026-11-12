@@ -41,17 +41,6 @@ export function Badge({
   );
 }
 
-export function DemoNotice({ children }: { children: ReactNode }) {
-  return (
-    <p
-      role="note"
-      className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
-    >
-      {children}
-    </p>
-  );
-}
-
 export function TableShell({ children }: { children: ReactNode }) {
   return <div className="overflow-x-auto rounded-xl border border-line bg-white">{children}</div>;
 }

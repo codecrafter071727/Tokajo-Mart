@@ -122,6 +122,19 @@ export type QueueOrder = z.infer<typeof queueOrderSchema>;
 export const queueResponseSchema = z.object({ items: z.array(queueOrderSchema) });
 export type QueueResponse = z.infer<typeof queueResponseSchema>;
 
+// --- Admin and manager overview ---------------------------------------------------------------
+
+export const adminOrderSchema = queueOrderSchema.extend({ customerName: z.string() });
+export type AdminOrder = z.infer<typeof adminOrderSchema>;
+
+export const adminOrdersQuerySchema = z.object({
+  status: orderStatusSchema.optional(),
+  warehouseId: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+export const adminOrdersResponseSchema = z.object({ items: z.array(adminOrderSchema) });
+export type AdminOrdersResponse = z.infer<typeof adminOrdersResponseSchema>;
+
 export const pickItemBodySchema = z.object({ picked: z.boolean() });
 export const pickItemParamsSchema = z.object({ id: z.uuid(), productId: z.string().min(1) });
 

@@ -324,6 +324,37 @@ suite("order service", async () => {
     });
   });
 
+  describe("admin overview", () => {
+    const manager = as(ADMIN, "warehouse_manager", "wh-noida-62");
+
+    it("lists every order for an admin, with filters, and never the delivery code", async () => {
+      const a = (await place(alice)).json();
+      await place(bob);
+      await post(`/v1/orders/${a.id}/cancel`, alice);
+      const all = (await get("/v1/orders/admin", admin)).json().items;
+      expect(all.length).toBeGreaterThanOrEqual(2);
+      expect(all[0]).not.toHaveProperty("deliveryCode");
+      expect(all.find((o: { id: string }) => o.id === a.id).customerName).toBe("Alice");
+      const cancelled = (await get("/v1/orders/admin?status=cancelled", admin)).json().items;
+      expect(cancelled.every((o: { status: string }) => o.status === "cancelled")).toBe(true);
+      expect(cancelled.some((o: { id: string }) => o.id === a.id)).toBe(true);
+      expect(
+        (await get("/v1/orders/admin?warehouseId=wh-indiranagar", admin)).json().items,
+      ).toEqual([]);
+    });
+
+    it("limits a manager to their own warehouse and keeps everyone else out", async () => {
+      await place(alice);
+      expect((await get("/v1/orders/admin", manager)).json().items.length).toBeGreaterThanOrEqual(
+        1,
+      );
+      const other = as(ADMIN, "warehouse_manager", "wh-indiranagar");
+      expect((await get("/v1/orders/admin", other)).json().items).toEqual([]);
+      expect((await get("/v1/orders/admin", staff)).statusCode).toBe(403);
+      expect((await get("/v1/orders/admin", alice)).statusCode).toBe(403);
+    });
+  });
+
   describe("cancelling", () => {
     it("lets the customer cancel before packing, and puts the stock back", async () => {
       const order = (await place()).json();

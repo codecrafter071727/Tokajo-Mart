@@ -203,7 +203,25 @@ assert.equal(done.status, "delivered");
 assert.equal(done.rider?.name, "Ravi Kumar");
 assert.ok(done.deliveredAt);
 
-// 8. Rules at the edges
+// 8. Admin sees it in the all-orders view and the riders view
+const admin = await ok(
+  "admin signs in",
+  call("POST", "/v1/identity/auth/login", {
+    body: { email: "admin@tokajo.dev", password: "tokajo-dev" },
+  }),
+);
+const all = await ok(
+  "admin lists all orders",
+  call("GET", "/v1/orders/admin?status=delivered", { token: admin.accessToken }),
+);
+assert.ok(all.items.some((o) => o.id === order.id && o.customerName === "E2E Customer"));
+const riders = await ok(
+  "admin lists riders",
+  call("GET", "/v1/delivery/admin/riders", { token: admin.accessToken }),
+);
+assert.ok(riders.items.some((r) => r.name === "Ravi Kumar"));
+
+// 9. Rules at the edges
 await ok(
   "a customer cannot read the warehouse queue",
   call("GET", "/v1/orders/queue", { token: customer.accessToken }),

@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +16,8 @@ import {
 } from "../../src/lib/delivery";
 import { REAL_BACKEND } from "../../src/lib/api";
 import { useDeliveryAction, useRiderState } from "../../src/lib/queries";
+import { useSession } from "../../src/store/session";
+import { useSessionReady } from "../../src/store/useSessionReady";
 import { colors, radius, space, TOUCH, typography } from "../../src/theme";
 
 const STEPS: { status: DeliveryStatus; label: string }[] = [
@@ -29,7 +31,16 @@ const STEPS: { status: DeliveryStatus; label: string }[] = [
 const mapsUrl = (lat: number, lng: number) =>
   `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 
-export default function DeliveryScreen() {
+/** A deep link may open this before the saved session is read: wait, then send strangers to login. */
+export default function DeliveryRoute() {
+  const rider = useSession((s) => s.rider);
+  const ready = useSessionReady();
+  if (!ready) return null;
+  if (!rider) return <Redirect href="/(auth)/login" />;
+  return <DeliveryScreen />;
+}
+
+function DeliveryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();

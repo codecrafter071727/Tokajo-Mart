@@ -1,4 +1,6 @@
 import {
+  adminOrdersQuerySchema,
+  adminOrdersResponseSchema,
   cancelOrderBodySchema,
   listOrdersQuerySchema,
   listOrdersResponseSchema,
@@ -70,6 +72,24 @@ export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void
     },
     async (request) => ({
       items: await orders.queue(requireRole(request, ...STAFF_ROLES), request.query.warehouseId),
+    }),
+  );
+
+  app.get(
+    "/v1/orders/admin",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "All orders, newest first (admin, or a manager for their warehouse)",
+        querystring: adminOrdersQuerySchema,
+        response: { 200: adminOrdersResponseSchema },
+      },
+    },
+    async (request) => ({
+      items: await orders.listAll(
+        requireRole(request, "admin", "warehouse_manager"),
+        request.query,
+      ),
     }),
   );
 

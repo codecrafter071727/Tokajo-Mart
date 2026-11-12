@@ -521,6 +521,28 @@ export class OrderService {
     return orders.map(({ deliveryCode: _code, ...rest }) => rest);
   }
 
+  /** Every order, newest first, for admins and (for their own warehouse) managers. */
+  async listAll(
+    identity: Identity,
+    filter: { status?: OrderStatus; warehouseId?: string; limit: number },
+  ): Promise<(QueueOrder & { customerName: string })[]> {
+    let query = this.db.selectFrom("orders.orders").selectAll();
+    if (identity.role === "admin") {
+      if (filter.warehouseId) query = query.where("warehouseId", "=", filter.warehouseId);
+    } else {
+      if (!identity.warehouseId) throw forbidden("You are not assigned to a warehouse.");
+      query = query.where("warehouseId", "=", identity.warehouseId);
+    }
+    if (filter.status) query = query.where("status", "=", filter.status);
+    const rows = await query.orderBy("placedAt", "desc").limit(filter.limit).execute();
+    const orders = await this.hydrate(rows, () => false);
+    const names = new Map(rows.map((r) => [r.id, r.customerName]));
+    return orders.map(({ deliveryCode: _code, ...rest }) => ({
+      ...rest,
+      customerName: names.get(rest.id) ?? "",
+    }));
+  }
+
   private async staffRow(identity: Identity, id: string): Promise<OrderRow> {
     const row = await this.rowById(id);
     try {

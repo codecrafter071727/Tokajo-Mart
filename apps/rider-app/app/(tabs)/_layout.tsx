@@ -2,6 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type { ColorValue } from "react-native";
 import { useSession } from "../../src/store/session";
+import { useSessionReady } from "../../src/store/useSessionReady";
 import { colors } from "../../src/theme";
 
 type Icon = React.ComponentProps<typeof Ionicons>["name"];
@@ -19,6 +20,9 @@ const tab = (title: string, icon: Icon, iconActive: Icon) => ({
 
 export default function TabsLayout() {
   const rider = useSession((s) => s.rider);
+  const ready = useSessionReady();
+  // A deep link can open this before the saved session is read: wait rather than bounce to login
+  if (!ready) return null;
   if (!rider) return <Redirect href="/(auth)/login" />;
 
   return (
