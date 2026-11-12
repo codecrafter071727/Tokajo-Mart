@@ -30,6 +30,26 @@ All of Vishu's items are built and on `main`. The ones that depend on Anshul's s
 
 **Not done:** real payments (Razorpay), push notifications, live map, proof of delivery photo, address capture and editing, and a shared UI package (the rider app copies the customer app's design tokens).
 
+## Status: Anshul's lane (updated Nov 13)
+
+Built by pairing with Claude on Vishu's machine, so that the whole slice runs end to end. Anshul should
+review it and own it from here. Everything runs locally: see [LOCAL-STACK.md](LOCAL-STACK.md).
+
+| Item                    | State                                                                                                                                               |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1 Database             | Done. Six migrations (catalog, inventory, identity, orders, delivery), seed data, `scripts/db-migrate.mjs`. Local Postgres only.                    |
+| A2 Identity and gateway | Done. Phone OTP for customers and riders, email and password for staff, rotating refresh tokens with reuse detection, role checks at the gateway.   |
+| A3 Order service        | Done. Priced from the catalog, stock held and sold, idempotent, state machine, cancel with restock, pick and pack. 27 tests.                        |
+| A4 Delivery service     | Done. Dispatch to online riders with offer timeout and decline, handover code, customer code checked on the server with an attempt limit. 26 tests. |
+| A5 Warehouse web        | Built, see the app. Queue, pick and pack, handover.                                                                                                 |
+| A6 CI                   | Postgres service, migrations, integration tests and the end to end script run in CI. Staging deploy and runbook still to do.                        |
+| A7 Contracts            | Done. Identity, order, delivery and pricing, with tests.                                                                                            |
+
+**Still open for Anshul:** staging deploy and runbook, a real SMS provider (MSG91 with DLT), Razorpay,
+push notifications, rider location and live map, an admin "all orders" endpoint, and moving
+service to service calls from HTTP to Pub/Sub if the architecture needs it. The lane rule still holds:
+review before changing the other person's files.
+
 ## Day 0 (before anything else): repo security cleanup
 
 Nothing else starts until this is done. A worm-style payload reached `main` and also sits in other repos on Vishu's Mac, so both accounts and both machines are treated as exposed. The full checklist, with the exact commands, is in [SECURITY-CLEANUP.md](SECURITY-CLEANUP.md).

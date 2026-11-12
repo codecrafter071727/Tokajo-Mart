@@ -8,9 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DB="${LOCAL_DATABASE_URL:-postgresql://localhost:5432/qc_dev}"
-case "$DB" in
-  postgresql://localhost*|postgresql://127.0.0.1*|postgres://localhost*|postgres://127.0.0.1*) ;;
-  *) echo "Refusing to run: LOCAL_DATABASE_URL must point at localhost, got $DB" >&2; exit 1 ;;
+HOST="$(printf '%s' "$DB" | sed -E 's#^[a-z]+://([^@/]*@)?(\[[^]]*\]|[^:/]+).*#\2#')"
+case "$HOST" in
+  localhost|127.0.0.1|"[::1]") ;;
+  *) echo "Refusing to run: the database must be on this machine, got host '$HOST'" >&2; exit 1 ;;
 esac
 
 ROOT="$(pwd)"

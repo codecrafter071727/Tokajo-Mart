@@ -19,6 +19,20 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Integration tests run against this database, and are skipped when it is not set
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/qc_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: qc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
         with:
@@ -32,6 +46,11 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Migrate and seed the test database
+        run: node scripts/db-migrate.mjs --reset --seed
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
       - name: Commit messages (Conventional Commits)
         if: github.event_name == 'pull_request'
@@ -81,3 +100,15 @@ jobs:
 
       - name: Dependency audit
         run: pnpm audit --audit-level high
+
+      - name: End to end (one order through the gateway)
+        run: |
+          scripts/dev-stack.sh
+          for i in $(seq 1 30); do
+            curl -sf localhost:4000/health/live >/dev/null && curl -sf localhost:4004/health/ready >/dev/null && break
+            sleep 2
+          done
+          node scripts/e2e.mjs || { tail -n 40 .dev-stack/*.log; exit 1; }
+          scripts/dev-stack.sh stop
+        env:
+          LOCAL_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
