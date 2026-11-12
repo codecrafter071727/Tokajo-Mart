@@ -1,11 +1,14 @@
 import { PageHeader } from "../../components/ui";
-import { CatalogTable } from "./catalog-table";
+import { CatalogTabs } from "./catalog-tabs";
 
 export default function CatalogPage() {
   return (
     <>
-      <PageHeader title="Catalog" subtitle="Products, prices and stock across the network." />
-      <CatalogTable />
+      <PageHeader
+        title="Catalog"
+        subtitle="What we sell: products, prices and categories. Stock lives under Inventory."
+      />
+      <CatalogTabs />
     </>
   );
 }

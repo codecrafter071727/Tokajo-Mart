@@ -26,7 +26,7 @@ function LoginForm() {
         return;
       }
       const next = params.get("next");
-      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/catalog");
+      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
       router.refresh();
     } catch {
       setError("Cannot reach the server.");

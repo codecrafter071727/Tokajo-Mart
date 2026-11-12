@@ -42,4 +42,4 @@ export async function refreshTokens(refreshToken: string): Promise<TokenPair | n
 
 /** Only same-site relative paths, so a login link cannot bounce someone to another site. */
 export const safeNext = (value: string | null): string =>
-  value && value.startsWith("/") && !value.startsWith("//") ? value : "/catalog";
+  value && value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";

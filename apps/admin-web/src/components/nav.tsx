@@ -4,9 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
-  { href: "/catalog", label: "Catalog" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/orders", label: "Orders" },
+  { href: "/catalog", label: "Catalog" },
+  { href: "/banners", label: "Banners" },
+  { href: "/inventory", label: "Inventory" },
+  { href: "/warehouses", label: "Warehouses" },
   { href: "/riders", label: "Riders" },
+  { href: "/customers", label: "Customers" },
+  { href: "/team", label: "Team" },
 ];
 
 export function Nav() {

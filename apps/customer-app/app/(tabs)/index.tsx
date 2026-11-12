@@ -1,13 +1,5 @@
-import React, { useCallback, useRef, useState, useEffect, useMemo } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  FlatList,
-  useWindowDimensions,
-} from "react-native";
+import React, { useCallback, useState, useEffect, useMemo } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,15 +9,14 @@ import { Colors, Spacing, Radius, typography } from "../../src/theme";
 import { colors } from "../../src/theme/tokens";
 import { TAB_RESERVE } from "../../src/theme/tabs";
 import { SectionRail } from "../../src/components/SectionRail";
-import { banners } from "../../src/lib/mockData";
 import { useCategories, useProducts, useServiceability } from "../../src/lib/queries";
 import { addressChip } from "../../src/lib/addresses";
 import { useSelectedAddress } from "../../src/store/addresses";
 import { ErrorState, RailSkeleton } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
+import { HomeBanners } from "../../src/components/HomeBanners";
 
-const BANNER_GAP = Spacing[12];
 const CAT_GAP = Spacing[12];
 const SECTION_PAD = Spacing[16];
 
@@ -49,11 +40,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width: screenW } = useWindowDimensions();
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
-  const [bannerIdx, setBannerIdx] = useState(0);
-  const bannerIdxRef = useRef(0);
   // The header shrinks to the search bar once the page is scrolled (hysteresis avoids flicker)
   const [compact, setCompact] = useState(false);
-  const bannerRef = useRef<FlatList>(null);
   const isReturningUser = true;
 
   useFocusEffect(
@@ -63,7 +51,6 @@ export default function HomeScreen() {
     }, []),
   );
 
-  const bannerW = screenW - SECTION_PAD * 2;
   const catCols = screenW < 340 ? 3 : screenW >= 700 ? 5 : 4;
   const catTileW = useMemo(() => {
     const inner = screenW - SECTION_PAD * 2;
@@ -74,22 +61,6 @@ export default function HomeScreen() {
     const timer = setInterval(() => {
       setPlaceholderIdx((i) => (i + 1) % SEARCH_PLACEHOLDERS.length);
     }, 2500);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      // The scroll is a side effect, so it lives here and not inside the state updater (React may
-      // run an updater twice)
-      const next = (bannerIdxRef.current + 1) % banners.length;
-      bannerIdxRef.current = next;
-      setBannerIdx(next);
-      try {
-        bannerRef.current?.scrollToIndex({ index: next, animated: true });
-      } catch {
-        // The banners are not laid out yet; the next tick tries again
-      }
-    }, 5000);
     return () => clearInterval(timer);
   }, []);
 
@@ -227,73 +198,7 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        <View style={styles.bannerSection}>
-          <FlatList
-            ref={bannerRef}
-            data={banners}
-            // The auto-advance timer can fire before the banners are laid out; skipping a slide is fine
-            onScrollToIndexFailed={() => undefined}
-            keyExtractor={(b) => b.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={bannerW + BANNER_GAP}
-            decelerationRate="fast"
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / (bannerW + BANNER_GAP));
-              bannerIdxRef.current = Math.min(idx, banners.length - 1);
-              setBannerIdx(bannerIdxRef.current);
-            }}
-            contentContainerStyle={{ paddingHorizontal: SECTION_PAD }}
-            ItemSeparatorComponent={() => <View style={{ width: BANNER_GAP }} />}
-            renderItem={({ item }) => (
-              <Pressable style={{ width: bannerW }} accessibilityLabel={item.title}>
-                <LinearGradient
-                  colors={item.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.banner}
-                >
-                  <View style={styles.bannerCircleLg} />
-                  <View style={styles.bannerCircleSm} />
-                  <View style={styles.bannerContent}>
-                    <Text style={styles.bannerTitle}>
-                      {item.title.replace(
-                        "{eta}",
-                        eta?.serviceable ? String(eta.etaMins) : "a few",
-                      )}
-                    </Text>
-                    <Text style={styles.bannerSubtitle}>{item.subtitle}</Text>
-                    <View style={styles.bannerCta}>
-                      <Text style={styles.bannerCtaText}>{item.cta}</Text>
-                      <Ionicons name="arrow-forward" size={14} color={colors.ink[900]} />
-                    </View>
-                  </View>
-                  <View style={styles.bannerPhotos}>
-                    {item.images.slice(0, 3).map((uri: string, i: number) => (
-                      <View
-                        key={uri || i}
-                        style={[styles.bannerPhoto, { top: i * 30, right: (i % 2) * 38 }]}
-                      >
-                        <ProductImage
-                          imageUrl={uri || undefined}
-                          fit="cover"
-                          emoji={item.image}
-                          emojiSize={28}
-                          style={StyleSheet.absoluteFill}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                </LinearGradient>
-              </Pressable>
-            )}
-          />
-          <View style={styles.dotsRow}>
-            {banners.map((_, i) => (
-              <View key={i} style={[styles.dot, i === bannerIdx && styles.dotActive]} />
-            ))}
-          </View>
-        </View>
+        <HomeBanners etaMins={eta?.serviceable ? eta.etaMins : null} />
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -511,75 +416,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: Spacing[20],
   },
-  bannerSection: {
-    marginBottom: Spacing[20],
-  },
-  banner: {
-    borderRadius: Radius.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingLeft: Spacing[20],
-    paddingRight: Spacing[12],
-    paddingVertical: Spacing[20],
-    minHeight: 132,
-    overflow: "hidden",
-  },
-  bannerCircleLg: {
-    position: "absolute",
-    right: -30,
-    top: -40,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  bannerCircleSm: {
-    position: "absolute",
-    right: 60,
-    bottom: -30,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  bannerContent: { flex: 1, alignItems: "flex-start" },
-  bannerTitle: {
-    ...typography.titleLg,
-    fontWeight: "800",
-    color: Colors.surface,
-  },
-  bannerSubtitle: {
-    ...typography.caption,
-    color: "rgba(255,255,255,0.88)",
-    marginTop: Spacing[4],
-    marginBottom: Spacing[12],
-  },
-  bannerCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing[12],
-    paddingVertical: 6,
-  },
-  bannerCtaText: {
-    ...typography.caption,
-    fontWeight: "800",
-    color: Colors.accentText,
-  },
-  bannerPhotos: { width: 110, height: 100 },
-  bannerPhoto: {
-    position: "absolute",
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    overflow: "hidden",
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.9)",
-    backgroundColor: Colors.surface,
-  },
   compactRow: { flexDirection: "row", alignItems: "center", gap: Spacing[8] },
   etaChip: {
     flexDirection: "row",
@@ -593,22 +429,6 @@ const styles = StyleSheet.create({
   etaChipText: { ...typography.bodyStrong, fontWeight: "800", color: Colors.surface },
   searchBarCompact: { flex: 1, height: 40 },
   avatarBtnSmall: { width: 36, height: 36, borderRadius: 18 },
-  dotsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 5,
-    marginTop: Spacing[10],
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.border,
-  },
-  dotActive: {
-    backgroundColor: Colors.brandGreen,
-    width: 16,
-  },
   section: {
     paddingHorizontal: Spacing[16],
     marginBottom: Spacing[20],

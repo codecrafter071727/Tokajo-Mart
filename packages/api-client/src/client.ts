@@ -1,6 +1,7 @@
 import {
   apiErrorSchema,
   availabilityResponseSchema,
+  listBannersResponseSchema,
   listCategoriesResponseSchema,
   listProductsResponseSchema,
   productSchema,
@@ -8,6 +9,7 @@ import {
   serviceabilityResponseSchema,
   type AvailabilityResponse,
   type ErrorCode,
+  type ListBannersResponse,
   type ListCategoriesResponse,
   type ListProductsQuery,
   type ListProductsResponse,
@@ -178,6 +180,10 @@ export function createApiClient(options: ApiClientOptions) {
     catalog: {
       listCategories: (opts?: RequestOptions): Promise<ListCategoriesResponse> =>
         get("catalog", "/v1/catalog/categories", listCategoriesResponseSchema, {}, opts),
+
+      /** Banners that are live right now, in display order. */
+      listBanners: (opts?: RequestOptions): Promise<ListBannersResponse> =>
+        get("catalog", "/v1/catalog/banners", listBannersResponseSchema, {}, opts),
 
       listProducts: (
         query: ListProductsQuery = {},

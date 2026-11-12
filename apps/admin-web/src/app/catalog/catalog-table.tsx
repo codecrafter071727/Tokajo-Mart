@@ -1,151 +1,72 @@
 "use client";
 
-import type { AvailabilityItem, Category, Product } from "@qc/contracts";
-import { useQuery } from "@tanstack/react-query";
+import type { AdminProduct } from "@qc/contracts";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type SortingState,
-} from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+  ConfirmModal,
+  fieldClass,
+  primaryButton,
+  secondaryButton,
+  Thumb,
+  Toast,
+} from "../../components/catalog-ui";
 import { Badge, TableShell, td, th } from "../../components/ui";
-import { api, DEFAULT_WAREHOUSE_ID, rupees } from "../../lib/api";
-import { EditProductDialog } from "./edit-product-dialog";
-
-type Row = Product & { categoryName: string; stock: AvailabilityItem | undefined };
-
-const column = createColumnHelper<Row>();
-
-function StockBadge({ stock }: { stock: AvailabilityItem | undefined }) {
-  if (!stock) return <Badge tone="gray">Unknown</Badge>;
-  if (stock.status === "out") return <Badge tone="red">Out of stock</Badge>;
-  if (stock.status === "low") return <Badge tone="amber">{`Low: ${stock.remaining} left`}</Badge>;
-  return <Badge tone="green">In stock</Badge>;
-}
+import { rupees } from "../../lib/api";
+import { catalogAdmin } from "../../lib/catalog-admin";
+import { ProductDialog } from "./product-dialog";
 
 export function CatalogTable() {
+  const client = useQueryClient();
   const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [editing, setEditing] = useState<Product | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [editing, setEditing] = useState<AdminProduct | "new" | null>(null);
+  const [confirm, setConfirm] = useState<{ product: AdminProduct; restore: boolean } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const categories = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => (await api.catalog.listCategories()).items,
-  });
-  const products = useQuery({
-    queryKey: ["products"],
-    queryFn: async () => (await api.catalog.listProducts({ limit: 100 })).items,
-  });
-  const productIds = products.data?.map((p) => p.id) ?? [];
-  const stock = useQuery({
-    queryKey: ["stock", DEFAULT_WAREHOUSE_ID, productIds.join(",")],
-    enabled: productIds.length > 0,
-    queryFn: async () => (await api.inventory.availability(DEFAULT_WAREHOUSE_ID, productIds)).items,
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const categories = useQuery({ queryKey: ["categories"], queryFn: catalogAdmin.categories });
+  const products = useInfiniteQuery({
+    queryKey: ["admin-products", debounced, categoryId],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      catalogAdmin.products(
+        { q: debounced || undefined, categoryId: categoryId || undefined },
+        pageParam,
+      ),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 
-  const rows: Row[] = useMemo(() => {
-    const names = new Map<string, string>(
-      (categories.data ?? []).map((c: Category) => [c.id, c.name]),
-    );
-    const stockById = new Map((stock.data ?? []).map((s) => [s.productId, s]));
-    return (products.data ?? [])
-      .filter((p) => categoryId === "" || p.categoryId === categoryId)
-      .map((p) => ({
-        ...p,
-        categoryName: names.get(p.categoryId) ?? p.categoryId,
-        stock: stockById.get(p.id),
-      }));
-  }, [products.data, categories.data, stock.data, categoryId]);
-
-  const columns = useMemo(
-    () => [
-      column.accessor("name", {
-        header: "Product",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            {row.original.imageUrl ? (
-              <img
-                src={row.original.imageUrl}
-                alt=""
-                className="size-10 rounded-lg border border-line bg-white object-contain"
-              />
-            ) : (
-              <span className="grid size-10 place-items-center rounded-lg border border-line bg-surface text-xl">
-                {row.original.emoji}
-              </span>
-            )}
-            <div>
-              <div className="font-semibold">{row.original.name}</div>
-              <div className="text-xs text-ink-500">{row.original.unit}</div>
-            </div>
-          </div>
-        ),
-      }),
-      column.accessor("categoryName", { header: "Category" }),
-      column.accessor("pricePaise", {
-        header: "Price",
-        cell: (c) => <span className="font-bold tabular-nums">{rupees(c.getValue())}</span>,
-      }),
-      column.accessor("mrpPaise", {
-        header: "MRP",
-        cell: (c) => <span className="tabular-nums text-ink-500">{rupees(c.getValue())}</span>,
-      }),
-      column.accessor("discountPercent", {
-        header: "Off",
-        cell: (c) =>
-          c.getValue() > 0 ? (
-            <Badge tone="green">{`${c.getValue()}%`}</Badge>
-          ) : (
-            <span className="text-ink-500">None</span>
-          ),
-      }),
-      column.display({
-        id: "stock",
-        header: "Stock",
-        cell: ({ row }) => <StockBadge stock={row.original.stock} />,
-      }),
-      column.display({
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={() => setEditing(row.original)}
-            className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold hover:bg-surface"
-          >
-            Edit
-          </button>
-        ),
-      }),
-    ],
-    [],
+  const names = useMemo(
+    () => new Map((categories.data ?? []).map((c) => [c.id, c.name])),
+    [categories.data],
   );
+  const all = useMemo(() => products.data?.pages.flatMap((p) => p.items) ?? [], [products.data]);
+  const rows = showArchived ? all : all.filter((p) => !p.archived);
+  const archivedCount = all.filter((p) => p.archived).length;
 
-  const table = useReactTable({
-    data: rows,
-    columns,
-    state: { sorting, globalFilter: search },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setSearch,
-    globalFilterFn: (row, _id, value: string) =>
-      `${row.original.name} ${row.original.unit} ${row.original.categoryName}`
-        .toLowerCase()
-        .includes(value.toLowerCase()),
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+  const toggle = useMutation({
+    mutationFn: ({ product, restore }: { product: AdminProduct; restore: boolean }) =>
+      restore ? catalogAdmin.restoreProduct(product.id) : catalogAdmin.archiveProduct(product.id),
+    onSuccess: async (_r, { product, restore }) => {
+      await client.invalidateQueries({ queryKey: ["admin-products"] });
+      setToast(restore ? `Restored ${product.name}` : `Archived ${product.name}`);
+      setConfirm(null);
+    },
   });
 
   if (products.isError || categories.isError) {
-    const retry = () => {
-      void products.refetch();
-      void categories.refetch();
-    };
     return (
       <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-6">
         <p className="font-bold text-red-800">Could not load the catalog.</p>
@@ -154,8 +75,11 @@ export function CatalogTable() {
         </p>
         <button
           type="button"
-          onClick={retry}
-          className="mt-3 rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-ink-900"
+          onClick={() => {
+            void products.refetch();
+            void categories.refetch();
+          }}
+          className={`mt-3 ${primaryButton}`}
         >
           Try again
         </button>
@@ -178,7 +102,7 @@ export function CatalogTable() {
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
           aria-label="Filter by category"
-          className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
+          className={`${fieldClass} !mt-0 !w-auto`}
         >
           <option value="">All categories</option>
           {(categories.data ?? []).map((c) => (
@@ -187,49 +111,38 @@ export function CatalogTable() {
             </option>
           ))}
         </select>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+            className="size-4 accent-brand-600"
+          />
+          Show archived
+        </label>
         <span className="ml-auto text-sm text-ink-500">
-          {products.isPending
-            ? "Loading"
-            : `${table.getRowModel().rows.length} of ${products.data?.length ?? 0} products`}
+          {products.isPending ? "Loading" : `${rows.length} shown`}
         </span>
+        <button
+          type="button"
+          onClick={() => setEditing("new")}
+          disabled={!categories.data?.length}
+          className={primaryButton}
+        >
+          New product
+        </button>
       </div>
 
       <TableShell>
         <table className="w-full">
           <thead className="border-b border-line">
-            {table.getHeaderGroups().map((group) => (
-              <tr key={group.id}>
-                {group.headers.map((header) => {
-                  const sortable =
-                    header.column.getCanSort() &&
-                    header.column.id !== "actions" &&
-                    header.column.id !== "stock";
-                  const dir = header.column.getIsSorted();
-                  return (
-                    <th
-                      key={header.id}
-                      className={th}
-                      aria-sort={
-                        dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined
-                      }
-                    >
-                      {sortable ? (
-                        <button
-                          type="button"
-                          onClick={header.column.getToggleSortingHandler()}
-                          className="font-bold uppercase"
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          {dir === "asc" ? " ▲" : dir === "desc" ? " ▼" : ""}
-                        </button>
-                      ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
-                      )}
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
+            <tr>
+              {["Product", "Category", "Price", "MRP", "Off", "Status", ""].map((h) => (
+                <th key={h || "actions"} className={th}>
+                  {h}
+                </th>
+              ))}
+            </tr>
           </thead>
           <tbody>
             {products.isPending
@@ -240,22 +153,61 @@ export function CatalogTable() {
                     </td>
                   </tr>
                 ))
-              : table.getRowModel().rows.map((row) => (
+              : rows.map((p) => (
                   <tr
-                    key={row.id}
-                    className="border-b border-line last:border-0 hover:bg-brand-50/40"
+                    key={p.id}
+                    className={`border-b border-line last:border-0 hover:bg-brand-50/40 ${p.archived ? "opacity-60" : ""}`}
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className={td}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
+                    <td className={td}>
+                      <div className="flex items-center gap-3">
+                        <Thumb imageUrl={p.imageUrl} emoji={p.emoji} fit={p.imageFit} />
+                        <div>
+                          <div className="font-semibold">{p.name}</div>
+                          <div className="text-xs text-ink-500">{p.unit}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className={td}>{names.get(p.categoryId) ?? p.categoryId}</td>
+                    <td className={`${td} font-bold tabular-nums`}>{rupees(p.pricePaise)}</td>
+                    <td className={`${td} tabular-nums text-ink-500`}>{rupees(p.mrpPaise)}</td>
+                    <td className={td}>
+                      {p.discountPercent > 0 ? (
+                        <Badge tone="green">{`${p.discountPercent}%`}</Badge>
+                      ) : (
+                        <span className="text-ink-500">None</span>
+                      )}
+                    </td>
+                    <td className={td}>
+                      {p.archived ? (
+                        <Badge tone="gray">Archived</Badge>
+                      ) : (
+                        <Badge tone="green">On sale</Badge>
+                      )}
+                    </td>
+                    <td className={`${td} whitespace-nowrap text-right`}>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(p)}
+                        className={`${secondaryButton} mr-2 !px-3 !py-1.5`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirm({ product: p, restore: p.archived })}
+                        className={`${secondaryButton} !px-3 !py-1.5`}
+                      >
+                        {p.archived ? "Restore" : "Archive"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
-            {!products.isPending && table.getRowModel().rows.length === 0 ? (
+            {!products.isPending && rows.length === 0 ? (
               <tr>
                 <td className={`${td} py-10 text-center text-ink-500`} colSpan={7}>
-                  No products match.
+                  {archivedCount > 0 && !showArchived
+                    ? "Only archived products match. Turn on Show archived to see them."
+                    : "No products match."}
                 </td>
               </tr>
             ) : null}
@@ -263,7 +215,57 @@ export function CatalogTable() {
         </table>
       </TableShell>
 
-      {editing ? <EditProductDialog product={editing} onClose={() => setEditing(null)} /> : null}
+      {products.hasNextPage ? (
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => void products.fetchNextPage()}
+            disabled={products.isFetchingNextPage}
+            className={secondaryButton}
+          >
+            {products.isFetchingNextPage ? "Loading" : "Load more"}
+          </button>
+        </div>
+      ) : null}
+
+      {editing ? (
+        <ProductDialog
+          product={editing === "new" ? null : editing}
+          categories={categories.data ?? []}
+          onClose={() => setEditing(null)}
+          onSaved={setToast}
+        />
+      ) : null}
+
+      {confirm ? (
+        <ConfirmModal
+          title={confirm.restore ? "Restore this product?" : "Archive this product?"}
+          body={
+            confirm.restore ? (
+              <>
+                <strong>{confirm.product.name}</strong> goes back on sale and customers can find and
+                order it again.
+              </>
+            ) : (
+              <>
+                <strong>{confirm.product.name}</strong> is taken off sale. Customers will not see it
+                or be able to order it. Past orders keep their details, and you can restore it any
+                time.
+              </>
+            )
+          }
+          confirmLabel={confirm.restore ? "Restore" : "Archive"}
+          danger={!confirm.restore}
+          pending={toggle.isPending}
+          error={toggle.error}
+          onConfirm={() => toggle.mutate(confirm)}
+          onClose={() => {
+            toggle.reset();
+            setConfirm(null);
+          }}
+        />
+      ) : null}
+      <Toast message={toast} />
     </>
   );
 }

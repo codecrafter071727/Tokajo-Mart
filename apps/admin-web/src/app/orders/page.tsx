@@ -33,6 +33,13 @@ const FILTERS: { value: OrderStatus | "all"; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const href = (status: string, warehouseId: string | undefined) => {
+  const params = new URLSearchParams();
+  if (status !== "all") params.set("status", status);
+  if (warehouseId) params.set("warehouseId", warehouseId);
+  return params.size > 0 ? `/orders?${params}` : "/orders";
+};
+
 const time = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", {
     day: "numeric",
@@ -41,9 +48,28 @@ const time = (iso: string) =>
     minute: "2-digit",
   });
 
-async function load(status: string | undefined): Promise<AdminOrder[] | "expired" | "failed"> {
+async function loadWarehouses(): Promise<{ id: string; name: string }[]> {
   const token = (await cookies()).get(ACCESS_COOKIE)?.value;
-  const query = status && status in STATUS ? `?status=${status}` : "";
+  try {
+    const res = await fetch(`${GATEWAY_URL}/v1/inventory/warehouses`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return res.ok ? ((await res.json()) as { items: { id: string; name: string }[] }).items : [];
+  } catch {
+    return [];
+  }
+}
+
+async function load(
+  status: string | undefined,
+  warehouseId: string | undefined,
+): Promise<AdminOrder[] | "expired" | "failed"> {
+  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+  const params = new URLSearchParams();
+  if (status && status in STATUS) params.set("status", status);
+  if (warehouseId) params.set("warehouseId", warehouseId);
+  const query = params.size > 0 ? `?${params}` : "";
   try {
     const res = await fetch(`${GATEWAY_URL}/v1/orders/admin${query}`, {
       headers: { authorization: `Bearer ${token}` },
@@ -60,22 +86,46 @@ async function load(status: string | undefined): Promise<AdminOrder[] | "expired
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; warehouseId?: string }>;
 }) {
-  const { status } = await searchParams;
-  const orders = await load(status);
+  const { status, warehouseId } = await searchParams;
+  const [orders, warehouses] = await Promise.all([load(status, warehouseId), loadWarehouses()]);
   if (orders === "expired") redirect("/session/refresh?next=/orders");
 
   return (
     <>
       <PageHeader title="Orders" subtitle="Everything placed across the network, newest first." />
+      {warehouses.length > 1 ? (
+        <form method="get" className="mb-3 flex items-center gap-2">
+          {status ? <input type="hidden" name="status" value={status} /> : null}
+          <select
+            name="warehouseId"
+            aria-label="Warehouse"
+            defaultValue={warehouseId ?? ""}
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
+          >
+            <option value="">All warehouses</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
+          >
+            Apply
+          </button>
+        </form>
+      ) : null}
       <nav className="mb-4 flex flex-wrap gap-2" aria-label="Filter by status">
         {FILTERS.map((f) => {
           const active = (status ?? "all") === f.value;
           return (
             <Link
               key={f.value}
-              href={f.value === "all" ? "/orders" : `/orders?status=${f.value}`}
+              href={href(f.value, warehouseId)}
               aria-current={active ? "page" : undefined}
               className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${
                 active
