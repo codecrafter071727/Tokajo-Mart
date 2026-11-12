@@ -33,6 +33,18 @@ export type Order = PriceBreakdown & {
   promisedMins: number;
   /** Set when the order was cancelled, so its status never advances */
   cancelledAt: string | null;
+  /**
+   * Present on orders that come from the order service. The service decides the status, so the
+   * clock based demo timeline below is skipped for them.
+   */
+  server?: {
+    number: string;
+    /** The service's own status, for example "packing" or "out_for_delivery" */
+    status: string;
+    pickedUpAt: string | null;
+    deliveredAt: string | null;
+    rider: { name: string; phone: string | null; rating: number } | null;
+  };
 };
 
 export type PlaceOrderInput = {
@@ -44,6 +56,8 @@ export type PlaceOrderInput = {
   payment: "cod";
   /** The ETA shown at checkout, kept on the order so tracking never contradicts it */
   promisedMins: number;
+  /** Where to deliver, sent to the order service so it can pick the serving warehouse */
+  location?: { lat: number; lng: number; instructions?: string | null };
 };
 
 export class OrderError extends Error {
@@ -60,7 +74,34 @@ export interface OrderRepository {
   get(id: string): Promise<Order | null>;
   /** Newest first */
   list(): Promise<Order[]>;
+  /** Cancel an order that has not started packing. Rejects with the server's reason otherwise. */
+  cancel?(id: string): Promise<Order>;
 }
+
+/** The app's coarse status for each status the order service reports. */
+const FROM_SERVER: Record<string, OrderStatus> = {
+  pending_payment: "placed",
+  confirmed: "confirmed",
+  packing: "picking",
+  packed: "picking",
+  picked_up: "on_the_way",
+  out_for_delivery: "on_the_way",
+  delivered: "delivered",
+  cancelled: "cancelled",
+  payment_failed: "cancelled",
+  expired: "cancelled",
+};
+
+/** How far along the journey each server status is, for the progress bar. */
+const SERVER_PROGRESS: Record<string, number> = {
+  pending_payment: 0.05,
+  confirmed: 0.15,
+  packing: 0.35,
+  packed: 0.5,
+  picked_up: 0.6,
+  out_for_delivery: 0.7,
+  delivered: 1,
+};
 
 /**
  * Demo timeline in seconds since placing. The real service moves an order on as the warehouse and
@@ -69,7 +110,11 @@ export interface OrderRepository {
 export const DEMO_TIMELINE = { confirmed: 5, picking: 20, on_the_way: 50, delivered: 110 } as const;
 
 /** The status an order has at `now`. Pure, so it is easy to test and never gets out of sync. */
-export function statusAt(order: Pick<Order, "placedAt" | "cancelledAt">, now: Date): OrderStatus {
+export function statusAt(
+  order: Pick<Order, "placedAt" | "cancelledAt"> & { server?: Order["server"] },
+  now: Date,
+): OrderStatus {
+  if (order.server) return FROM_SERVER[order.server.status] ?? "placed";
   if (order.cancelledAt) return "cancelled";
   const seconds = (now.getTime() - Date.parse(order.placedAt)) / 1000;
   if (seconds >= DEMO_TIMELINE.delivered) return "delivered";
@@ -84,14 +129,26 @@ export function statusAt(order: Pick<Order, "placedAt" | "cancelledAt">, now: Da
  * (about two minutes), so the promise is scaled by how far through it we are: an 8 minute promise
  * reads 8 at the start and 1 just before delivery. Never below 1 while the order is in flight.
  */
-export function etaMinutes(order: Pick<Order, "placedAt" | "promisedMins">, now: Date): number {
+export function etaMinutes(
+  order: Pick<Order, "placedAt" | "promisedMins"> & { server?: Order["server"] },
+  now: Date,
+): number {
+  if (order.server) {
+    // Real time: the promise minus what has already passed, never below 1 while in flight
+    const passed = (now.getTime() - Date.parse(order.placedAt)) / 60_000;
+    return Math.max(1, Math.ceil(order.promisedMins - passed));
+  }
   const elapsed = (now.getTime() - Date.parse(order.placedAt)) / 1000;
   const fractionLeft = Math.max(0, 1 - elapsed / DEMO_TIMELINE.delivered);
   return Math.max(1, Math.ceil(order.promisedMins * fractionLeft));
 }
 
 /** How far through the journey, 0 at placing and 1 at the door, for drawing progress. */
-export function journeyProgress(order: Pick<Order, "placedAt" | "cancelledAt">, now: Date): number {
+export function journeyProgress(
+  order: Pick<Order, "placedAt" | "cancelledAt"> & { server?: Order["server"] },
+  now: Date,
+): number {
+  if (order.server) return SERVER_PROGRESS[order.server.status] ?? 0;
   const elapsed = (now.getTime() - Date.parse(order.placedAt)) / 1000;
   return Math.min(1, Math.max(0, elapsed / DEMO_TIMELINE.delivered));
 }
@@ -100,7 +157,20 @@ export function journeyProgress(order: Pick<Order, "placedAt" | "cancelledAt">, 
  * Where the rider is on the way to the customer: 0 at the store, 1 at the door. The rider stays
  * at the store until the order is out for delivery, then moves along the route.
  */
-export function riderProgress(order: Pick<Order, "placedAt" | "cancelledAt">, now: Date): number {
+export function riderProgress(
+  order: Pick<Order, "placedAt" | "cancelledAt"> & { server?: Order["server"] },
+  now: Date,
+): number {
+  if (order.server) {
+    const { status, pickedUpAt } = order.server;
+    if (status === "delivered") return 1;
+    if ((status === "picked_up" || status === "out_for_delivery") && pickedUpAt) {
+      // Ride time is a guess (a few minutes): never reaches the door until it is delivered
+      const minutes = (now.getTime() - Date.parse(pickedUpAt)) / 60_000;
+      return Math.min(0.95, Math.max(0.05, minutes / 6));
+    }
+    return 0;
+  }
   if (order.cancelledAt) return 0;
   const elapsed = (now.getTime() - Date.parse(order.placedAt)) / 1000;
   const start = DEMO_TIMELINE.on_the_way;

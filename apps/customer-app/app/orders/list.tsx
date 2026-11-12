@@ -93,7 +93,7 @@ function OrderCard({ order, now }: { order: Order; now: Date }) {
     >
       <View style={styles.cardHeader}>
         <View>
-          <Text style={styles.orderId}>Order #{order.id}</Text>
+          <Text style={styles.orderId}>Order #{order.server?.number ?? order.id}</Text>
           <Text style={styles.orderDate}>{formatWhen(order.placedAt, now)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>

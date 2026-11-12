@@ -7,7 +7,9 @@ import { useCartStore } from "../../src/store/cart";
 import { formatPaise, priceCart, toPriceLines } from "../../src/lib/pricing";
 import { usePlaceOrder } from "../../src/lib/orderQueries";
 import { useServiceability } from "../../src/lib/queries";
-import { OrderError, type OrderItem } from "../../src/lib/orders";
+import type { OrderItem } from "../../src/lib/orders";
+import { describeOrderError } from "../../src/lib/orderMapping";
+import { OrderError } from "../../src/lib/orders";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductImage } from "../../src/components/ProductImage";
 
@@ -19,6 +21,8 @@ interface Address {
   icon: React.ComponentProps<typeof Ionicons>["name"];
   line1: string;
   line2: string;
+  lat: number;
+  lng: number;
 }
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -28,22 +32,28 @@ const SAVED_ADDRESSES: Address[] = [
     id: "a1",
     tag: "Home",
     icon: "home",
-    line1: "123, MG Road, Indiranagar",
-    line2: "Bengaluru - 560038",
+    line1: "B-12, Sector 62",
+    line2: "Noida - 201309",
+    lat: 28.6208,
+    lng: 77.3649,
   },
   {
     id: "a2",
     tag: "Work",
     icon: "business",
-    line1: "45, HSR Layout, Sector 6",
-    line2: "Bengaluru - 560102",
+    line1: "Tower 3, Logix Cyber Park, Sector 62",
+    line2: "Noida - 201309",
+    lat: 28.6262,
+    lng: 77.3722,
   },
   {
     id: "a3",
     tag: "Parents",
     icon: "people",
-    line1: "7B, Jayanagar 4th Block",
-    line2: "Bengaluru - 560041",
+    line1: "7B, Sector 63",
+    line2: "Noida - 201301",
+    lat: 28.6301,
+    lng: 77.3801,
   },
 ];
 
@@ -242,6 +252,7 @@ export default function CheckoutScreen() {
           line1: selectedAddress.line1,
           line2: selectedAddress.line2,
         },
+        location: { lat: selectedAddress.lat, lng: selectedAddress.lng },
         payment: "cod",
         promisedMins: eta?.etaMins ?? 10,
       },
@@ -254,7 +265,7 @@ export default function CheckoutScreen() {
           setPlaceError(
             error instanceof OrderError
               ? error.message
-              : "We could not place your order. Try again.",
+              : describeOrderError(error, Object.fromEntries(items.map((i) => [i.id, i.name]))),
           ),
       },
     );

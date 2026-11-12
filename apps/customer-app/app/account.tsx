@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../src/store/auth";
+import { signOut } from "../src/lib/auth";
 
 const MENU_ITEMS = [
   {
@@ -61,7 +62,6 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -180,7 +180,7 @@ export default function AccountScreen() {
         <Pressable
           style={styles.logoutBtn}
           onPress={() => {
-            logout();
+            void signOut();
             router.replace("/(auth)/login");
           }}
         >

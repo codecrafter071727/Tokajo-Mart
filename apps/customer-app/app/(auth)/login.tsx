@@ -14,11 +14,15 @@ import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { noWebOutline } from "../../src/theme/web";
+import { requestOtp } from "../../src/lib/auth";
+import { backendEnabled } from "../../src/lib/session";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [phone, setPhone] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isValid = phone.replace(/\s/g, "").length === 10;
 
@@ -63,19 +67,43 @@ export default function LoginScreen() {
         </View>
 
         {/* OTP note */}
-        <Text style={styles.otpNote}>A 4-digit OTP will be sent to this number</Text>
+        <Text style={styles.otpNote}>A one time code will be sent to this number</Text>
+        {error ? (
+          <Text style={{ color: Colors.danger, fontWeight: "700" }} accessibilityRole="alert">
+            {error}
+          </Text>
+        ) : null}
 
         {/* Continue button */}
         <Pressable
           style={[styles.continueBtn, !isValid && styles.continueBtnDisabled]}
-          onPress={() => {
-            if (isValid) {
-              router.push({ pathname: "/(auth)/otp", params: { phone } });
+          onPress={async () => {
+            if (!isValid || sending) return;
+            setError(null);
+            if (!backendEnabled) {
+              router.push({ pathname: "/(auth)/otp", params: { phone, length: "4", demo: "1" } });
+              return;
+            }
+            setSending(true);
+            try {
+              const sent = await requestOtp(phone);
+              router.push({
+                pathname: "/(auth)/otp",
+                params: {
+                  phone,
+                  length: String(sent.codeLength),
+                  demo: sent.demoMode ? "1" : "0",
+                },
+              });
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Could not send the code. Try again.");
+            } finally {
+              setSending(false);
             }
           }}
         >
           <Text style={[styles.continueBtnText, !isValid && styles.continueBtnTextDisabled]}>
-            Continue
+            {sending ? "Sending..." : "Continue"}
           </Text>
         </Pressable>
 

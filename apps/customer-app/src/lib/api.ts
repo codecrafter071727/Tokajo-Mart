@@ -1,4 +1,5 @@
 import { createApiClient } from "@qc/api-client";
+import { useAuthStore } from "../store/auth";
 
 /**
  * Gateway origin, for example http://192.168.1.5:4000. Per service URLs override it for local
@@ -14,5 +15,9 @@ const baseUrl = gateway ?? catalog ?? inventory;
 export const apiEnabled = Boolean(baseUrl);
 
 export const api = baseUrl
-  ? createApiClient({ baseUrl, serviceUrls: { catalog, inventory } })
+  ? createApiClient({
+      baseUrl,
+      serviceUrls: { catalog, inventory },
+      getAccessToken: () => useAuthStore.getState().accessToken ?? undefined,
+    })
   : null;

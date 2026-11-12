@@ -15,14 +15,18 @@ import { DEMO_OTP, useAuthStore } from "../../src/store/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { noWebOutline } from "../../src/theme/web";
 import { applyOtpInput } from "../../src/lib/otp";
-
-const OTP_LENGTH = 4;
+import { requestOtp, verifyOtp } from "../../src/lib/auth";
+import { backendEnabled } from "../../src/lib/session";
 
 export default function OtpScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
-  const [otp, setOtp] = useState(["", "", "", ""]);
+  const params = useLocalSearchParams<{ phone: string; length?: string; demo?: string }>();
+  const { phone } = params;
+  const OTP_LENGTH = Math.min(6, Math.max(4, Number(params.length) || 4));
+  const showDemoHint = params.demo === "1";
+  const [otp, setOtp] = useState<string[]>(() => Array(OTP_LENGTH).fill(""));
+  const [busy, setBusy] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const inputs = useRef<(React.ComponentRef<typeof TextInput> | null)[]>([]);
 
@@ -35,16 +39,45 @@ export default function OtpScreen() {
   const login = useAuthStore((s) => s.login);
   const [error, setError] = useState<string | null>(null);
 
-  const verify = (code: string) => {
-    if (code !== DEMO_OTP) {
-      setError("That code is not right. Try again.");
-      setOtp(["", "", "", ""]);
-      inputs.current[0]?.focus();
+  const clearBoxes = () => {
+    setOtp(Array(OTP_LENGTH).fill(""));
+    inputs.current[0]?.focus();
+  };
+
+  const verify = async (code: string) => {
+    if (busy) return;
+    if (!backendEnabled) {
+      if (code !== DEMO_OTP) {
+        setError("That code is not right. Try again.");
+        clearBoxes();
+        return;
+      }
+      setError(null);
+      login(phone ?? "98765 43210");
       return;
     }
+    setBusy(true);
     setError(null);
-    login(phone ?? "98765 43210");
-    // The route guard in the root layout moves a signed in user to the app
+    try {
+      await verifyOtp(phone ?? "", code);
+      // The route guard in the root layout moves a signed in user to the app
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not verify the code. Try again.");
+      clearBoxes();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resend = async () => {
+    setError(null);
+    try {
+      if (backendEnabled) await requestOtp(phone ?? "");
+      setCountdown(30);
+      clearBoxes();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send a new code.");
+    }
   };
 
   const handleOtpChange = (value: string, index: number) => {
@@ -86,7 +119,7 @@ export default function OtpScreen() {
 
         <Text style={styles.title}>Verify your number</Text>
         <Text style={styles.subtitle}>
-          We've sent a 4-digit OTP to{"\n"}
+          We've sent a {OTP_LENGTH}-digit code to{"\n"}
           <Text style={styles.phoneText}>+91 {phone}</Text>
         </Text>
 
@@ -119,7 +152,7 @@ export default function OtpScreen() {
               Resend OTP in <Text style={styles.countdownValue}>{countdown}s</Text>
             </Text>
           ) : (
-            <Pressable onPress={() => setCountdown(30)}>
+            <Pressable onPress={resend}>
               <Text style={styles.resendText}>Resend OTP</Text>
             </Pressable>
           )}
@@ -130,7 +163,9 @@ export default function OtpScreen() {
             {error}
           </Text>
         ) : null}
-        <Text style={styles.demoHint}>Demo mode: the code is {DEMO_OTP}.</Text>
+        {showDemoHint ? (
+          <Text style={styles.demoHint}>Demo mode: the code is {DEMO_OTP}.</Text>
+        ) : null}
 
         {/* Verify button */}
         <Pressable
@@ -140,7 +175,7 @@ export default function OtpScreen() {
           }}
         >
           <Text style={[styles.verifyBtnText, !isComplete && styles.verifyBtnTextDisabled]}>
-            Verify & Continue
+            {busy ? "Verifying..." : "Verify & Continue"}
           </Text>
         </Pressable>
 

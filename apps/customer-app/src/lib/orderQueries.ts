@@ -7,9 +7,16 @@ import {
   type PlaceOrderInput,
 } from "./orders";
 import { makeSeedOrders } from "./orderSeed";
+import { createHttpOrderRepository } from "./httpOrders";
+import { backendEnabled } from "./session";
 
-/** Swap for an HTTP repository backed by the order service when it exists. */
-export const orderRepository = createInMemoryOrderRepository({ seed: makeSeedOrders() });
+/** The order service when a gateway is configured, otherwise the demo orders that run on the clock. */
+export const orderRepository = backendEnabled
+  ? createHttpOrderRepository()
+  : createInMemoryOrderRepository({ seed: makeSeedOrders() });
+
+// Real orders change when the warehouse and rider act, so poll a little slower than the demo clock
+const POLL_MS = backendEnabled ? 5000 : 3000;
 
 const inFlight = (order: Order) => {
   const status = statusAt(order, new Date());
@@ -20,7 +27,7 @@ export function useOrders() {
   return useQuery({
     queryKey: ["orders"],
     queryFn: () => orderRepository.list(),
-    refetchInterval: (query) => (query.state.data?.some(inFlight) ? 3000 : false),
+    refetchInterval: (query) => (query.state.data?.some(inFlight) ? POLL_MS : false),
   });
 }
 
@@ -29,7 +36,18 @@ export function useOrder(id: string | undefined) {
     queryKey: ["orders", id],
     enabled: Boolean(id),
     queryFn: async () => orderRepository.get(id as string),
-    refetchInterval: (query) => (query.state.data && inFlight(query.state.data) ? 3000 : false),
+    refetchInterval: (query) => (query.state.data && inFlight(query.state.data) ? POLL_MS : false),
+  });
+}
+
+export function useCancelOrder() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!orderRepository.cancel) throw new Error("Cancelling is not available.");
+      return orderRepository.cancel(id);
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: ["orders"] }),
   });
 }
 

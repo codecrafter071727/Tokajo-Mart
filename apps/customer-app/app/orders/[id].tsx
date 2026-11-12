@@ -1,10 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { useNow, useOrder } from "../../src/lib/orderQueries";
+import { useCancelOrder, useNow, useOrder } from "../../src/lib/orderQueries";
 import { etaMinutes, riderProgress, statusAt, type OrderStatus } from "../../src/lib/orders";
 import { RouteProgress } from "../../src/components/RouteProgress";
 import { formatPaise } from "../../src/lib/pricing";
@@ -28,6 +28,7 @@ export default function OrderTrackingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const orderQuery = useOrder(id);
+  const cancel = useCancelOrder();
   const now = useNow(1000);
   const order = orderQuery.data;
 
@@ -57,6 +58,9 @@ export default function OrderTrackingScreen() {
   const currentStepIdx = ORDER_STEPS.findIndex((s) => s.key === status);
   const eta = etaMinutes(order, now);
   const hasRider = status === "on_the_way" || delivered;
+  // The real rider from the delivery service, or the demo one when running on fixtures
+  const rider = order.server ? order.server.rider : DEMO_RIDER;
+  const canCancel = order.server?.status === "confirmed";
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -66,7 +70,7 @@ export default function OrderTrackingScreen() {
           <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Track Order</Text>
-        <Text style={styles.orderId}>#{order.id}</Text>
+        <Text style={styles.orderId}>#{order.server?.number ?? order.id}</Text>
       </View>
 
       <ScrollView
@@ -84,7 +88,7 @@ export default function OrderTrackingScreen() {
               : delivered
                 ? "Delivered"
                 : status === "on_the_way"
-                  ? `${DEMO_RIDER.name} is on the way`
+                  ? `${rider?.name ?? "Your delivery partner"} is on the way`
                   : status === "picking"
                     ? "Packing your order"
                     : "Getting your order ready"
@@ -136,7 +140,7 @@ export default function OrderTrackingScreen() {
         ) : null}
 
         {/* Delivery partner */}
-        {hasRider ? (
+        {hasRider && rider ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Delivery partner</Text>
             <View style={styles.riderRow}>
@@ -144,13 +148,19 @@ export default function OrderTrackingScreen() {
                 <Ionicons name="person" size={24} color={Colors.brandText} />
               </View>
               <View style={styles.riderInfo}>
-                <Text style={styles.riderName}>{DEMO_RIDER.name}</Text>
+                <Text style={styles.riderName}>{rider.name}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                   <Ionicons name="star" size={13} color={Colors.accent} />
-                  <Text style={styles.riderRating}>{DEMO_RIDER.rating}</Text>
+                  <Text style={styles.riderRating}>{rider.rating}</Text>
                 </View>
               </View>
-              <Pressable style={styles.callBtn}>
+              <Pressable
+                style={styles.callBtn}
+                onPress={() => {
+                  const phone = "phone" in rider ? rider.phone : null;
+                  if (phone) void Linking.openURL(`tel:${phone}`);
+                }}
+              >
                 <Ionicons name="call" size={16} color={Colors.brandText} />
                 <Text style={styles.callBtnText}>Call</Text>
               </Pressable>
@@ -229,6 +239,26 @@ export default function OrderTrackingScreen() {
             {order.address.tag}: {order.address.line1}, {order.address.line2}
           </Text>
         </View>
+
+        {/* Cancel: only until the warehouse starts packing */}
+        {canCancel ? (
+          <View style={styles.card}>
+            <Pressable
+              onPress={() => cancel.mutate(order.id)}
+              disabled={cancel.isPending}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.helpBtnText, { color: Colors.danger, textAlign: "center" }]}>
+                {cancel.isPending ? "Cancelling..." : "Cancel order"}
+              </Text>
+            </Pressable>
+            {cancel.isError ? (
+              <Text style={styles.codeHint}>
+                {cancel.error instanceof Error ? cancel.error.message : "Could not cancel."}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Help */}
         <View style={styles.helpCard}>

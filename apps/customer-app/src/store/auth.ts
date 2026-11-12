@@ -13,14 +13,25 @@ export interface UserProfile {
   ordersPlaced: number;
 }
 
-/** Demo mode accepts this code for any number. The real flow uses Supabase phone OTP. */
+/** Demo mode (no backend configured) accepts this code for any number. */
 export const DEMO_OTP = "1234";
 
 export interface AuthState {
   isAuthenticated: boolean;
   hasSeenOnboarding: boolean;
   user: UserProfile;
+  /** Set when signed in against the real backend, null in fixture demo mode */
+  accessToken: string | null;
+  refreshToken: string | null;
+  /** Demo sign in used when no backend is configured */
   login: (phone: string, name?: string) => void;
+  /** Sign in with a real session from the identity service */
+  signIn: (session: {
+    accessToken: string;
+    refreshToken: string;
+    user: { id: string; name: string; phone: string | null };
+  }) => void;
+  setTokens: (accessToken: string, refreshToken: string) => void;
   logout: () => void;
   completeOnboarding: () => void;
   updateWalletBalance: (amount: number) => void;
@@ -75,6 +86,26 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       hasSeenOnboarding: false,
       user: GUEST,
+      accessToken: null,
+      refreshToken: null,
+
+      signIn: ({ accessToken, refreshToken, user }) => {
+        set({
+          isAuthenticated: true,
+          accessToken,
+          refreshToken,
+          user: {
+            id: user.id,
+            name: user.name,
+            phone: user.phone ?? "",
+            walletBalance: 0,
+            totalSaved: 0,
+            ordersPlaced: 0,
+          },
+        });
+      },
+
+      setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
 
       login: (phone: string, name = GUEST.name) => {
         set({
@@ -84,7 +115,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({ isAuthenticated: false });
+        set({ isAuthenticated: false, accessToken: null, refreshToken: null });
       },
 
       completeOnboarding: () => {
@@ -104,6 +135,8 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         hasSeenOnboarding: state.hasSeenOnboarding,
         user: state.user,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
       }),
     },
   ),
