@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "predev": "pnpm exec turbo run build --filter=@qc/admin-web^..."
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.0",
