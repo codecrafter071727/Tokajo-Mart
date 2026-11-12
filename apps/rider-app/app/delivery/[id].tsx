@@ -14,6 +14,7 @@ import {
   type Delivery,
   type DeliveryStatus,
 } from "../../src/lib/delivery";
+import { REAL_BACKEND } from "../../src/lib/api";
 import { useDeliveryAction, useRiderState } from "../../src/lib/queries";
 import { colors, radius, space, TOUCH, typography } from "../../src/theme";
 
@@ -36,6 +37,7 @@ export default function DeliveryScreen() {
   const act = useDeliveryAction();
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [code, setCode] = useState("");
+  const [handover, setHandover] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const delivery: Delivery | null =
@@ -144,7 +146,11 @@ export default function DeliveryScreen() {
                 icon="navigate"
                 onPress={() => {
                   const p = toStore ? delivery.store : delivery.customer;
-                  void Linking.openURL(mapsUrl(p.lat, p.lng));
+                  void Linking.openURL(
+                    p.lat !== null && p.lng !== null
+                      ? mapsUrl(p.lat, p.lng)
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}`,
+                  );
                 }}
               />
             </View>
@@ -200,6 +206,26 @@ export default function DeliveryScreen() {
           })}
         </Card>
 
+        {delivery.status === "at_store" && REAL_BACKEND ? (
+          <Card title="Handover code">
+            <Text style={styles.address}>
+              Enter the {DELIVERY_CODE_LENGTH} digit code shown on the warehouse screen.
+            </Text>
+            <TextInput
+              style={styles.codeInput}
+              value={handover}
+              onChangeText={(v) => {
+                setError(null);
+                setHandover(v.replace(/\D/g, "").slice(0, DELIVERY_CODE_LENGTH));
+              }}
+              keyboardType="number-pad"
+              placeholder="----"
+              placeholderTextColor={colors.line[300]}
+              accessibilityLabel="Warehouse handover code"
+            />
+          </Card>
+        ) : null}
+
         {delivery.status === "at_customer" ? (
           <Card title="Customer code">
             <Text style={styles.address}>
@@ -242,8 +268,14 @@ export default function DeliveryScreen() {
               itemsChecked ? "Picked up all items" : `Check all ${delivery.items.length} items`
             }
             icon="bag-check"
-            onPress={() => run({ type: "pick_up", checkedItemIds: [...checked] })}
-            disabled={!itemsChecked}
+            onPress={() =>
+              run({
+                type: "pick_up",
+                checkedItemIds: [...checked],
+                handoverCode: REAL_BACKEND ? handover : undefined,
+              })
+            }
+            disabled={!itemsChecked || (REAL_BACKEND && handover.length !== DELIVERY_CODE_LENGTH)}
             loading={act.isPending}
           />
         ) : delivery.status === "picked_up" ? (

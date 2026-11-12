@@ -44,7 +44,7 @@ describe("fixture repository", () => {
     await repo.act(offer.id, { type: "arrive_store" });
     await repo.act(offer.id, { type: "pick_up", checkedItemIds: offer.items.map((i) => i.id) });
     await repo.act(offer.id, { type: "arrive_customer" });
-    const after = await repo.act(offer.id, { type: "deliver", code: offer.deliveryCode });
+    const after = await repo.act(offer.id, { type: "deliver", code: offer.deliveryCode ?? "" });
 
     expect(after.active).toBeNull();
     expect(after.history).toHaveLength(4);

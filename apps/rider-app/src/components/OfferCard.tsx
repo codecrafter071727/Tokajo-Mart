@@ -6,7 +6,8 @@ import { colors, radius, space, typography } from "../theme";
 import { BigButton } from "./BigButton";
 
 /** Seconds the rider has to respond before the offer goes to someone else. */
-export const OFFER_SECONDS = 30;
+/** Matches the delivery service: an unanswered offer moves on to another rider after 25 seconds. */
+export const OFFER_SECONDS = 25;
 
 type Props = {
   delivery: Delivery;

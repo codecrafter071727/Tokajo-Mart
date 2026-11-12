@@ -16,8 +16,8 @@ export type DeliveryStatus =
 export type Place = {
   name: string;
   address: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
 };
 
 export type DeliveryItem = {
@@ -40,8 +40,11 @@ export type Delivery = {
   tipPaise: number;
   /** Cash the rider must collect, or null when the order is already paid */
   codPaise: number | null;
-  /** The customer reads this out at the door. Real deliveries never send it to the rider app. */
-  deliveryCode: string;
+  /**
+   * Fixture mode only. The delivery service never sends this to the rider app: the customer reads
+   * the code out at the door and the server checks what the rider types.
+   */
+  deliveryCode?: string;
   /** ISO time the delivery was completed, set when status becomes "delivered" */
   deliveredAt: string | null;
 };
@@ -49,12 +52,20 @@ export type Delivery = {
 export type Action =
   | { type: "accept" }
   | { type: "arrive_store" }
-  | { type: "pick_up"; checkedItemIds: string[] }
+  | { type: "pick_up"; checkedItemIds: string[]; handoverCode?: string }
   | { type: "arrive_customer" }
   | { type: "deliver"; code: string };
 
 export class DeliveryError extends Error {
-  readonly reason: "INVALID_TRANSITION" | "ITEMS_NOT_CHECKED" | "WRONG_CODE" | "CODE_FORMAT";
+  readonly reason:
+    | "INVALID_TRANSITION"
+    | "ITEMS_NOT_CHECKED"
+    | "WRONG_CODE"
+    | "CODE_FORMAT"
+    | "CODE_LOCKED"
+    | "OFFER_EXPIRED"
+    | "NETWORK"
+    | "UNAUTHORIZED";
 
   constructor(reason: DeliveryError["reason"], message: string) {
     super(message);

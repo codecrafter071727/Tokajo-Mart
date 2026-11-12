@@ -69,9 +69,9 @@ export default function JobsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {setOnline.error ? (
+        {(setOnline.error ?? act.error ?? decline.error) ? (
           <Text style={styles.error} accessibilityRole="alert">
-            {setOnline.error.message}
+            {(setOnline.error ?? act.error ?? decline.error)?.message}
           </Text>
         ) : null}
 

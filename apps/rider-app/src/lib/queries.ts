@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Action } from "./delivery";
+import { REAL_BACKEND } from "./api";
+import { createHttpRepository } from "./httpRepository";
 import { createFixtureRepository, type RiderState } from "./repository";
 
-/** Swap for an HTTP repository backed by the delivery service when it exists. */
-export const repository = createFixtureRepository();
+/** The delivery service when EXPO_PUBLIC_API_URL is set, otherwise demo data. */
+export const repository = REAL_BACKEND ? createHttpRepository() : createFixtureRepository();
 
 const KEY = ["rider", "state"] as const;
 

@@ -12,22 +12,30 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const signIn = useSession((s) => s.signIn);
+  const requestCode = useSession((s) => s.requestCode);
+  const [busy, setBusy] = useState(false);
+  const [demoMode, setDemoMode] = useState(true);
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [error, setError] = useState<string | null>(null);
 
-  const next = () => {
+  const next = async () => {
     setError(null);
-    if (step === "phone") {
-      if (!/^\d{10}$/.test(phone)) return setError("Enter a 10 digit mobile number.");
-      return setStep("otp");
-    }
+    setBusy(true);
     try {
-      signIn(phone, otp);
+      if (step === "phone") {
+        if (!/^\d{10}$/.test(phone)) return setError("Enter a 10 digit mobile number.");
+        const res = await requestCode(phone);
+        setDemoMode(res.demoMode);
+        return setStep("otp");
+      }
+      await signIn(phone, otp);
       router.replace("/(tabs)");
     } catch (e) {
       setError(e instanceof SignInError ? e.message : "Something went wrong. Try again.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -83,14 +91,15 @@ export default function LoginScreen() {
             {error}
           </Text>
         ) : null}
-        {step === "otp" ? (
+        {step === "otp" && demoMode ? (
           <Text style={styles.hint}>Demo mode: the code is {DEMO_OTP}.</Text>
         ) : null}
 
         <View style={styles.spacer} />
         <BigButton
           label={step === "phone" ? "Send code" : "Sign in"}
-          onPress={next}
+          onPress={() => void next()}
+          loading={busy}
           disabled={step === "phone" ? phone.length !== 10 : otp.length !== 6}
         />
         {step === "otp" ? (
