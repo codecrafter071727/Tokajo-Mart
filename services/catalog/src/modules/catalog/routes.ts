@@ -4,6 +4,7 @@ import {
   listProductsResponseSchema,
   productParamsSchema,
   productSchema,
+  updateProductBodySchema,
 } from "@qc/contracts";
 import type { ServiceApp } from "@qc/service-kit";
 import type { CatalogRepository } from "./repository";
@@ -71,6 +72,35 @@ export function registerCatalogRoutes(app: ServiceApp, repository: CatalogReposi
         throw app.httpErrors.notFound("Product not found.");
       }
       return product;
+    },
+  );
+
+  app.patch(
+    "/v1/catalog/products/:id",
+    {
+      schema: {
+        tags: ["catalog"],
+        summary: "Edit a product (admin). Role checks are enforced at the gateway.",
+        params: productParamsSchema,
+        body: updateProductBodySchema,
+        response: { 200: productSchema },
+      },
+    },
+    async (request) => {
+      const existing = await repository.getProduct(request.params.id);
+      if (!existing) {
+        throw app.httpErrors.notFound("Product not found.");
+      }
+      const price = request.body.pricePaise ?? existing.pricePaise;
+      const mrp = request.body.mrpPaise ?? existing.mrpPaise;
+      if (price > mrp) {
+        throw app.httpErrors.badRequest("The selling price cannot be higher than the MRP.");
+      }
+      const updated = await repository.updateProduct(request.params.id, request.body);
+      if (!updated) {
+        throw app.httpErrors.notFound("Product not found.");
+      }
+      return updated;
     },
   );
 }

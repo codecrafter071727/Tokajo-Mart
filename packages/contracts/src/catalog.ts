@@ -66,4 +66,25 @@ export const listProductsResponseSchema = z.object({
 });
 export type ListProductsResponse = z.infer<typeof listProductsResponseSchema>;
 
+/** Admin edit of a product. Send only the fields that change; at least one is required. */
+export const updateProductBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    unit: z.string().trim().min(1).max(40).optional(),
+    pricePaise: paise.optional(),
+    mrpPaise: paise.optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send at least one field to change.",
+  });
+export type UpdateProductBody = {
+  name?: string;
+  unit?: string;
+  pricePaise?: number;
+  mrpPaise?: number;
+  description?: string | null;
+};
+
 export const productParamsSchema = z.object({ id: z.string().min(1) });

@@ -155,4 +155,40 @@ describe("api client", () => {
     expect(urls[0]).toBe("http://inventory.test:4003/v1/inventory/serviceability?lat=1&lng=2");
     expect(urls[1]).toBe("http://api.test/v1/catalog/categories");
   });
+
+  it("sends a PATCH with a JSON body and parses the updated product", async () => {
+    const product = {
+      id: "p1",
+      name: "Banana",
+      unit: "6 pcs",
+      pricePaise: 2500,
+      mrpPaise: 3500,
+      discountPercent: 29,
+      categoryId: "fruits",
+      emoji: "🍌",
+      imageUrl: null,
+      imageFit: "cover",
+      deliveryMins: 10,
+      optionsCount: null,
+      description: null,
+    };
+    const fetchMock = vi.fn(async () => json(product));
+    const result = await client(fetchMock as unknown as typeof fetch).catalog.updateProduct("p1", {
+      pricePaise: 2500,
+    });
+    expect(result.pricePaise).toBe(2500);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://api.test/v1/catalog/products/p1");
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ pricePaise: 2500 }));
+    expect((init.headers as Record<string, string>)["content-type"]).toBe("application/json");
+  });
+
+  it("does not send a body or content type on GET", async () => {
+    const fetchMock = vi.fn(async () => json({ items: [] }));
+    await client(fetchMock as unknown as typeof fetch).catalog.listCategories();
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.body).toBeUndefined();
+    expect((init.headers as Record<string, string>)["content-type"]).toBeUndefined();
+  });
 });

@@ -1,4 +1,4 @@
-import type { Category, Product } from "@qc/contracts";
+import type { Category, Product, UpdateProductBody } from "@qc/contracts";
 
 export type ProductFilter = {
   categoryId?: string;
@@ -23,6 +23,8 @@ export interface CatalogRepository {
   listCategories(): Promise<Category[]>;
   listProducts(filter: ProductFilter): Promise<ProductPage>;
   getProduct(id: string): Promise<Product | null>;
+  /** Apply an admin edit. Returns the updated product, or null when the id does not exist. */
+  updateProduct(id: string, patch: UpdateProductBody): Promise<Product | null>;
 }
 
 function rank(product: Product, categoryName: string, q: string): number {
@@ -34,10 +36,16 @@ function rank(product: Product, categoryName: string, q: string): number {
   return -1;
 }
 
+export function discountPercentFor(pricePaise: number, mrpPaise: number): number {
+  return mrpPaise > pricePaise ? Math.round(((mrpPaise - pricePaise) / mrpPaise) * 100) : 0;
+}
+
 export function createInMemoryCatalogRepository(
   categories: Category[],
-  products: Product[],
+  seed: Product[],
 ): CatalogRepository {
+  // Copy so edits never mutate the seed arrays, which tests and other repositories share
+  const products = seed.map((p) => ({ ...p }));
   const sortedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
   const categoryNames = new Map(categories.map((c) => [c.id, c.name]));
 
@@ -68,6 +76,21 @@ export function createInMemoryCatalogRepository(
 
     async getProduct(id) {
       return products.find((p) => p.id === id) ?? null;
+    },
+
+    async updateProduct(id, patch) {
+      const index = products.findIndex((p) => p.id === id);
+      const current = products[index];
+      if (!current) return null;
+      const next: Product = { ...current };
+      if (patch.name !== undefined) next.name = patch.name;
+      if (patch.unit !== undefined) next.unit = patch.unit;
+      if (patch.description !== undefined) next.description = patch.description;
+      if (patch.pricePaise !== undefined) next.pricePaise = patch.pricePaise;
+      if (patch.mrpPaise !== undefined) next.mrpPaise = patch.mrpPaise;
+      next.discountPercent = discountPercentFor(next.pricePaise, next.mrpPaise);
+      products[index] = next;
+      return next;
     },
   };
 }

@@ -7,11 +7,13 @@ export {
   listProductsResponseSchema,
   productParamsSchema,
   productSchema,
+  updateProductBodySchema,
   type Category,
   type ListCategoriesResponse,
   type ListProductsQuery,
   type ListProductsResponse,
   type Product,
+  type UpdateProductBody,
 } from "./catalog";
 export {
   availabilityItemSchema,

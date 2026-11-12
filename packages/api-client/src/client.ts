@@ -4,6 +4,7 @@ import {
   listCategoriesResponseSchema,
   listProductsResponseSchema,
   productSchema,
+  type UpdateProductBody,
   serviceabilityResponseSchema,
   type AvailabilityResponse,
   type ErrorCode,
@@ -90,12 +91,14 @@ export function createApiClient(options: ApiClientOptions) {
   const timeoutMs = options.timeoutMs ?? 10_000;
   const doFetch = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
 
-  async function get<T>(
+  async function request<T>(
+    method: "GET" | "PATCH",
     service: ServiceName,
     path: string,
     schema: Parser<T>,
     query: Record<string, string | number | undefined> = {},
     { signal }: RequestOptions = {},
+    body?: unknown,
   ): Promise<T> {
     const controller = new AbortController();
     let timedOut = false;
@@ -113,13 +116,15 @@ export function createApiClient(options: ApiClientOptions) {
         throw Object.assign(new Error("Aborted"), { name: "AbortError" });
       }
       const headers: Record<string, string> = { accept: "application/json" };
+      if (body !== undefined) headers["content-type"] = "application/json";
       if (token) headers.authorization = `Bearer ${token}`;
 
       let response: Response;
       try {
         response = await doFetch(`${originFor(service)}${path}${toQueryString(query)}`, {
-          method: "GET",
+          method,
           headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
           signal: controller.signal,
         });
       } catch (cause) {
@@ -130,15 +135,15 @@ export function createApiClient(options: ApiClientOptions) {
         throw new ApiClientError("Could not reach the server.", "NETWORK_ERROR");
       }
 
-      let body: unknown;
+      let payload: unknown;
       try {
-        body = await response.json();
+        payload = await response.json();
       } catch {
-        body = undefined;
+        payload = undefined;
       }
 
       if (!response.ok) {
-        const parsed = apiErrorSchema.safeParse(body);
+        const parsed = apiErrorSchema.safeParse(payload);
         if (parsed.success) {
           const { code, message, requestId } = parsed.data.error;
           throw new ApiClientError(message, code, { status: response.status, requestId });
@@ -149,7 +154,7 @@ export function createApiClient(options: ApiClientOptions) {
       }
 
       try {
-        return schema.parse(body);
+        return schema.parse(payload);
       } catch {
         throw new ApiClientError("The server sent an unexpected response.", "INVALID_RESPONSE", {
           status: response.status,
@@ -160,6 +165,14 @@ export function createApiClient(options: ApiClientOptions) {
       signal?.removeEventListener("abort", onAbort);
     }
   }
+
+  const get = <T>(
+    service: ServiceName,
+    path: string,
+    schema: Parser<T>,
+    query: Record<string, string | number | undefined> = {},
+    opts?: RequestOptions,
+  ) => request("GET", service, path, schema, query, opts);
 
   return {
     catalog: {
@@ -174,6 +187,22 @@ export function createApiClient(options: ApiClientOptions) {
 
       getProduct: (id: string, opts?: RequestOptions): Promise<Product> =>
         get("catalog", `/v1/catalog/products/${encodeURIComponent(id)}`, productSchema, {}, opts),
+
+      /** Admin edit. Send only the fields that change. */
+      updateProduct: (
+        id: string,
+        changes: UpdateProductBody,
+        opts?: RequestOptions,
+      ): Promise<Product> =>
+        request(
+          "PATCH",
+          "catalog",
+          `/v1/catalog/products/${encodeURIComponent(id)}`,
+          productSchema,
+          {},
+          opts,
+          changes,
+        ),
     },
 
     inventory: {

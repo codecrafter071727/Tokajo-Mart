@@ -91,3 +91,51 @@ describe("GET /v1/catalog/products/:id", () => {
     expect(res.json().error.code).toBe("NOT_FOUND");
   });
 });
+
+describe("PATCH /v1/catalog/products/:id", () => {
+  const patch = (id: string, body: unknown) =>
+    app.inject({ method: "PATCH", url: `/v1/catalog/products/${id}`, payload: body as object });
+
+  it("updates only the fields sent and recomputes the discount", async () => {
+    const before = productSchema.parse((await get("/v1/catalog/products/p20")).json());
+    const res = await patch("p20", { pricePaise: 500, mrpPaise: 1000 });
+    expect(res.statusCode).toBe(200);
+    const after = productSchema.parse(res.json());
+    expect(after).toMatchObject({ pricePaise: 500, mrpPaise: 1000, discountPercent: 50 });
+    expect(after.name).toBe(before.name);
+    // and it sticks
+    expect(productSchema.parse((await get("/v1/catalog/products/p20")).json()).pricePaise).toBe(
+      500,
+    );
+  });
+
+  it("can rename and clear the description", async () => {
+    const res = await patch("p19", { name: "  Dark Fantasy Choco Fills  ", description: null });
+    expect(productSchema.parse(res.json())).toMatchObject({
+      name: "Dark Fantasy Choco Fills",
+      description: null,
+    });
+  });
+
+  it("refuses a price above the MRP, including when only one of them is sent", async () => {
+    const both = await patch("p18", { pricePaise: 9000, mrpPaise: 8000 });
+    expect(both.statusCode).toBe(400);
+    const onlyPrice = await patch("p18", { pricePaise: 99900000 });
+    expect(onlyPrice.statusCode).toBe(400);
+    expect(onlyPrice.json().error.message).toMatch(/higher than the MRP/);
+  });
+
+  it("rejects an empty body, unknown fields, negative or fractional money", async () => {
+    expect((await patch("p18", {})).statusCode).toBe(400);
+    expect((await patch("p18", { id: "hack" })).statusCode).toBe(400);
+    expect((await patch("p18", { pricePaise: -1 })).statusCode).toBe(400);
+    expect((await patch("p18", { pricePaise: 10.5 })).statusCode).toBe(400);
+    expect((await patch("p18", { name: "   " })).statusCode).toBe(400);
+  });
+
+  it("returns NOT_FOUND for an unknown product", async () => {
+    const res = await patch("nope", { name: "x" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe("NOT_FOUND");
+  });
+});
