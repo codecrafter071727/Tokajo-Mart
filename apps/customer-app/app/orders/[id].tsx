@@ -4,56 +4,58 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { useNow, useOrder } from "../../src/lib/orderQueries";
+import { etaMinutes, statusAt, type OrderStatus } from "../../src/lib/orders";
+import { formatPaise } from "../../src/lib/pricing";
 
-type OrderStatus = "placed" | "confirmed" | "picking" | "on_the_way" | "delivered";
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-const ORDER_STEPS: { key: OrderStatus; label: string; emoji: string }[] = [
-  { key: "placed", label: "Order placed", emoji: "📋" },
-  { key: "confirmed", label: "Order confirmed", emoji: "✅" },
-  { key: "picking", label: "Picking items", emoji: "📦" },
-  { key: "on_the_way", label: "On the way", emoji: "🛵" },
-  { key: "delivered", label: "Delivered", emoji: "🎉" },
+const ORDER_STEPS: { key: OrderStatus; label: string; icon: IconName }[] = [
+  { key: "placed", label: "Order placed", icon: "receipt-outline" },
+  { key: "confirmed", label: "Order confirmed", icon: "checkmark-circle-outline" },
+  { key: "picking", label: "Picking items", icon: "bag-handle-outline" },
+  { key: "on_the_way", label: "On the way", icon: "bicycle" },
+  { key: "delivered", label: "Delivered", icon: "gift-outline" },
 ];
 
-const MOCK_ORDERS = [
-  {
-    id: "ORD001",
-    status: "on_the_way" as OrderStatus,
-    date: "Today, 3:15 PM",
-    items: [
-      { name: "Fresho Banana", qty: 2, price: 50, emoji: "🍌" },
-      { name: "Amul Milk 500ml", qty: 1, price: 29, emoji: "🥛" },
-      { name: "Lay's Chips", qty: 1, price: 20, emoji: "🥔" },
-    ],
-    total: 99,
-    deliveryAddress: "123, MG Road, Bengaluru",
-    eta: "3 minutes",
-    rider: { name: "Rahul K", rating: 4.8 },
-  },
-];
+/** Demo rider until the delivery service assigns a real one. Matches the rider app's demo login. */
+const DEMO_RIDER = { name: "Ravi Kumar", rating: 4.8 };
 
 export default function OrderTrackingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const orderFound = MOCK_ORDERS.find((o) => o.id === id) ?? MOCK_ORDERS[0];
+  const orderQuery = useOrder(id);
+  const now = useNow(1000);
+  const order = orderQuery.data;
 
-  if (!orderFound) {
+  if (!order) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Order not found</Text>
+          <Text style={styles.headerTitle}>
+            {orderQuery.isPending ? "Loading order" : "Order not found"}
+          </Text>
         </View>
       </View>
     );
   }
 
-  const order = orderFound;
-  const currentStepIdx = ORDER_STEPS.findIndex((s) => s.key === order.status);
+  const status = statusAt(order, now);
+  const cancelled = status === "cancelled";
+  const delivered = status === "delivered";
+  const inFlight = !cancelled && !delivered;
+  const currentStepIdx = ORDER_STEPS.findIndex((s) => s.key === status);
+  const eta = etaMinutes(order, now);
+  const hasRider = status === "on_the_way" || delivered;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -75,19 +77,29 @@ export default function OrderTrackingScreen() {
         <View style={styles.mapPlaceholder}>
           <Ionicons name="map" size={48} color={Colors.brandText} />
           <Text style={styles.mapText}>Live tracking map</Text>
-          <Text style={styles.mapSubtext}>Your rider is {order.eta} away</Text>
+          <Text style={styles.mapSubtext}>
+            {status === "on_the_way"
+              ? `Your rider is about ${eta} min away`
+              : delivered
+                ? "Delivered"
+                : cancelled
+                  ? "This order was cancelled"
+                  : "We will show your rider once they pick up your order"}
+          </Text>
         </View>
 
         {/* ETA card */}
         <View style={[styles.card, styles.etaCard]}>
           <View style={styles.etaLeft}>
             <Text style={styles.etaTime}>
-              {order.status === "delivered" ? "Delivered" : order.eta}
+              {cancelled ? "Cancelled" : delivered ? "Delivered" : `${eta} min`}
             </Text>
             <Text style={styles.etaLabel}>
-              {order.status === "delivered"
-                ? "Your order was delivered"
-                : "Estimated delivery time"}
+              {cancelled
+                ? "No charge for this order"
+                : delivered
+                  ? "Your order was delivered"
+                  : "Estimated delivery time"}
             </Text>
           </View>
           <View style={styles.etaBadge}>
@@ -95,26 +107,44 @@ export default function OrderTrackingScreen() {
           </View>
         </View>
 
-        {/* Delivery partner */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Delivery partner</Text>
-          <View style={styles.riderRow}>
-            <View style={styles.riderAvatar}>
-              <Ionicons name="person" size={24} color={Colors.brandText} />
-            </View>
-            <View style={styles.riderInfo}>
-              <Text style={styles.riderName}>{order.rider.name}</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                <Ionicons name="star" size={13} color={Colors.accent} />
-                <Text style={styles.riderRating}>{order.rider.rating}</Text>
-              </View>
-            </View>
-            <Pressable style={styles.callBtn}>
-              <Ionicons name="call" size={16} color={Colors.surface} />
-              <Text style={styles.callBtnText}>Call</Text>
-            </Pressable>
+        {/* Delivery code: the customer reads this out to the rider at the door */}
+        {inFlight ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Delivery code</Text>
+            <Text
+              style={styles.deliveryCode}
+              accessibilityLabel={`Delivery code ${order.deliveryCode.split("").join(" ")}`}
+            >
+              {order.deliveryCode}
+            </Text>
+            <Text style={styles.codeHint}>
+              Tell this to your delivery partner when they arrive.
+            </Text>
           </View>
-        </View>
+        ) : null}
+
+        {/* Delivery partner */}
+        {hasRider ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Delivery partner</Text>
+            <View style={styles.riderRow}>
+              <View style={styles.riderAvatar}>
+                <Ionicons name="person" size={24} color={Colors.brandText} />
+              </View>
+              <View style={styles.riderInfo}>
+                <Text style={styles.riderName}>{DEMO_RIDER.name}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <Ionicons name="star" size={13} color={Colors.accent} />
+                  <Text style={styles.riderRating}>{DEMO_RIDER.rating}</Text>
+                </View>
+              </View>
+              <Pressable style={styles.callBtn}>
+                <Ionicons name="call" size={16} color={Colors.surface} />
+                <Text style={styles.callBtnText}>Call</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {/* Status timeline */}
         <View style={styles.card}>
@@ -138,7 +168,11 @@ export default function OrderTrackingScreen() {
                   )}
                 </View>
                 <View style={styles.stepContent}>
-                  <Text style={styles.stepEmoji}>{step.emoji}</Text>
+                  <Ionicons
+                    name={step.icon}
+                    size={18}
+                    color={done ? Colors.brandText : Colors.textTertiary}
+                  />
                   <Text
                     style={[
                       styles.stepLabel,
@@ -156,26 +190,32 @@ export default function OrderTrackingScreen() {
         {/* Order items */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Items ordered</Text>
-          {order.items.map((item, i) => (
-            <View key={i} style={styles.orderItem}>
+          {order.items.map((item) => (
+            <View key={item.productId} style={styles.orderItem}>
               <Text style={styles.orderItemEmoji}>{item.emoji}</Text>
               <Text style={styles.orderItemName} numberOfLines={1}>
                 {item.name}
               </Text>
-              <Text style={styles.orderItemQty}>×{item.qty}</Text>
-              <Text style={styles.orderItemPrice}>₹{item.price}</Text>
+              <Text style={styles.orderItemQty}>×{item.quantity}</Text>
+              <Text style={styles.orderItemPrice}>
+                {formatPaise(item.unitPricePaise * item.quantity)}
+              </Text>
             </View>
           ))}
           <View style={styles.orderTotalRow}>
-            <Text style={styles.orderTotalLabel}>Total paid</Text>
-            <Text style={styles.orderTotalValue}>₹{order.total}</Text>
+            <Text style={styles.orderTotalLabel}>
+              {cancelled ? "Total" : delivered ? "Total paid" : "To pay on delivery"}
+            </Text>
+            <Text style={styles.orderTotalValue}>{formatPaise(order.totalPaise)}</Text>
           </View>
         </View>
 
         {/* Delivery address */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Delivery address</Text>
-          <Text style={styles.addressText}>{order.deliveryAddress}</Text>
+          <Text style={styles.addressText}>
+            {order.address.tag}: {order.address.line1}, {order.address.line2}
+          </Text>
         </View>
 
         {/* Help */}
@@ -196,6 +236,19 @@ export default function OrderTrackingScreen() {
 }
 
 const styles = StyleSheet.create({
+  deliveryCode: {
+    fontSize: 40,
+    fontWeight: "800",
+    letterSpacing: 12,
+    color: Colors.textPrimary,
+    textAlign: "center",
+    fontVariant: ["tabular-nums"],
+  },
+  codeHint: {
+    fontSize: FontSize.caption,
+    color: Colors.textSecondary,
+    textAlign: "center",
+  },
   root: {
     flex: 1,
     backgroundColor: Colors.canvas,

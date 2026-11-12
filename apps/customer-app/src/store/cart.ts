@@ -14,6 +14,9 @@ export interface CartItem {
 
 export interface CartState {
   items: CartItem[];
+  /** Rider tip in whole rupees, shared by the cart and checkout. Default none. */
+  tipRupees: number;
+  setTip: (rupees: number) => void;
   addItem: (product: Omit<CartItem, "quantity">) => void;
   removeItem: (id: string) => void;
   incrementItem: (id: string) => void;
@@ -28,6 +31,9 @@ export interface CartState {
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
+  tipRupees: 0,
+
+  setTip: (rupees) => set({ tipRupees: Math.max(0, Math.round(rupees)) }),
 
   addItem: (product) => {
     set((state) => {
@@ -66,7 +72,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     });
   },
 
-  clearCart: () => set({ items: [] }),
+  clearCart: () => set({ items: [], tipRupees: 0 }),
 
   getQuantity: (id) => {
     const item = get().items.find((i) => i.id === id);

@@ -1,9 +1,12 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, Alert } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { useCartStore } from "../../src/store/cart";
+import { formatPaise, priceCart, toPriceLines } from "../../src/lib/pricing";
+import { usePlaceOrder } from "../../src/lib/orderQueries";
+import { OrderError, type OrderItem } from "../../src/lib/orders";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductImage } from "../../src/components/ProductImage";
 
@@ -196,35 +199,61 @@ const sheetStyles = StyleSheet.create({
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedPayment, setSelectedPayment] = useState("upi");
+  const [selectedPayment, setSelectedPayment] = useState("cod");
+  const [placeError, setPlaceError] = useState<string | null>(null);
+  // One key per checkout screen: a double tap or a retry returns the same order, never a second one
+  const idempotencyKey = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const placeOrder = usePlaceOrder();
   const [selectedAddressId, setSelectedAddressId] = useState("a1");
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
 
   const items = useCartStore((s) => s.items);
-  const totalPrice = useCartStore((s) => s.totalPrice());
-  const totalSavings = useCartStore((s) => s.totalSavings());
+  const tipRupees = useCartStore((s) => s.tipRupees);
   const clearCart = useCartStore((s) => s.clearCart);
 
-  const deliveryFee = totalPrice >= 99 ? 0 : 29;
-  const handlingFee = 5;
-  const grandTotal = totalPrice + deliveryFee + handlingFee;
+  // The same pricing the cart used, including the tip, so the total never changes at checkout
+  const bill = priceCart(toPriceLines(items), tipRupees * 100);
 
   const selectedAddress =
     SAVED_ADDRESSES.find((a) => a.id === selectedAddressId) ?? SAVED_ADDRESSES[0];
 
   const handlePlaceOrder = () => {
-    Alert.alert(
-      "Order placed!",
-      `Your order will be delivered in 10 minutes.\n\nOrder total: ₹${grandTotal}`,
-      [
-        {
-          text: "Track Order",
-          onPress: () => {
-            clearCart();
-            router.replace("/orders/ORD001");
-          },
+    if (placeOrder.isPending || items.length === 0 || !selectedAddress) return;
+    setPlaceError(null);
+    const orderItems: OrderItem[] = items.map((i) => ({
+      productId: i.id,
+      name: i.name,
+      unit: i.unit,
+      quantity: i.quantity,
+      unitPricePaise: Math.round(i.price * 100),
+      mrpPaise: Math.round(i.mrp * 100),
+      emoji: i.image,
+      imageUrl: i.imageUrl,
+    }));
+    placeOrder.mutate(
+      {
+        idempotencyKey: idempotencyKey.current,
+        items: orderItems,
+        tipPaise: tipRupees * 100,
+        address: {
+          tag: selectedAddress.tag,
+          line1: selectedAddress.line1,
+          line2: selectedAddress.line2,
         },
-      ],
+        payment: "cod",
+      },
+      {
+        onSuccess: (order) => {
+          clearCart();
+          router.replace({ pathname: "/orders/[id]", params: { id: order.id } });
+        },
+        onError: (error) =>
+          setPlaceError(
+            error instanceof OrderError
+              ? error.message
+              : "We could not place your order. Try again.",
+          ),
+      },
     );
   };
 
@@ -288,7 +317,9 @@ export default function CheckoutScreen() {
                 {item.name}
               </Text>
               <Text style={styles.orderItemQty}>×{item.quantity}</Text>
-              <Text style={styles.orderItemPrice}>₹{item.price * item.quantity}</Text>
+              <Text style={styles.orderItemPrice}>
+                {formatPaise(Math.round(item.price * 100) * item.quantity)}
+              </Text>
             </View>
           ))}
           {items.length > 4 && <Text style={styles.moreItems}>+{items.length - 4} more items</Text>}
@@ -297,22 +328,32 @@ export default function CheckoutScreen() {
         {/* Payment method */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Payment method</Text>
-          {PAYMENT_METHODS.map((method) => (
-            <Pressable
-              key={method.id}
-              style={[
-                styles.paymentMethod,
-                selectedPayment === method.id && styles.paymentMethodActive,
-              ]}
-              onPress={() => setSelectedPayment(method.id)}
-            >
-              <View style={styles.paymentRadio}>
-                {selectedPayment === method.id && <View style={styles.paymentRadioFill} />}
-              </View>
-              <Text style={styles.paymentEmoji}>{method.emoji}</Text>
-              <Text style={styles.paymentLabel}>{method.label}</Text>
-            </Pressable>
-          ))}
+          {PAYMENT_METHODS.map((method) => {
+            const available = method.id === "cod";
+            return (
+              <Pressable
+                key={method.id}
+                style={[
+                  styles.paymentMethod,
+                  selectedPayment === method.id && styles.paymentMethodActive,
+                  !available && styles.paymentMethodDisabled,
+                ]}
+                disabled={!available}
+                accessibilityState={{
+                  disabled: !available,
+                  selected: selectedPayment === method.id,
+                }}
+                onPress={() => setSelectedPayment(method.id)}
+              >
+                <View style={styles.paymentRadio}>
+                  {selectedPayment === method.id && <View style={styles.paymentRadioFill} />}
+                </View>
+                <Text style={styles.paymentEmoji}>{method.emoji}</Text>
+                <Text style={styles.paymentLabel}>{method.label}</Text>
+                {!available ? <Text style={styles.soon}>Coming soon</Text> : null}
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Coupons */}
@@ -327,28 +368,34 @@ export default function CheckoutScreen() {
           <Text style={styles.cardTitle}>Bill summary</Text>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Items total</Text>
-            <Text style={styles.billValue}>₹{totalPrice}</Text>
+            <Text style={styles.billValue}>{formatPaise(bill.itemTotalPaise)}</Text>
           </View>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Delivery</Text>
-            {deliveryFee === 0 ? (
+            {bill.deliveryFeePaise === 0 ? (
               <Text style={styles.billFree}>FREE</Text>
             ) : (
-              <Text style={styles.billValue}>₹{deliveryFee}</Text>
+              <Text style={styles.billValue}>{formatPaise(bill.deliveryFeePaise)}</Text>
             )}
           </View>
           <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Platform fee</Text>
-            <Text style={styles.billValue}>₹{handlingFee}</Text>
+            <Text style={styles.billLabel}>Handling charge</Text>
+            <Text style={styles.billValue}>{formatPaise(bill.handlingFeePaise)}</Text>
           </View>
+          {bill.tipPaise > 0 && (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Delivery partner tip</Text>
+              <Text style={styles.billValue}>{formatPaise(bill.tipPaise)}</Text>
+            </View>
+          )}
           <View style={styles.billDivider} />
           <View style={styles.billRow}>
-            <Text style={styles.billTotalLabel}>Grand Total</Text>
-            <Text style={styles.billTotalValue}>₹{grandTotal}</Text>
+            <Text style={styles.billTotalLabel}>Grand total</Text>
+            <Text style={styles.billTotalValue}>{formatPaise(bill.totalPaise)}</Text>
           </View>
-          {totalSavings > 0 && (
+          {bill.savingsPaise > 0 && (
             <View style={styles.savingsRow}>
-              <Text style={styles.savingsText}>You save ₹{totalSavings}</Text>
+              <Text style={styles.savingsText}>You save {formatPaise(bill.savingsPaise)}</Text>
             </View>
           )}
         </View>
@@ -357,13 +404,29 @@ export default function CheckoutScreen() {
       {/* Bottom bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing[8] }]}>
         <View style={styles.bottomInfo}>
-          <Text style={styles.bottomTotal}>₹{grandTotal}</Text>
+          <Text style={styles.bottomTotal}>{formatPaise(bill.totalPaise)}</Text>
           <Text style={styles.bottomSub}>
-            {selectedPayment === "cod" ? "Pay on delivery" : "Online payment"}
+            {items.length === 0 ? "Your cart is empty" : "Pay on delivery"}
           </Text>
         </View>
-        <Pressable style={styles.placeOrderBtn} onPress={handlePlaceOrder}>
-          <Text style={styles.placeOrderText}>Place order</Text>
+        {placeError ? (
+          <Text style={styles.placeError} accessibilityRole="alert">
+            {placeError}
+          </Text>
+        ) : null}
+        <Pressable
+          style={[
+            styles.placeOrderBtn,
+            (placeOrder.isPending || items.length === 0) && styles.placeOrderBtnDisabled,
+          ]}
+          onPress={handlePlaceOrder}
+          disabled={placeOrder.isPending || items.length === 0}
+          accessibilityRole="button"
+          accessibilityLabel="Place order"
+        >
+          <Text style={styles.placeOrderText}>
+            {placeOrder.isPending ? "Placing order" : "Place order"}
+          </Text>
           <Ionicons name="chevron-forward" size={18} color={Colors.surface} />
         </Pressable>
       </View>
@@ -374,6 +437,27 @@ export default function CheckoutScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  paymentMethodDisabled: {
+    opacity: 0.55,
+  },
+  soon: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    color: Colors.textTertiary,
+  },
+  placeError: {
+    position: "absolute",
+    top: -28,
+    left: Spacing[16],
+    right: Spacing[16],
+    textAlign: "center",
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    color: Colors.danger,
+  },
+  placeOrderBtnDisabled: {
+    opacity: 0.5,
+  },
   root: {
     flex: 1,
     backgroundColor: Colors.canvas,

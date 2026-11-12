@@ -1,135 +1,133 @@
-import React from "react";
-import { View, Text, StyleSheet, FlatList, Pressable } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { useNow, useOrders } from "../../src/lib/orderQueries";
+import { statusAt, type Order, type OrderStatus } from "../../src/lib/orders";
+import { formatPaise } from "../../src/lib/pricing";
+import { useCartStore } from "../../src/store/cart";
+import { ErrorState } from "../../src/components/StateViews";
 
-type OrderStatus = "delivered" | "on_the_way" | "cancelled" | "placed";
-
-interface OrderSummary {
-  id: string;
-  date: string;
-  items: string[];
-  total: number;
-  status: OrderStatus;
-  itemCount: number;
-}
-
-const MOCK_ORDERS: OrderSummary[] = [
-  {
-    id: "ORD001",
-    date: "Today, 3:15 PM",
-    items: ["🍌 Fresho Banana", "🥛 Amul Milk", "🥔 Lay's Chips"],
-    total: 99,
-    status: "on_the_way",
-    itemCount: 3,
-  },
-  {
-    id: "ORD002",
-    date: "Yesterday, 11:30 AM",
-    items: ["🍅 Tomato", "🧅 Onion", "🫑 Capsicum", "🍞 Bread"],
-    total: 142,
-    status: "delivered",
-    itemCount: 4,
-  },
-  {
-    id: "ORD003",
-    date: "22 Oct, 7:45 PM",
-    items: ["🥤 Coca-Cola", "🍿 Popcorn", "🍪 Cookies"],
-    total: 78,
-    status: "delivered",
-    itemCount: 3,
-  },
-  {
-    id: "ORD004",
-    date: "19 Oct, 2:00 PM",
-    items: ["🧴 Shampoo", "🧹 Broom"],
-    total: 210,
-    status: "delivered",
-    itemCount: 2,
-  },
-  {
-    id: "ORD005",
-    date: "15 Oct, 9:10 AM",
-    items: ["🥛 Mother Dairy Milk", "🧈 Amul Butter"],
-    total: 74,
-    status: "cancelled",
-    itemCount: 2,
-  },
-];
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
 const STATUS_CONFIG: Record<
   OrderStatus,
-  { label: string; color: string; bg: string; emoji: string }
+  { label: string; color: string; bg: string; icon: IconName }
 > = {
+  placed: {
+    label: "Order placed",
+    color: "#8A5A00",
+    bg: Colors.yellowTint,
+    icon: "receipt-outline",
+  },
+  confirmed: {
+    label: "Confirmed",
+    color: Colors.offerBlue,
+    bg: "#EEF4FF",
+    icon: "checkmark-circle-outline",
+  },
+  picking: { label: "Packing", color: Colors.offerBlue, bg: "#EEF4FF", icon: "bag-handle-outline" },
+  on_the_way: { label: "On the way", color: Colors.offerBlue, bg: "#EEF4FF", icon: "bicycle" },
   delivered: {
     label: "Delivered",
     color: Colors.brandText,
     bg: Colors.greenTint,
-    emoji: "✅",
+    icon: "checkmark-circle",
   },
-  on_the_way: {
-    label: "On the way",
-    color: Colors.offerBlue,
-    bg: "#EEF4FF",
-    emoji: "🛵",
-  },
-  placed: {
-    label: "Order placed",
-    color: "#E8A000",
-    bg: Colors.yellowTint,
-    emoji: "📋",
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: Colors.danger,
-    bg: "#FFF0F1",
-    emoji: "❌",
-  },
+  cancelled: { label: "Cancelled", color: Colors.danger, bg: "#FFF0F1", icon: "close-circle" },
 };
 
-function OrderCard({ order }: { order: OrderSummary }) {
+const FILTERS = ["All", "Active", "Delivered", "Cancelled"] as const;
+type Filter = (typeof FILTERS)[number];
+
+const matchesFilter = (status: OrderStatus, filter: Filter) =>
+  filter === "All" ||
+  (filter === "Active" && status !== "delivered" && status !== "cancelled") ||
+  (filter === "Delivered" && status === "delivered") ||
+  (filter === "Cancelled" && status === "cancelled");
+
+const formatWhen = (iso: string, now: Date) => {
+  const d = new Date(iso);
+  const days = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  return days <= 0
+    ? `Today, ${time}`
+    : days === 1
+      ? `Yesterday, ${time}`
+      : `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, ${time}`;
+};
+
+function OrderCard({ order, now }: { order: Order; now: Date }) {
   const router = useRouter();
-  const cfg = STATUS_CONFIG[order.status];
+  const addItem = useCartStore((s) => s.addItem);
+  const incrementItem = useCartStore((s) => s.incrementItem);
+  const status = statusAt(order, now);
+  const cfg = STATUS_CONFIG[status];
+  const itemCount = order.items.reduce((n, i) => n + i.quantity, 0);
+  const active = status !== "delivered" && status !== "cancelled";
+
+  const reorder = () => {
+    for (const item of order.items) {
+      addItem({
+        id: item.productId,
+        name: item.name,
+        unit: item.unit,
+        price: item.unitPricePaise / 100,
+        mrp: item.mrpPaise / 100,
+        image: item.emoji,
+        imageUrl: item.imageUrl,
+      });
+      for (let n = 1; n < item.quantity; n += 1) incrementItem(item.productId);
+    }
+    router.push("/(tabs)/cart");
+  };
 
   return (
-    <Pressable style={styles.card} onPress={() => router.push(`/orders/${order.id}`)}>
-      {/* Order header */}
+    <Pressable
+      style={styles.card}
+      onPress={() => router.push({ pathname: "/orders/[id]", params: { id: order.id } })}
+      accessibilityLabel={`Order ${order.id}, ${cfg.label}`}
+    >
       <View style={styles.cardHeader}>
         <View>
           <Text style={styles.orderId}>Order #{order.id}</Text>
-          <Text style={styles.orderDate}>{order.date}</Text>
+          <Text style={styles.orderDate}>{formatWhen(order.placedAt, now)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-          <Text style={styles.statusEmoji}>{cfg.emoji}</Text>
+          <Ionicons name={cfg.icon} size={14} color={cfg.color} />
           <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
         </View>
       </View>
 
       <View style={styles.divider} />
 
-      {/* Items preview */}
       <Text style={styles.itemsPreview} numberOfLines={2}>
-        {order.items.slice(0, 3).join("  ·  ")}
-        {order.itemCount > 3 ? `  +${order.itemCount - 3} more` : ""}
+        {order.items
+          .slice(0, 3)
+          .map((i) => `${i.emoji} ${i.name}`)
+          .join("  ·  ")}
+        {order.items.length > 3 ? `  +${order.items.length - 3} more` : ""}
       </Text>
 
-      {/* Footer */}
       <View style={styles.cardFooter}>
         <Text style={styles.totalLabel}>
-          {order.itemCount} item{order.itemCount !== 1 ? "s" : ""}
+          {itemCount} item{itemCount !== 1 ? "s" : ""}
           {"  ·  "}
-          <Text style={styles.totalValue}>₹{order.total}</Text>
+          <Text style={styles.totalValue}>{formatPaise(order.totalPaise)}</Text>
         </Text>
         <View style={styles.actionRow}>
-          {order.status === "on_the_way" && (
-            <Pressable style={styles.trackBtn} onPress={() => router.push(`/orders/${order.id}`)}>
+          {active && (
+            <Pressable
+              style={styles.trackBtn}
+              onPress={() => router.push({ pathname: "/orders/[id]", params: { id: order.id } })}
+            >
               <Text style={styles.trackBtnText}>Track order</Text>
             </Pressable>
           )}
-          {order.status === "delivered" && (
-            <Pressable style={styles.reorderBtn}>
+          {status === "delivered" && (
+            <Pressable style={styles.reorderBtn} onPress={reorder} accessibilityLabel="Reorder">
               <Text style={styles.reorderBtnText}>Reorder</Text>
             </Pressable>
           )}
@@ -143,6 +141,10 @@ function OrderCard({ order }: { order: OrderSummary }) {
 export default function OrdersListScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const ordersQuery = useOrders();
+  const now = useNow(1000);
+  const [filter, setFilter] = useState<Filter>("All");
+  const shown = (ordersQuery.data ?? []).filter((o) => matchesFilter(statusAt(o, now), filter));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -156,28 +158,48 @@ export default function OrdersListScreen() {
 
       {/* Filter chips */}
       <View style={styles.filterRow}>
-        {["All", "Active", "Delivered", "Cancelled"].map((f, i) => (
-          <Pressable key={f} style={[styles.filterChip, i === 0 && styles.filterChipActive]}>
-            <Text style={[styles.filterChipText, i === 0 && styles.filterChipTextActive]}>{f}</Text>
+        {FILTERS.map((f) => (
+          <Pressable
+            key={f}
+            style={[styles.filterChip, filter === f && styles.filterChipActive]}
+            onPress={() => setFilter(f)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filter === f }}
+          >
+            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
+              {f}
+            </Text>
           </Pressable>
         ))}
       </View>
 
-      <FlatList
-        data={MOCK_ORDERS}
-        keyExtractor={(o) => o.id}
-        contentContainerStyle={[styles.list, { paddingBottom: 32 + insets.bottom }]}
-        ItemSeparatorComponent={() => <View style={{ height: Spacing[12] }} />}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={56} color={Colors.border} />
-            <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.emptySubtitle}>Your past orders will appear here</Text>
-          </View>
-        }
-        renderItem={({ item }) => <OrderCard order={item} />}
-      />
+      {ordersQuery.isPending ? (
+        <ActivityIndicator style={{ marginTop: Spacing[32] }} color={Colors.brandGreen} />
+      ) : ordersQuery.isError ? (
+        <ErrorState
+          error={ordersQuery.error}
+          title="Could not load your orders"
+          onRetry={() => void ordersQuery.refetch()}
+        />
+      ) : (
+        <FlatList
+          data={shown}
+          keyExtractor={(o) => o.id}
+          contentContainerStyle={[styles.list, { paddingBottom: 32 + insets.bottom }]}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing[12] }} />}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="receipt-outline" size={56} color={Colors.border} />
+              <Text style={styles.emptyTitle}>
+                {filter === "All" ? "No orders yet" : `No ${filter.toLowerCase()} orders`}
+              </Text>
+              <Text style={styles.emptySubtitle}>Your orders will appear here</Text>
+            </View>
+          }
+          renderItem={({ item }) => <OrderCard order={item} now={now} />}
+        />
+      )}
     </View>
   );
 }

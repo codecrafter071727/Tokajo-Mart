@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { AddButton } from "../../src/components/AddButton";
 import { useCartStore } from "../../src/store/cart";
+import { DELIVERY_FEE_PAISE, formatPaise, priceCart, toPriceLines } from "../../src/lib/pricing";
 import { getSuggestedProducts } from "../../src/lib/mockData";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductImage } from "../../src/components/ProductImage";
@@ -16,14 +17,11 @@ export default function CartScreen() {
   const router = useRouter();
   const items = useCartStore((s) => s.items);
   const totalItems = useCartStore((s) => s.totalItems());
-  const totalPrice = useCartStore((s) => s.totalPrice());
-  const totalMrp = useCartStore((s) => s.totalMrp());
-  const totalSavings = useCartStore((s) => s.totalSavings());
-  const [selectedTip, setSelectedTip] = useState(20);
+  const tipRupees = useCartStore((s) => s.tipRupees);
+  const setTip = useCartStore((s) => s.setTip);
 
-  const deliveryFee = totalPrice >= 99 ? 0 : 29;
-  const handlingFee = 5;
-  const grandTotal = totalPrice + deliveryFee + handlingFee + selectedTip;
+  // One pricing function for the cart, checkout and the order, so the totals always agree
+  const bill = priceCart(toPriceLines(items), tipRupees * 100);
 
   const suggestedProducts = getSuggestedProducts(items.map((i) => i.id));
 
@@ -161,11 +159,11 @@ export default function CartScreen() {
             {TIP_AMOUNTS.map((amount) => (
               <Pressable
                 key={amount}
-                style={[styles.tipChip, selectedTip === amount && styles.tipChipActive]}
-                onPress={() => setSelectedTip(amount)}
+                style={[styles.tipChip, tipRupees === amount && styles.tipChipActive]}
+                onPress={() => setTip(amount)}
               >
                 <Text
-                  style={[styles.tipChipText, selectedTip === amount && styles.tipChipTextActive]}
+                  style={[styles.tipChipText, tipRupees === amount && styles.tipChipTextActive]}
                 >
                   {amount === 0 ? "None" : `₹${amount}`}
                 </Text>
@@ -181,32 +179,34 @@ export default function CartScreen() {
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Item total</Text>
             <View style={styles.billRight}>
-              {totalSavings > 0 && <Text style={styles.billMrp}>₹{totalMrp}</Text>}
-              <Text style={styles.billValue}>₹{totalPrice}</Text>
+              {bill.savingsPaise > 0 && (
+                <Text style={styles.billMrp}>{formatPaise(bill.mrpTotalPaise)}</Text>
+              )}
+              <Text style={styles.billValue}>{formatPaise(bill.itemTotalPaise)}</Text>
             </View>
           </View>
 
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Delivery charge</Text>
-            {deliveryFee === 0 ? (
+            {bill.deliveryFeePaise === 0 ? (
               <View style={styles.billFreeRow}>
-                <Text style={styles.billFreeOriginal}>₹29</Text>
+                <Text style={styles.billFreeOriginal}>{formatPaise(DELIVERY_FEE_PAISE)}</Text>
                 <Text style={styles.billFree}>FREE</Text>
               </View>
             ) : (
-              <Text style={styles.billValue}>₹{deliveryFee}</Text>
+              <Text style={styles.billValue}>{formatPaise(bill.deliveryFeePaise)}</Text>
             )}
           </View>
 
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Handling charge</Text>
-            <Text style={styles.billValue}>₹{handlingFee}</Text>
+            <Text style={styles.billValue}>{formatPaise(bill.handlingFeePaise)}</Text>
           </View>
 
-          {selectedTip > 0 && (
+          {bill.tipPaise > 0 && (
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>Delivery partner tip</Text>
-              <Text style={styles.billValue}>₹{selectedTip}</Text>
+              <Text style={styles.billValue}>{formatPaise(bill.tipPaise)}</Text>
             </View>
           )}
 
@@ -214,12 +214,14 @@ export default function CartScreen() {
 
           <View style={styles.billRow}>
             <Text style={styles.billTotalLabel}>Grand total</Text>
-            <Text style={styles.billTotalValue}>₹{grandTotal}</Text>
+            <Text style={styles.billTotalValue}>{formatPaise(bill.totalPaise)}</Text>
           </View>
 
-          {totalSavings > 0 && (
+          {bill.savingsPaise > 0 && (
             <View style={styles.savingsStrip}>
-              <Text style={styles.savingsText}>You saved ₹{totalSavings} on this order</Text>
+              <Text style={styles.savingsText}>
+                You saved {formatPaise(bill.savingsPaise)} on this order
+              </Text>
             </View>
           )}
         </View>
@@ -247,7 +249,7 @@ export default function CartScreen() {
         {/* Total + button */}
         <View style={styles.bottomBarRow}>
           <View style={styles.bottomBarLeft}>
-            <Text style={styles.bottomTotal}>₹{grandTotal}</Text>
+            <Text style={styles.bottomTotal}>{formatPaise(bill.totalPaise)}</Text>
             <Text style={styles.bottomTotalLabel}>Total (incl. all taxes)</Text>
           </View>
           <Pressable style={styles.proceedBtn} onPress={() => router.push("/checkout")}>
