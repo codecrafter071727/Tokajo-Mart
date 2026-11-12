@@ -50,10 +50,14 @@ export function registerErrorHandler(app: FastifyInstance): void {
       request.log.warn({ err: error }, error.message);
     }
 
+    // A 4xx error may carry structured details for the caller, for example which items are short
+    const details = statusCode < 500 ? (error as { details?: unknown }).details : undefined;
+
     return reply.status(statusCode).send({
       error: {
         code: statusToCode(statusCode),
         message: statusCode >= 500 ? "An unexpected error occurred." : error.message,
+        ...(details !== undefined ? { details } : {}),
         requestId: request.id,
       },
     });

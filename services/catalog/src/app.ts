@@ -1,7 +1,9 @@
-import { createDatabaseReadinessCheck, createService } from "@qc/service-kit";
+import { createDatabaseReadinessCheck, createDb, createService } from "@qc/service-kit";
+import type { DB } from "./db/types.generated";
 import { env } from "./config/env";
 import {
   createInMemoryCatalogRepository,
+  createPostgresCatalogRepository,
   registerCatalogRoutes,
   seedCategories,
   seedProducts,
@@ -23,10 +25,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
     }),
   });
 
-  registerCatalogRoutes(
-    app,
-    options.repository ?? createInMemoryCatalogRepository(seedCategories, seedProducts),
-  );
+  // Postgres when a database is configured, the seeded in-memory data otherwise (tests, quick demos)
+  const repository =
+    options.repository ??
+    (env.DATABASE_URL && env.NODE_ENV !== "test"
+      ? createPostgresCatalogRepository(createDb<DB>(env.DATABASE_URL, env.DATABASE_POOL_MAX))
+      : createInMemoryCatalogRepository(seedCategories, seedProducts));
+
+  registerCatalogRoutes(app, repository);
 
   return app;
 }

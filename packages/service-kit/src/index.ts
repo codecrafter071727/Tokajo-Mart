@@ -8,7 +8,7 @@ export {
   type BaseEnv,
   type ServiceEnvAliases,
 } from "./env";
-export { pingPostgres } from "./db";
+export { createDb, pingPostgres, type Kysely, type Transaction } from "./db";
 export { registerErrorHandler } from "./errors";
 export {
   createDatabaseReadinessCheck,
@@ -18,3 +18,11 @@ export {
   type ReadinessResult,
 } from "./health";
 export { buildLoggerOptions } from "./logger";
+export { INTERNAL_KEY_HEADER, registerInternalAuth } from "./internal-auth";
+export {
+  createInternalClient,
+  InternalCallError,
+  type CallInit,
+  type InternalClient,
+  type InternalClientOptions,
+} from "./internal-client";

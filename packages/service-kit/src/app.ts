@@ -22,6 +22,7 @@ import {
 import type { BaseEnv } from "./env";
 import { registerErrorHandler } from "./errors";
 import { registerHealthRoutes } from "./health";
+import { registerInternalAuth } from "./internal-auth";
 import { buildLoggerOptions } from "./logger";
 
 export type CreateServiceOptions = {
@@ -100,6 +101,10 @@ export async function createService(options: CreateServiceOptions): Promise<Serv
     await app.register(swaggerUi, { routePrefix: "/docs" });
   }
 
+  registerInternalAuth(app, {
+    apiKey: env.INTERNAL_API_KEY,
+    production: env.NODE_ENV === "production",
+  });
   registerErrorHandler(app);
   registerHealthRoutes(app, { service: name, readinessCheck });
 

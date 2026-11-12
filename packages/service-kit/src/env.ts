@@ -15,6 +15,8 @@ export const baseEnvSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]),
   SENTRY_DSN: optionalUrl(),
+  /** Shared secret for service to service calls on /internal/* routes */
+  INTERNAL_API_KEY: optionalString(),
   CORS_ORIGINS: z
     .string()
     .optional()

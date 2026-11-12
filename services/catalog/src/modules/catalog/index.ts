@@ -6,4 +6,5 @@ export {
   type ProductFilter,
   type ProductPage,
 } from "./repository";
+export { createPostgresCatalogRepository, escapeLike } from "./postgres-repository";
 export { seedCategories, seedProducts } from "./seed";
