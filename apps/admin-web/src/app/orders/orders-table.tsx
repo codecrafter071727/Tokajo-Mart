@@ -41,7 +41,10 @@ export function OrdersTable() {
 
   return (
     <>
-      <DemoNotice>Demo data. This page connects to the order service once it exists.</DemoNotice>
+      <DemoNotice>
+        Demo data. The order service has no all-orders endpoint for admins yet, so this list is not
+        live.
+      </DemoNotice>
 
       <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filter by status">
         {FILTERS.map((f) => {

@@ -1,10 +1,7 @@
 import { createApiClient } from "@qc/api-client";
 
-/** Browser side client. Requests go to this site's /api proxy (see next.config.mjs). */
-export const api = createApiClient({
-  baseUrl: "/api",
-  serviceUrls: { inventory: "/api-inventory" },
-});
+/** Browser side client. Requests go to this site's /api route, which adds the admin's token. */
+export const api = createApiClient({ baseUrl: "/api" });
 
 /** Warehouse whose stock the catalog table shows, until the admin can pick one. */
 export const DEFAULT_WAREHOUSE_ID = "wh-noida-62";

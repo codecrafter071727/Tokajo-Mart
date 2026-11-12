@@ -11,11 +11,6 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
 ];
 
-// The browser calls /api/... on this site and Next forwards it to the services, so no CORS setup is
-// needed and the service ports stay private. In production the gateway replaces these targets.
-const catalogUrl = process.env.CATALOG_SERVICE_URL ?? "http://localhost:4002";
-const inventoryUrl = process.env.INVENTORY_SERVICE_URL ?? "http://localhost:4003";
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -24,12 +19,6 @@ const nextConfig = {
   transpilePackages: ["@qc/ui-web"],
   eslint: { ignoreDuringBuilds: true },
   outputFileTracingRoot: monorepoRoot,
-  async rewrites() {
-    return [
-      { source: "/api/:path*", destination: `${catalogUrl}/:path*` },
-      { source: "/api-inventory/:path*", destination: `${inventoryUrl}/:path*` },
-    ];
-  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
