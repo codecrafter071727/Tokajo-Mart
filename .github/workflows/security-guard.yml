@@ -1,0 +1,18 @@
+name: Security guard
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Block hidden-payload patterns
+        run: bash scripts/guard-repo.sh
