@@ -1,0 +1,182 @@
+import {
+  cancelOrderBodySchema,
+  listOrdersQuerySchema,
+  listOrdersResponseSchema,
+  orderParamsSchema,
+  orderSchema,
+  pickItemBodySchema,
+  pickItemParamsSchema,
+  placeOrderBodySchema,
+  queueOrderSchema,
+  queueResponseSchema,
+  transitionBodySchema,
+} from "@qc/contracts";
+import { requireIdentity, requireRole, type ServiceApp } from "@qc/service-kit";
+import { z } from "zod";
+import { badRequest } from "./errors";
+import { STAFF_ROLES, toOrder, type OrderService } from "./service";
+
+export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void {
+  app.post(
+    "/v1/orders",
+    {
+      schema: {
+        tags: ["orders"],
+        summary: "Place an order (customer). Needs an Idempotency-Key header.",
+        body: placeOrderBodySchema,
+        response: { 200: orderSchema, 201: orderSchema },
+      },
+    },
+    async (request, reply) => {
+      const identity = requireIdentity(request);
+      const key = request.headers["idempotency-key"];
+      if (typeof key !== "string" || key.length < 8 || key.length > 100) {
+        throw badRequest("Send an Idempotency-Key header of 8 to 100 characters.");
+      }
+      const { order, created } = await orders.place(identity, key, request.body);
+      return reply.status(created ? 201 : 200).send(order);
+    },
+  );
+
+  app.get(
+    "/v1/orders",
+    {
+      schema: {
+        tags: ["orders"],
+        summary: "My orders, newest first (admins can pass userId)",
+        querystring: listOrdersQuerySchema,
+        response: { 200: listOrdersResponseSchema },
+      },
+    },
+    async (request) => ({
+      items: await orders.listFor(
+        requireIdentity(request),
+        request.query.limit,
+        request.query.userId,
+      ),
+    }),
+  );
+
+  // Warehouse screens. These sit before /:id so "queue" is not read as an order id.
+  app.get(
+    "/v1/orders/queue",
+    {
+      schema: {
+        tags: ["warehouse"],
+        summary: "Orders waiting to be packed at my warehouse",
+        querystring: z.object({ warehouseId: z.string().min(1).optional() }),
+        response: { 200: queueResponseSchema },
+      },
+    },
+    async (request) => ({
+      items: await orders.queue(requireRole(request, ...STAFF_ROLES), request.query.warehouseId),
+    }),
+  );
+
+  app.get(
+    "/v1/orders/:id",
+    {
+      schema: {
+        tags: ["orders"],
+        summary: "One order",
+        params: orderParamsSchema,
+        response: { 200: orderSchema },
+      },
+    },
+    async (request) => orders.get(requireIdentity(request), request.params.id),
+  );
+
+  app.post(
+    "/v1/orders/:id/cancel",
+    {
+      schema: {
+        tags: ["orders"],
+        summary: "Cancel an order (customer until packing starts, admin any time)",
+        params: orderParamsSchema,
+        body: cancelOrderBodySchema,
+        response: { 200: orderSchema },
+      },
+    },
+    async (request) =>
+      orders.cancel(requireIdentity(request), request.params.id, request.body.reason),
+  );
+
+  app.post(
+    "/v1/orders/:id/start-packing",
+    {
+      schema: {
+        tags: ["warehouse"],
+        summary: "Start packing an order",
+        params: orderParamsSchema,
+        response: { 200: queueOrderSchema },
+      },
+    },
+    async (request) => orders.startPacking(requireRole(request, ...STAFF_ROLES), request.params.id),
+  );
+
+  app.post(
+    "/v1/orders/:id/items/:productId/picked",
+    {
+      schema: {
+        tags: ["warehouse"],
+        summary: "Tick or untick an item while packing",
+        params: pickItemParamsSchema,
+        body: pickItemBodySchema,
+        response: { 200: queueOrderSchema },
+      },
+    },
+    async (request) =>
+      orders.setPicked(
+        requireRole(request, ...STAFF_ROLES),
+        request.params.id,
+        request.params.productId,
+        request.body.picked,
+      ),
+  );
+
+  app.post(
+    "/v1/orders/:id/packed",
+    {
+      schema: {
+        tags: ["warehouse"],
+        summary: "Mark packed once every item is ticked, and request a rider",
+        params: orderParamsSchema,
+        response: { 200: queueOrderSchema },
+      },
+    },
+    async (request) => orders.markPacked(requireRole(request, ...STAFF_ROLES), request.params.id),
+  );
+
+  // Internal: called by the delivery service as the rider moves the order along
+  app.post(
+    "/internal/orders/:id/transition",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Move an order to its next status",
+        params: orderParamsSchema,
+        body: transitionBodySchema,
+        response: { 200: orderSchema },
+      },
+    },
+    async (request) => {
+      await orders.transition(request.params.id, request.body);
+      return orders.internalGet(request.params.id);
+    },
+  );
+
+  app.get(
+    "/internal/orders/:id",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "One order including its delivery code",
+        params: orderParamsSchema,
+        response: { 200: orderSchema },
+      },
+    },
+    async (request) => orders.internalGet(request.params.id),
+  );
+}
+
+export { toOrder };

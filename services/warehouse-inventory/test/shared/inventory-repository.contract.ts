@@ -105,6 +105,21 @@ export function inventoryRepositoryContract(
       await expect(repo.commit("order-9")).rejects.toBeInstanceOf(ReservationStateError);
     });
 
+    it("puts a sold order's stock back on restock, and restocking twice is harmless", async () => {
+      const repo = await make();
+      const before = await available(repo, "p1");
+      await reserve(repo, "order-10", [{ productId: "p1", quantity: 2 }]);
+      await repo.commit("order-10");
+      expect((await repo.restock("order-10"))?.status).toBe("released");
+      expect((await repo.restock("order-10"))?.status).toBe("released");
+      expect(await available(repo, "p1")).toBe(before);
+      // A hold that was never sold is simply released
+      await reserve(repo, "order-11", [{ productId: "p1", quantity: 1 }]);
+      expect((await repo.restock("order-11"))?.status).toBe("released");
+      expect(await available(repo, "p1")).toBe(before);
+      expect(await repo.restock("ghost")).toBeNull();
+    });
+
     it("returns null for a reference it has never seen", async () => {
       const repo = await make();
       expect(await repo.commit("ghost")).toBeNull();

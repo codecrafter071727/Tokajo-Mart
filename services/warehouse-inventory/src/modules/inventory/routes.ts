@@ -170,4 +170,21 @@ export function registerInventoryRoutes(app: ServiceApp, repository: InventoryRe
       return reservation;
     },
   );
+
+  app.post(
+    "/internal/reservations/:reference/restock",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Take a sold order's stock back after a cancellation",
+        params: reservationRefParamsSchema,
+        response: { 200: reservationSchema },
+      },
+    },
+    async (request) => {
+      const reservation = await repository.restock(request.params.reference);
+      if (!reservation) throw app.httpErrors.notFound("Reservation not found.");
+      return reservation;
+    },
+  );
 }

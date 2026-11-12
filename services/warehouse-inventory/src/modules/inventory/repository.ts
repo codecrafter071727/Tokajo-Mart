@@ -41,6 +41,8 @@ export interface InventoryRepository {
   commit(reference: string): Promise<Reservation | null>;
   /** Give a hold back (order cancelled, or the hold expired). Safe to repeat. Null when unknown. */
   release(reference: string, as?: "released" | "expired"): Promise<Reservation | null>;
+  /** Take a sold order's stock back after a cancellation. Safe to repeat. Null when unknown. */
+  restock(reference: string): Promise<Reservation | null>;
   /** Release every hold whose time is up. Returns how many were released. */
   expireDue(now: Date): Promise<number>;
 }
@@ -274,6 +276,21 @@ export function createInMemoryInventoryRepository(
       if (r.status === "committed")
         throw new ReservationStateError("A committed reservation cannot be released.");
       give(r, as);
+      return view(r);
+    },
+
+    async restock(reference) {
+      const r = reservations.get(reference);
+      if (!r) return null;
+      if (r.status === "released" || r.status === "expired") return view(r);
+      if (r.status === "held") {
+        give(r, "released");
+        return view(r);
+      }
+      for (const line of r.lines) {
+        items.get(key(r.warehouseId, line.productId))!.onHand += line.quantity;
+      }
+      r.status = "released";
       return view(r);
     },
 

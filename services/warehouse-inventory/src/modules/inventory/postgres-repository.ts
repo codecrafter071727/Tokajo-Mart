@@ -243,6 +243,41 @@ export function createPostgresInventoryRepository(db: Kysely<DB>): InventoryRepo
       });
     },
 
+    async restock(reference) {
+      return db.transaction().execute(async (trx) => {
+        const row = await trx
+          .updateTable("inventory.reservations")
+          .set({ status: "released" })
+          .where("reference", "=", reference)
+          .where("status", "=", "committed")
+          .returning(["id", "warehouseId", "reference", "status", "expiresAt"])
+          .executeTakeFirst();
+        if (!row) {
+          // Not sold: still only held, already given back, or unknown. release() covers all three
+          return repo.release(reference);
+        }
+        for (const line of await linesOf(trx, row.id)) {
+          await trx
+            .updateTable("inventory.stockItems")
+            .set({ onHand: sql`on_hand + ${line.quantity}` })
+            .where("warehouseId", "=", row.warehouseId)
+            .where("productId", "=", line.productId)
+            .execute();
+          await trx
+            .insertInto("inventory.stockMovements")
+            .values({
+              warehouseId: row.warehouseId,
+              productId: line.productId,
+              type: "return",
+              quantityDelta: line.quantity,
+              reference,
+            })
+            .execute();
+        }
+        return toReservation(row);
+      });
+    },
+
     async expireDue(now) {
       const due = await db
         .selectFrom("inventory.reservations")

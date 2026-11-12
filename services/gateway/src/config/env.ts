@@ -1,4 +1,4 @@
-import { baseEnvSchema, loadServiceEnv, optionalUrl } from "@qc/service-kit";
+import { baseEnvSchema, loadServiceEnv, optionalString, optionalUrl } from "@qc/service-kit";
 
 const envSchema = baseEnvSchema.extend({
   IDENTITY_SERVICE_URL: optionalUrl(),
@@ -11,6 +11,8 @@ const envSchema = baseEnvSchema.extend({
   ANALYTICS_SERVICE_URL: optionalUrl(),
   SUPABASE_URL: optionalUrl(),
   SUPABASE_JWKS_URL: optionalUrl(),
+  /** Verifies access tokens signed by the identity service. Development has a fixed fallback. */
+  JWT_SECRET: optionalString(),
 });
 
 export const env = loadServiceEnv(

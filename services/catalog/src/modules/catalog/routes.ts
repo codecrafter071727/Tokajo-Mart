@@ -6,6 +6,7 @@ import {
   productSchema,
   updateProductBodySchema,
 } from "@qc/contracts";
+import { z } from "zod";
 import type { ServiceApp } from "@qc/service-kit";
 import type { CatalogRepository } from "./repository";
 
@@ -101,6 +102,36 @@ export function registerCatalogRoutes(app: ServiceApp, repository: CatalogReposi
         throw app.httpErrors.notFound("Product not found.");
       }
       return updated;
+    },
+  );
+
+  // Internal: the order service prices an order from the catalog, never from the client
+  app.get(
+    "/internal/products",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Get several products by id (up to 100)",
+        querystring: z.object({
+          ids: z
+            .string()
+            .min(1)
+            .transform((value) => [
+              ...new Set(
+                value
+                  .split(",")
+                  .map((id) => id.trim())
+                  .filter(Boolean),
+              ),
+            ])
+            .pipe(z.array(z.string()).min(1).max(100)),
+        }),
+        response: { 200: listProductsResponseSchema.pick({ items: true }) },
+      },
+    },
+    async (request) => {
+      const found = await Promise.all(request.query.ids.map((id) => repository.getProduct(id)));
+      return { items: found.filter((product) => product !== null) };
     },
   );
 }

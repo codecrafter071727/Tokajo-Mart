@@ -64,20 +64,20 @@ export function registerInternalRoutes(app: ServiceApp, db: Kysely<DB>): void {
     {
       schema: {
         tags: ["internal"],
-        summary: "Active riders of one warehouse",
-        querystring: z.object({ warehouseId: z.string().min(1) }),
+        summary: "Active riders of one warehouse, or of all warehouses",
+        querystring: z.object({ warehouseId: z.string().min(1).optional() }),
         response: { 200: z.object({ items: z.array(personSchema) }) },
       },
     },
     async (request) => {
-      const rows = await db
+      let query = db
         .selectFrom("identity.users as u")
         .innerJoin("identity.riderProfiles as r", "r.userId", "u.id")
         .select(["u.id", "u.name", "u.phone", "u.status", "r.vehicle", "r.rating", "r.warehouseId"])
-        .where("r.warehouseId", "=", request.query.warehouseId)
-        .where("u.status", "=", "active")
-        .orderBy("u.name")
-        .execute();
+        .where("u.status", "=", "active");
+      if (request.query.warehouseId)
+        query = query.where("r.warehouseId", "=", request.query.warehouseId);
+      const rows = await query.orderBy("u.name").execute();
       return {
         items: rows.map((r) => ({
           id: r.id,
