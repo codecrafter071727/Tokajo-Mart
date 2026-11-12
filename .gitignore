@@ -38,3 +38,7 @@ supabase/.branches/
 *.log
 .DS_Store
 Thumbs.db
+
+# pnpm store when it lives inside the workspace (CI), and Expo generated types
+.pnpm-store/
+expo-env.d.ts
