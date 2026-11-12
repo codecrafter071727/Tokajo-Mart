@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors, Radius, Spacing, typography } from "../theme";
 import { AddButton } from "./AddButton";
 import { ProductImage } from "./ProductImage";
+import { useStock } from "../lib/queries";
 import type { Product } from "../lib/mockData";
 
 interface ProductCardProps {
@@ -15,6 +16,10 @@ export function ProductCard({ product }: ProductCardProps) {
   const router = useRouter();
   const [saved, setSaved] = useState(false);
   const showDiscount = (product.discount ?? 0) >= 5;
+  const stock = useStock(product.id);
+  const outOfStock = stock?.status === "out";
+  // Only shown when it is true: the service reports "low" with the real remaining count
+  const lowStock = stock?.status === "low" && stock.remaining !== null;
 
   return (
     <Pressable
@@ -25,7 +30,7 @@ export function ProductCard({ product }: ProductCardProps) {
       }`}
     >
       <View style={styles.imageWrap}>
-        <View style={styles.imageBlock}>
+        <View style={[styles.imageBlock, outOfStock && styles.dimmed]}>
           <ProductImage
             imageUrl={product.imageUrl}
             fit={product.imageFit}
@@ -80,6 +85,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <Text style={styles.productName} numberOfLines={2}>
           {product.name}
         </Text>
+        {lowStock ? <Text style={styles.lowStock}>Only {stock?.remaining} left</Text> : null}
         <Text style={styles.unit} numberOfLines={1}>
           {product.optionsCount && product.optionsCount > 1
             ? `${product.optionsCount} options`
@@ -110,6 +116,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: "hidden",
+  },
+  dimmed: {
+    opacity: 0.5,
+  },
+  lowStock: {
+    ...typography.micro,
+    fontSize: 11,
+    fontWeight: "800",
+    color: Colors.warning,
   },
   discountBadge: {
     position: "absolute",

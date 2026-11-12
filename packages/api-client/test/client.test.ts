@@ -139,4 +139,20 @@ describe("api client", () => {
     expect(error.name).toBe("AbortError");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("sends each service to its own origin when overrides are set, and the rest to baseUrl", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.includes("/inventory/")
+        ? json({ serviceable: true, warehouseId: "w", etaMins: 9, reason: null })
+        : json({ items: [] }),
+    );
+    const api = client(fetchMock as unknown as typeof fetch, {
+      serviceUrls: { inventory: "http://inventory.test:4003/" },
+    });
+    await api.inventory.serviceability({ lat: 1, lng: 2 });
+    await api.catalog.listCategories();
+    const urls = fetchMock.mock.calls.map((c) => (c as unknown as [string])[0]);
+    expect(urls[0]).toBe("http://inventory.test:4003/v1/inventory/serviceability?lat=1&lng=2");
+    expect(urls[1]).toBe("http://api.test/v1/catalog/categories");
+  });
 });

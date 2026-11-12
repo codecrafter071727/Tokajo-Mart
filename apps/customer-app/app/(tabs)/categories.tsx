@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors, Spacing, Radius, typography } from "../../src/theme";
 import { TAB_RESERVE } from "../../src/theme/tabs";
 import { ProductCard } from "../../src/components/ProductCard";
-import { useCategories, useProducts } from "../../src/lib/queries";
+import { useCategories, useProducts, useServiceability } from "../../src/lib/queries";
 import { EmptyState, ErrorState, ProductGridSkeleton } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
@@ -25,6 +25,7 @@ export default function CategoriesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ categoryId?: string }>();
+  const eta = useServiceability().data;
   const categoriesQuery = useCategories();
   const categories = categoriesQuery.data ?? [];
   const [selected, setSelected] = useState<string | undefined>(params.categoryId);
@@ -59,7 +60,9 @@ export default function CategoriesScreen() {
           <Text style={styles.title}>Categories</Text>
           <View style={styles.etaPill}>
             <Ionicons name="flash" size={12} color={Colors.brandText} />
-            <Text style={styles.etaPillText}>9 mins</Text>
+            <Text style={styles.etaPillText}>
+              {eta?.serviceable ? `${eta.etaMins} mins` : eta ? "Unavailable" : "-- mins"}
+            </Text>
           </View>
         </View>
         <Pressable

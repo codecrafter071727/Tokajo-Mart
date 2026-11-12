@@ -18,7 +18,8 @@ import { colors } from "../../src/theme/tokens";
 import { TAB_RESERVE } from "../../src/theme/tabs";
 import { SectionRail } from "../../src/components/SectionRail";
 import { banners } from "../../src/lib/mockData";
-import { useCategories, useProducts } from "../../src/lib/queries";
+import { useCategories, useProducts, useServiceability } from "../../src/lib/queries";
+import { DEFAULT_LOCATION } from "../../src/lib/location";
 import { ErrorState, RailSkeleton } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
@@ -84,6 +85,8 @@ export default function HomeScreen() {
   }, []);
 
   // One catalog read feeds every rail. A gateway "home" endpoint replaces this later.
+  const serviceability = useServiceability();
+  const eta = serviceability.data;
   const categoriesQuery = useCategories();
   const productsQuery = useProducts({ limit: 100 });
   const categories = categoriesQuery.data ?? [];
@@ -113,14 +116,24 @@ export default function HomeScreen() {
               <Ionicons name="flash" size={12} color={colors.accent[500]} />
               <Text style={styles.etaLabel}>Delivery in</Text>
             </View>
-            <Text style={styles.etaValue}>9 minutes</Text>
+            {serviceability.isPending ? (
+              <Skeleton width={150} height={34} borderRadius={Radius.sm} />
+            ) : serviceability.isError ? (
+              <Text style={styles.etaValue}>-- mins</Text>
+            ) : eta?.serviceable ? (
+              <Text style={styles.etaValue}>{eta.etaMins} minutes</Text>
+            ) : (
+              <Text style={styles.etaValue}>Not available</Text>
+            )}
             <Pressable
               style={styles.addressRow}
               hitSlop={6}
               accessibilityLabel="Change delivery address"
             >
               <Text style={styles.addressText} numberOfLines={1}>
-                Sector 62, Noida
+                {eta && !eta.serviceable
+                  ? "We do not deliver to this area yet"
+                  : DEFAULT_LOCATION.label}
               </Text>
               <Ionicons name="chevron-down" size={14} color={Colors.brandTint} />
             </Pressable>

@@ -45,9 +45,16 @@ export class ApiClientError extends Error {
   }
 }
 
+export type ServiceName = "catalog" | "inventory";
+
 export type ApiClientOptions = {
   /** Gateway origin, for example "http://192.168.1.5:4000". No trailing slash needed. */
   baseUrl: string;
+  /**
+   * Per service origin overrides, for running services directly while the gateway does not route
+   * to them yet. Anything not listed here goes to `baseUrl`.
+   */
+  serviceUrls?: Partial<Record<ServiceName, string>>;
   /** Called per request, so a refreshed token is always used. */
   getAccessToken?: () => string | undefined | Promise<string | undefined>;
   /** Defaults to the global fetch. Injected in tests. */
@@ -74,11 +81,17 @@ function toQueryString(query: Record<string, string | number | undefined>): stri
 }
 
 export function createApiClient(options: ApiClientOptions) {
-  const baseUrl = options.baseUrl.replace(/\/+$/, "");
+  const trim = (url: string) => url.replace(/\/+$/, "");
+  const baseUrl = trim(options.baseUrl);
+  const originFor = (service: ServiceName) => {
+    const override = options.serviceUrls?.[service];
+    return override ? trim(override) : baseUrl;
+  };
   const timeoutMs = options.timeoutMs ?? 10_000;
   const doFetch = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
 
   async function get<T>(
+    service: ServiceName,
     path: string,
     schema: Parser<T>,
     query: Record<string, string | number | undefined> = {},
@@ -104,7 +117,7 @@ export function createApiClient(options: ApiClientOptions) {
 
       let response: Response;
       try {
-        response = await doFetch(`${baseUrl}${path}${toQueryString(query)}`, {
+        response = await doFetch(`${originFor(service)}${path}${toQueryString(query)}`, {
           method: "GET",
           headers,
           signal: controller.signal,
@@ -151,16 +164,16 @@ export function createApiClient(options: ApiClientOptions) {
   return {
     catalog: {
       listCategories: (opts?: RequestOptions): Promise<ListCategoriesResponse> =>
-        get("/v1/catalog/categories", listCategoriesResponseSchema, {}, opts),
+        get("catalog", "/v1/catalog/categories", listCategoriesResponseSchema, {}, opts),
 
       listProducts: (
         query: ListProductsQuery = {},
         opts?: RequestOptions,
       ): Promise<ListProductsResponse> =>
-        get("/v1/catalog/products", listProductsResponseSchema, { ...query }, opts),
+        get("catalog", "/v1/catalog/products", listProductsResponseSchema, { ...query }, opts),
 
       getProduct: (id: string, opts?: RequestOptions): Promise<Product> =>
-        get(`/v1/catalog/products/${encodeURIComponent(id)}`, productSchema, {}, opts),
+        get("catalog", `/v1/catalog/products/${encodeURIComponent(id)}`, productSchema, {}, opts),
     },
 
     inventory: {
@@ -168,7 +181,13 @@ export function createApiClient(options: ApiClientOptions) {
         query: ServiceabilityQuery,
         opts?: RequestOptions,
       ): Promise<ServiceabilityResponse> =>
-        get("/v1/inventory/serviceability", serviceabilityResponseSchema, { ...query }, opts),
+        get(
+          "inventory",
+          "/v1/inventory/serviceability",
+          serviceabilityResponseSchema,
+          { ...query },
+          opts,
+        ),
 
       availability: (
         warehouseId: string,
@@ -176,6 +195,7 @@ export function createApiClient(options: ApiClientOptions) {
         opts?: RequestOptions,
       ): Promise<AvailabilityResponse> =>
         get(
+          "inventory",
           "/v1/inventory/availability",
           availabilityResponseSchema,
           { warehouseId, productIds: productIds.join(",") },

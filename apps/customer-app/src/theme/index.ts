@@ -24,6 +24,7 @@ export const Colors = {
   offerBlue: colors.info,
   discountGreen: colors.success,
   danger: colors.danger,
+  warning: colors.warning,
   disabledBg: colors.surface[100],
   disabledText: colors.ink[500],
   accent: colors.accent[500],

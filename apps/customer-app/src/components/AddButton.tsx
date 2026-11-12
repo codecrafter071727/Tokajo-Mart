@@ -1,10 +1,11 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { Pressable, Text, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Colors, Radius, Motion } from "../theme";
 import { useCartStore, type CartState } from "../store/cart";
+import { useStock } from "../lib/queries";
 
 interface AddButtonProps {
   productId: string;
@@ -28,11 +29,21 @@ function tap() {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 }
 
+function warn() {
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+}
+
 export function AddButton({ productId, productData, size = "sm", optionsCount }: AddButtonProps) {
   const quantity = useCartStore((s: CartState) => s.getQuantity(productId));
   const addItem = useCartStore((s: CartState) => s.addItem);
   const incrementItem = useCartStore((s: CartState) => s.incrementItem);
   const decrementItem = useCartStore((s: CartState) => s.decrementItem);
+
+  const stock = useStock(productId);
+  const outOfStock = stock?.status === "out";
+  const maxPerOrder = stock?.maxPerOrder ?? null;
+  const atLimit = maxPerOrder !== null && quantity >= maxPerOrder;
+  const [notified, setNotified] = useState(false);
 
   const scale = useSharedValue(1);
 
@@ -54,6 +65,26 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
   const btnW = size === "sm" ? 64 : 104;
   const hasOptions = (optionsCount ?? 0) > 1 && quantity === 0;
   const iconSize = size === "sm" ? 16 : 20;
+
+  // Out of stock and not in the cart: no ADD, offer to be told when it is back
+  if (outOfStock && quantity === 0) {
+    return (
+      <Pressable
+        style={[styles.notifyBtn, { height: btnH, width: btnW }, notified && styles.notifyBtnDone]}
+        onPress={() => {
+          tap();
+          setNotified(true);
+        }}
+        disabled={notified}
+        accessibilityRole="button"
+        accessibilityLabel={notified ? "You will be notified" : "Notify me when back in stock"}
+      >
+        <Text style={[styles.notifyText, size === "md" && styles.notifyTextMd]}>
+          {notified ? "Noted" : "Notify me"}
+        </Text>
+      </Pressable>
+    );
+  }
 
   if (quantity === 0) {
     return (
@@ -94,14 +125,24 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
       <Pressable
         style={styles.stepBtn}
         onPress={() => {
+          if (outOfStock || atLimit) {
+            warn();
+            return;
+          }
           tap();
           incrementItem(productId);
         }}
         hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
         accessibilityRole="button"
-        accessibilityLabel="Increase quantity"
+        accessibilityLabel={atLimit ? `Only ${maxPerOrder} per order` : "Increase quantity"}
+        accessibilityState={{ disabled: outOfStock || atLimit }}
       >
-        <Ionicons name="add" size={iconSize} color={Colors.surface} />
+        <Ionicons
+          name="add"
+          size={iconSize}
+          color={Colors.surface}
+          style={outOfStock || atLimit ? { opacity: 0.4 } : undefined}
+        />
       </Pressable>
     </View>
   );
@@ -132,6 +173,27 @@ const styles = StyleSheet.create({
   },
   addTextMd: {
     fontSize: 15,
+  },
+  notifyBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.25,
+    borderColor: Colors.textTertiary,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 4,
+  },
+  notifyBtnDone: {
+    borderColor: Colors.border,
+    backgroundColor: Colors.canvas,
+  },
+  notifyText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: Colors.textSecondary,
+  },
+  notifyTextMd: {
+    fontSize: 13,
   },
   stepper: {
     flexDirection: "row",
