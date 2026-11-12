@@ -6,20 +6,29 @@ This is a thin slice, not the full platform. ARCHITECTURE.md budgets 8 weeks for
 
 ## Status: Vishu's lane (updated Nov 12)
 
-Done and committed on the local branch `vishu/catalog-api-layer` (not pushed, see SECURITY-CLEANUP.md):
+All of Vishu's items are built and on `main`. The ones that depend on Anshul's services run on demo data behind interfaces, so switching to the real services changes one file each, not the screens.
 
-- **V1 contracts and api-client:** `packages/contracts/src/{catalog,inventory}.ts` and a typed `packages/api-client` that validates every response against the contracts. Money is integer paise on the wire.
-- **V2 catalog service:** `GET /v1/catalog/categories`, `/products` (category filter, ranked search, cursor paging) and `/products/:id`. Seeded in memory behind a `CatalogRepository` interface. 9 tests.
-- **V3 inventory service:** `GET /v1/inventory/serviceability` and `/availability`. Seeded behind an `InventoryRepository` interface. 12 tests.
-- **V4 and V6 in the customer app:** home, categories, search and product pages read from the API through TanStack Query, with loading, error and empty states, real ETA and stock states. With no `EXPO_PUBLIC_*_URL` set the app runs on bundled fixtures.
+| Item                     | State                                                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V1 contracts, api-client | Done. Catalog and inventory contracts, a typed client with timeouts, cancellation and typed errors, and `updateProduct`.                            |
+| V2 catalog service       | Done. List, ranked search, paging, detail and `PATCH` edit. 16 tests.                                                                               |
+| V3 inventory service     | Done. Serviceability and availability. 14 tests.                                                                                                    |
+| V4, V6 app data layer    | Done. Home, categories, search and product pages read the API with loading, error and empty states. Real ETA and stock states.                      |
+| V5 login                 | Built on demo OTP `1234`: persisted session, route guard, onboarding. Needs Anshul's identity service for real phone OTP. Address is still fixed.   |
+| V7 cart and checkout     | Built. One pricing function in paise for cart, checkout and order; idempotent order placing; cash on delivery only. Needs the order service.        |
+| V8 orders and tracking   | Built. Orders list with working filters and Reorder, tracking with status over time and the delivery code. Needs the order service for live status. |
+| V9 rider app             | Built. Login, online toggle, offers with countdown, the full delivery flow with the 4 digit handover code, earnings. Needs the delivery service.    |
+| V10 admin web            | Built. Catalog table with edit, orders and riders pages. Orders and riders are demo data until the order and delivery services exist.               |
 
-**What Anshul can rely on:**
+**What Anshul needs to provide, and where it plugs in:**
 
-- Both services have a repository interface. When the Postgres tables exist (A1), implement `CatalogRepository` and `InventoryRepository` with Kysely and swap them in `buildApp`. The routes and tests stay as they are.
-- The gateway (A2) should route `/v1/catalog/*` to catalog (port 4002) and `/v1/inventory/*` to warehouse-inventory (port 4003). Until then the app uses `EXPO_PUBLIC_CATALOG_URL` and `EXPO_PUBLIC_INVENTORY_URL` directly.
-- Still needed from Anshul, per the handoff table: order contract shapes (V7), working login (V5), and the live order API (V8).
+- **Database (A1):** implement `CatalogRepository` and `InventoryRepository` with Kysely and swap them in each service's `buildApp`. Routes and tests stay as they are.
+- **Gateway and identity (A2):** route `/v1/catalog/*` to port 4002 and `/v1/inventory/*` to 4003, enforce the admin role on `PATCH /v1/catalog/products/:id`, and issue real sessions. The customer app and rider app then replace their demo sign in.
+- **Order service (A3, A7):** publish the order contract. The draft is `apps/customer-app/src/lib/orders.ts` (`Order`, `PlaceOrderInput`, `OrderRepository`). Implement an HTTP `OrderRepository` in the app and the screens work unchanged. The service must price the order itself from the items, as the in-memory one does, and honour the idempotency key.
+- **Delivery service (A4):** the draft is `apps/rider-app/src/lib/delivery.ts` (`Delivery`, the actions, `DeliveryRepository`). The state machine and its rules (every item checked, the customer's code to finish) are tested there and should be mirrored on the server.
+- **Admin pages:** the demo types in `apps/admin-web/src/lib/demo.ts` become the real order and delivery contracts.
 
-Next for Vishu: V5 auth and address (blocked on identity), V7 cart and checkout (blocked on the order contract), V9 rider app, V10 admin web.
+**Not done:** real payments (Razorpay), push notifications, live map, proof of delivery photo, address capture and editing, and a shared UI package (the rider app copies the customer app's design tokens).
 
 ## Day 0 (before anything else): repo security cleanup
 
