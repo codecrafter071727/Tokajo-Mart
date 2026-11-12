@@ -4,16 +4,35 @@ Goal for the week: **one real order, end to end, on staging.** A customer signs 
 
 This is a thin slice, not the full platform. ARCHITECTURE.md budgets 8 weeks for everything. Today the customer app is ~7,200 lines of UI on mock data; every service is a ~40 line skeleton, the web apps are ~25 lines each, the rider app is empty, and there are no database migrations. What we skip is listed at the bottom.
 
+## Status: Vishu's lane (updated Nov 12)
+
+Done and committed on the local branch `vishu/catalog-api-layer` (not pushed, see SECURITY-CLEANUP.md):
+
+- **V1 contracts and api-client:** `packages/contracts/src/{catalog,inventory}.ts` and a typed `packages/api-client` that validates every response against the contracts. Money is integer paise on the wire.
+- **V2 catalog service:** `GET /v1/catalog/categories`, `/products` (category filter, ranked search, cursor paging) and `/products/:id`. Seeded in memory behind a `CatalogRepository` interface. 9 tests.
+- **V3 inventory service:** `GET /v1/inventory/serviceability` and `/availability`. Seeded behind an `InventoryRepository` interface. 12 tests.
+- **V4 and V6 in the customer app:** home, categories, search and product pages read from the API through TanStack Query, with loading, error and empty states, real ETA and stock states. With no `EXPO_PUBLIC_*_URL` set the app runs on bundled fixtures.
+
+**What Anshul can rely on:**
+
+- Both services have a repository interface. When the Postgres tables exist (A1), implement `CatalogRepository` and `InventoryRepository` with Kysely and swap them in `buildApp`. The routes and tests stay as they are.
+- The gateway (A2) should route `/v1/catalog/*` to catalog (port 4002) and `/v1/inventory/*` to warehouse-inventory (port 4003). Until then the app uses `EXPO_PUBLIC_CATALOG_URL` and `EXPO_PUBLIC_INVENTORY_URL` directly.
+- Still needed from Anshul, per the handoff table: order contract shapes (V7), working login (V5), and the live order API (V8).
+
+Next for Vishu: V5 auth and address (blocked on identity), V7 cart and checkout (blocked on the order contract), V9 rider app, V10 admin web.
+
 ## Day 0 (before anything else): repo security cleanup
 
-Nothing else starts until this is done. Split so it takes both of us about an hour.
+Nothing else starts until this is done. A worm-style payload reached `main` and also sits in other repos on Vishu's Mac, so both accounts and both machines are treated as exposed. The full checklist, with the exact commands, is in [SECURITY-CLEANUP.md](SECURITY-CLEANUP.md).
 
-**Both:** do not pull `origin/main`, do not open the repo in VS Code, do not run `pnpm dev/start/build` from it. Commit `91ffad0` adds an obfuscated `init` file to every app and service, a hidden `.vscode/tasks.json` that runs a fake font file on folder open, and `node init &&` in every start/dev/build script.
+Already done: `main` on GitHub is clean and the 15 dependabot branches are deleted.
 
-| Owner  | Day 0 task                                                                                                                                                                                                                                                                                                           |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vishu  | Revoke GitHub tokens and sessions, re-auth `gh`, check collaborators and deploy keys. Reset `main` to `b26d73f`. Delete the `dependabot/*` branches. Turn on branch protection (PR required, no force pushes)                                                                                                        |
-| Anshul | If you pulled or opened the repo, treat your machine as compromised: change passwords and keys from a clean device, revoke SSH keys, scan. Rotate every GitHub Actions and GCP secret. Disable the deploy workflows until `main` is repaired. Add a CI check that fails if `.vscode/` or a file named `init` appears |
+| Owner  | Day 0 task                                                                                                                                                  |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vishu  | From a clean device: rotate every credential, revoke GitHub sessions, tokens and SSH keys. Wipe or clean the Mac. Clean and report the other infected repos |
+| Anshul | Check your machine for the payload and clean it. Repo owner account: rotate Actions and GCP secrets, turn on branch protection, commit the security guard   |
+
+Until both machines are clean, do not open the repo in VS Code or Cursor and do not run `pnpm dev`, `start` or `build`.
 
 ## Who owns what (lanes)
 
