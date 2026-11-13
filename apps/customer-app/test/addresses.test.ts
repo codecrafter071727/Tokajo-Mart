@@ -9,6 +9,14 @@ import {
   selectedOf,
   updateAddress,
   validateDraft,
+  CURRENT_LOCATION_AREA,
+  addressSummary,
+  bookFromServer,
+  fromServer,
+  isUntouchedSeed,
+  pendingUploads,
+  replaceId,
+  toServer,
   type AddressDraft,
 } from "../src/lib/addresses";
 import { coveringWarehouse, SERVICE_AREAS, servedLocally } from "../src/lib/serviceAreas";
@@ -185,5 +193,101 @@ describe("service areas", () => {
     expect(coveringWarehouse(28.6208, 77.3649)).toBe("wh-noida-62");
     expect(coveringWarehouse(12.98, 77.64)).toBe("wh-indiranagar");
     expect(coveringWarehouse(19.07, 72.87)).toBeNull();
+  });
+});
+
+describe("addresses pinned with the device location", () => {
+  const pinned = draft({ areaId: CURRENT_LOCATION_AREA, lat: 28.6311, lng: 77.3712 });
+
+  it("accepts a pinned spot and keeps its exact coordinates", () => {
+    expect(validateDraft(pinned)).toEqual({});
+    const book = addAddress(initialBook(), pinned, "p1");
+    const added = book.addresses.find((a) => a.id === "p1")!;
+    expect([added.lat, added.lng]).toEqual([28.6311, 77.3712]);
+    expect(addressSummary(added).line2).toBe("Pinned with your location");
+  });
+
+  it("refuses a pin without coordinates", () => {
+    expect(validateDraft(draft({ areaId: CURRENT_LOCATION_AREA })).areaId).toBeTruthy();
+    expect(
+      validateDraft(draft({ areaId: CURRENT_LOCATION_AREA, lat: 200, lng: 1 })).areaId,
+    ).toBeTruthy();
+  });
+
+  it("survives a reload", () => {
+    const book = addAddress(initialBook(), pinned, "p1");
+    const again = migrateAddressBook(JSON.parse(JSON.stringify(book)));
+    expect(again.addresses.find((a) => a.id === "p1")).toMatchObject({
+      areaId: CURRENT_LOCATION_AREA,
+      lat: 28.6311,
+    });
+  });
+});
+
+describe("server mapping", () => {
+  it("sends the area's pincode, and no area for a pinned spot", () => {
+    const seed = initialBook().addresses[2]!;
+    expect(toServer(seed)).toMatchObject({
+      kind: "other",
+      label: "Parents",
+      areaId: "noida-63",
+      pincode: "201301",
+    });
+    const book = addAddress(
+      initialBook(),
+      draft({ areaId: CURRENT_LOCATION_AREA, lat: 28.6, lng: 77.3 }),
+      "p",
+    );
+    expect(toServer(book.addresses.find((a) => a.id === "p")!)).toMatchObject({
+      areaId: null,
+      pincode: null,
+    });
+  });
+
+  it("reads a server row back, treating an unknown area as a pinned spot", () => {
+    const base = {
+      id: "00000000-0000-4000-8000-000000000001",
+      kind: "home" as const,
+      label: "",
+      line1: "X road",
+      line2: "",
+      landmark: "",
+      instructions: "",
+      lat: 1,
+      lng: 2,
+      pincode: null,
+      isDefault: true,
+      createdAt: "",
+      updatedAt: "",
+    };
+    expect(fromServer({ ...base, areaId: "noida-62" }).areaId).toBe("noida-62");
+    expect(fromServer({ ...base, areaId: null }).areaId).toBe(CURRENT_LOCATION_AREA);
+  });
+
+  it("knows which starting addresses were never changed", () => {
+    const seed = initialBook().addresses[0]!;
+    expect(isUntouchedSeed(seed)).toBe(true);
+    expect(isUntouchedSeed({ ...seed, line1: "Changed" })).toBe(false);
+  });
+
+  it("skips duplicates within the device list too", () => {
+    const one = { ...initialBook().addresses[0]!, id: "x1", line1: "Same Road" };
+    const two = { ...one, id: "x2", line1: " same road" };
+    expect(pendingUploads([one, two], []).map((a) => a.id)).toEqual(["x1"]);
+  });
+
+  it("swaps a temporary id for the server one, keeping the selection", () => {
+    const book = addAddress(initialBook(), draft(), "tmp");
+    const saved = {
+      ...book.addresses.find((a) => a.id === "tmp")!,
+      id: "00000000-0000-4000-8000-000000000009",
+    };
+    const next = replaceId(book, "tmp", saved);
+    expect(next.selectedId).toBe(saved.id);
+    expect(next.addresses.some((a) => a.id === "tmp")).toBe(false);
+  });
+
+  it("falls back to the starting addresses when nothing is left anywhere", () => {
+    expect(bookFromServer([], { addresses: [], selectedId: "" }).selectedId).toBe("a1");
   });
 });

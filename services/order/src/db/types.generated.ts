@@ -14,6 +14,34 @@ export type Int8 = ColumnType<string, bigint | number | string, bigint | number 
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface OrdersCouponRedemptions {
+  couponId: string;
+  createdAt: Generated<Timestamp>;
+  discountPaise: number;
+  id: Generated<string>;
+  orderId: string;
+  userId: string;
+}
+
+export interface OrdersCoupons {
+  active: Generated<boolean>;
+  code: string;
+  createdAt: Generated<Timestamp>;
+  description: Generated<string>;
+  endsAt: Timestamp | null;
+  firstOrderOnly: Generated<boolean>;
+  id: Generated<string>;
+  maxDiscountPaise: number | null;
+  minOrderPaise: Generated<number>;
+  startsAt: Timestamp | null;
+  title: string;
+  type: string;
+  updatedAt: Generated<Timestamp>;
+  usageLimitPerUser: number | null;
+  usageLimitTotal: number | null;
+  value: Generated<number>;
+}
+
 export interface OrdersOrderItems {
   createdAt: Generated<Timestamp>;
   emoji: Generated<string>;
@@ -38,12 +66,14 @@ export interface OrdersOrders {
   cancelledAt: Timestamp | null;
   cancelReason: string | null;
   confirmedAt: Timestamp | null;
+  couponCode: string | null;
   createdAt: Generated<Timestamp>;
   customerName: Generated<string>;
   customerPhone: Generated<string>;
   deliveredAt: Timestamp | null;
   deliveryCode: string;
   deliveryFeePaise: number;
+  discountPaise: Generated<number>;
   handlingFeePaise: number;
   id: Generated<string>;
   idempotencyKey: string;
@@ -81,6 +111,8 @@ export interface OrdersOrderStatusHistory {
 }
 
 export interface DB {
+  "orders.couponRedemptions": OrdersCouponRedemptions;
+  "orders.coupons": OrdersCoupons;
   "orders.orderItems": OrdersOrderItems;
   "orders.orders": OrdersOrders;
   "orders.orderStatusHistory": OrdersOrderStatusHistory;

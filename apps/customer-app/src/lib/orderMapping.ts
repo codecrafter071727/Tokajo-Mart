@@ -1,4 +1,8 @@
-import type { Order as ServerOrder } from "@qc/contracts";
+import {
+  DELIVERY_FEE_PAISE,
+  FREE_DELIVERY_MIN_PAISE,
+  type Order as ServerOrder,
+} from "@qc/contracts";
 import type { Order, OrderItem } from "./orders";
 import { HttpError } from "./httpError";
 
@@ -31,6 +35,7 @@ export function fromServer(order: ServerOrder): Order {
     tipPaise: order.tipPaise,
     totalPaise: order.totalPaise,
     toFreeDeliveryPaise: 0,
+    ...couponParts(order),
     server: {
       number: order.number,
       status: order.status,
@@ -38,6 +43,31 @@ export function fromServer(order: ServerOrder): Order {
       deliveredAt: order.deliveredAt,
       rider: order.rider,
     },
+  };
+}
+
+/**
+ * The server keeps the code and the amount taken off. A free delivery code shows as a zero delivery
+ * fee on a cart that would otherwise pay it, so the waived fee is worked out from that.
+ */
+function couponParts(order: ServerOrder) {
+  const discountPaise = order.discountPaise ?? 0;
+  const code = order.couponCode ?? null;
+  const waived =
+    code &&
+    discountPaise === 0 &&
+    order.deliveryFeePaise === 0 &&
+    order.itemTotalPaise < FREE_DELIVERY_MIN_PAISE
+      ? DELIVERY_FEE_PAISE
+      : 0;
+  return {
+    discountPaise,
+    deliveryWaivedPaise: waived,
+    couponSavingsPaise: discountPaise + waived,
+    appliedCoupon: code
+      ? { code, type: (waived > 0 ? "free_delivery" : "flat") as "free_delivery" | "flat" }
+      : null,
+    couponShortfallPaise: 0,
   };
 }
 

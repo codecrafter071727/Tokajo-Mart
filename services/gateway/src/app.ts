@@ -159,6 +159,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<ServiceAp
   app.route({
     method: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
     url: "/v1/*",
+    // Room for a rider's door photo (base64). Each service still enforces its own, smaller limit
+    // on every other route, so this only lets the photo upload through.
+    bodyLimit: 2_400_000,
     handler: proxy,
   });
   app.route({ method: ["POST"], url: "/webhooks/*", handler: proxy });

@@ -14,6 +14,12 @@ import {
   type OrderSummary,
   type PlaceOrderBody,
   type QueueOrder,
+  type ValidateCouponBody,
+  type ValidateCouponResponse,
+  type CouponOffer,
+  type AdminCoupon,
+  type CreateCouponBody,
+  type UpdateCouponBody,
 } from "@qc/contracts";
 import {
   assertWarehouseScope,
@@ -29,6 +35,19 @@ import {
   type ResolveResult,
   type WarehouseInfo,
 } from "./clients";
+import {
+  adminCoupons,
+  createCoupon,
+  findCoupon,
+  ineligibleReason,
+  lockCoupon,
+  offersFor,
+  rupees,
+  termsOf,
+  toOffer,
+  updateCoupon,
+  type CouponRow,
+} from "./coupons";
 import { badRequest, conflict, forbidden, notFound, unavailable } from "./errors";
 
 type OrderRow = Selectable<OrdersOrders>;
@@ -75,6 +94,8 @@ export function toOrder(
     deliveryFeePaise: row.deliveryFeePaise,
     handlingFeePaise: row.handlingFeePaise,
     tipPaise: row.tipPaise,
+    discountPaise: row.discountPaise,
+    couponCode: row.couponCode,
     totalPaise: row.totalPaise,
     paymentMethod: row.paymentMethod === "online" ? "online" : "cod",
     promisedMins: row.promisedMins,
@@ -242,22 +263,12 @@ export class OrderService {
       return { order: order as Order, created: false };
     }
 
-    // One line per product even if the client sent a product twice
-    const quantities = new Map<string, number>();
-    for (const line of body.items) {
-      quantities.set(line.productId, (quantities.get(line.productId) ?? 0) + line.quantity);
-    }
-    const lines = [...quantities].map(([productId, quantity]) => ({ productId, quantity }));
-    if (lines.some((l) => l.quantity > 100)) throw badRequest("Too many of one item.");
+    const { lines, priced } = await this.loadLines(body.items);
 
-    const catalog = await this.call(() =>
-      this.clients.catalog.get<{ items: CatalogProduct[] }>(
-        `/internal/products?ids=${lines.map((l) => encodeURIComponent(l.productId)).join(",")}`,
-      ),
-    );
-    const byId = new Map(catalog.items.map((p) => [p.id, p]));
-    const unknown = lines.filter((l) => !byId.has(l.productId)).map((l) => l.productId);
-    if (unknown.length > 0) throw conflict("Some items are no longer sold.", { unknown });
+    // A coupon is checked before anything is held, so a bad code costs the customer nothing
+    const coupon = body.couponCode
+      ? await this.usableCoupon(body.couponCode, identity.userId)
+      : null;
 
     const resolved = await this.call(() =>
       this.clients.inventory.post<ResolveResult>("/internal/serviceability/resolve", {
@@ -279,18 +290,12 @@ export class OrderService {
     const warehouseId = resolved.warehouseId;
     const promisedMins = resolved.etaMins ?? 15;
 
-    const priced = lines.map((l) => {
-      const product = byId.get(l.productId) as CatalogProduct;
-      return { product, quantity: l.quantity };
-    });
     const price = priceCart(
-      priced.map(({ product, quantity }) => ({
-        unitPricePaise: product.pricePaise,
-        mrpPaise: product.mrpPaise,
-        quantity,
-      })),
+      toPriceLines(priced),
       body.tipPaise ?? 0,
+      coupon ? termsOf(coupon) : null,
     );
+    if (coupon) assertCouponApplies(coupon, price);
 
     const online = body.payment === "online";
     const orderId = randomUUID();
@@ -316,6 +321,13 @@ export class OrderService {
         const number = `QC-${stamp}-${String(seq.rows[0]?.n).padStart(5, "0")}`;
         const [customerName, customerPhone] = await this.customerContact(identity.userId);
 
+        // Checked again under a lock on the coupon, so its limits hold when customers race
+        if (coupon) {
+          const locked = await lockCoupon(trx, coupon.id);
+          const reason = await ineligibleReason(trx, locked, identity.userId, now);
+          if (reason) throw conflict(reason, { coupon: coupon.code });
+        }
+
         const inserted = await trx
           .insertInto("orders.orders")
           .values({
@@ -331,6 +343,8 @@ export class OrderService {
             deliveryFeePaise: price.deliveryFeePaise,
             handlingFeePaise: price.handlingFeePaise,
             tipPaise: price.tipPaise,
+            discountPaise: price.discountPaise,
+            couponCode: coupon ? coupon.code : null,
             totalPaise: price.totalPaise,
             promisedMins,
             deliveryCode: String(randomInt(0, 10_000)).padStart(4, "0"),
@@ -366,6 +380,17 @@ export class OrderService {
             })),
           )
           .execute();
+        if (coupon) {
+          await trx
+            .insertInto("orders.couponRedemptions")
+            .values({
+              couponId: coupon.id,
+              orderId,
+              userId: identity.userId,
+              discountPaise: price.couponSavingsPaise,
+            })
+            .execute();
+        }
         await trx
           .insertInto("orders.orderStatusHistory")
           .values({
@@ -407,6 +432,90 @@ export class OrderService {
 
     const [order] = await this.hydrate([row], () => true);
     return { order: order as Order, created: true };
+  }
+
+  /** One line per product (a product sent twice is added up), priced from the catalog. */
+  private async loadLines(items: { productId: string; quantity: number }[]) {
+    const quantities = new Map<string, number>();
+    for (const line of items) {
+      quantities.set(line.productId, (quantities.get(line.productId) ?? 0) + line.quantity);
+    }
+    const lines = [...quantities].map(([productId, quantity]) => ({ productId, quantity }));
+    if (lines.some((l) => l.quantity > 100)) throw badRequest("Too many of one item.");
+
+    const catalog = await this.call(() =>
+      this.clients.catalog.get<{ items: CatalogProduct[] }>(
+        `/internal/products?ids=${lines.map((l) => encodeURIComponent(l.productId)).join(",")}`,
+      ),
+    );
+    const byId = new Map(catalog.items.map((p) => [p.id, p]));
+    const unknown = lines.filter((l) => !byId.has(l.productId)).map((l) => l.productId);
+    if (unknown.length > 0) throw conflict("Some items are no longer sold.", { unknown });
+    const priced = lines.map((l) => ({
+      product: byId.get(l.productId) as CatalogProduct,
+      quantity: l.quantity,
+    }));
+    return { lines, priced };
+  }
+
+  /** The coupon for a code if this customer may use it now, or a 409 saying why not. */
+  private async usableCoupon(code: string, userId: string): Promise<CouponRow> {
+    const coupon = await findCoupon(this.db, code);
+    if (!coupon) throw conflict("This code does not exist.", { coupon: code.toUpperCase() });
+    const reason = await ineligibleReason(this.db, coupon, userId, this.now());
+    if (reason) throw conflict(reason, { coupon: coupon.code });
+    return coupon;
+  }
+
+  // -------------------------------------------------------------------------------------
+  // Coupons
+  // -------------------------------------------------------------------------------------
+
+  /** Prices the cart with a code and says whether it applies, and if not, why. */
+  async validateCoupon(
+    identity: Identity,
+    body: ValidateCouponBody,
+  ): Promise<ValidateCouponResponse> {
+    if (identity.role !== "customer") throw forbidden("Only customers can use coupons.");
+    const { priced } = await this.loadLines(body.items);
+    const tip = body.tipPaise ?? 0;
+    const plain = priceCart(toPriceLines(priced), tip);
+    const coupon = await findCoupon(this.db, body.code);
+    if (!coupon) {
+      return { valid: false, reason: "This code does not exist.", coupon: null, price: plain };
+    }
+    const reason = await ineligibleReason(this.db, coupon, identity.userId, this.now());
+    if (reason) return { valid: false, reason, coupon: toOffer(coupon, reason), price: plain };
+    const price = priceCart(toPriceLines(priced), tip, termsOf(coupon));
+    const problem = couponProblem(coupon, price);
+    if (problem) {
+      return { valid: false, reason: problem, coupon: toOffer(coupon, problem), price: plain };
+    }
+    return { valid: true, reason: null, coupon: toOffer(coupon, null), price };
+  }
+
+  async availableCoupons(identity: Identity): Promise<CouponOffer[]> {
+    if (identity.role !== "customer") throw forbidden("Only customers can use coupons.");
+    return offersFor(this.db, identity.userId, this.now());
+  }
+
+  async adminListCoupons(): Promise<AdminCoupon[]> {
+    return adminCoupons(this.db, this.now());
+  }
+
+  async adminGetCoupon(id: string): Promise<AdminCoupon> {
+    const [coupon] = await adminCoupons(this.db, this.now(), id);
+    if (!coupon) throw notFound("Coupon not found.");
+    return coupon;
+  }
+
+  async adminCreateCoupon(body: CreateCouponBody & { code: string }): Promise<AdminCoupon> {
+    return this.adminGetCoupon(await createCoupon(this.db, body));
+  }
+
+  async adminUpdateCoupon(id: string, body: UpdateCouponBody): Promise<AdminCoupon> {
+    await updateCoupon(this.db, id, body);
+    return this.adminGetCoupon(id);
   }
 
   private async customerContact(userId: string): Promise<[string, string]> {
@@ -473,6 +582,10 @@ export class OrderService {
         .returningAll()
         .executeTakeFirst();
       if (!row) return null;
+      // A cancelled or unpaid order gives its coupon use back
+      if (input.to === "cancelled" || input.to === "expired") {
+        await trx.deleteFrom("orders.couponRedemptions").where("orderId", "=", id).execute();
+      }
       await trx
         .insertInto("orders.orderStatusHistory")
         .values({
@@ -969,4 +1082,29 @@ export class OrderService {
     const [order] = await this.hydrate([row], () => true);
     return order as Order;
   }
+}
+
+const toPriceLines = (priced: { product: CatalogProduct; quantity: number }[]) =>
+  priced.map(({ product, quantity }) => ({
+    unitPricePaise: product.pricePaise,
+    mrpPaise: product.mrpPaise,
+    quantity,
+  }));
+
+/** Why a coupon that the customer may use still does nothing for this cart, or null. */
+function couponProblem(coupon: CouponRow, price: ReturnType<typeof priceCart>): string | null {
+  if (price.couponShortfallPaise > 0) {
+    return `Add ${rupees(price.couponShortfallPaise)} more to use ${coupon.code}.`;
+  }
+  if (price.couponSavingsPaise === 0) {
+    return coupon.type === "free_delivery"
+      ? "Delivery is already free on this order."
+      : "This code does not save anything on this order.";
+  }
+  return null;
+}
+
+function assertCouponApplies(coupon: CouponRow, price: ReturnType<typeof priceCart>): void {
+  const problem = couponProblem(coupon, price);
+  if (problem) throw conflict(problem, { coupon: coupon.code });
 }

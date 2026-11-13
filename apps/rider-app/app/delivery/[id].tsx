@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BigButton } from "../../src/components/BigButton";
 import { Card } from "../../src/components/Card";
 import { CodeInput } from "../../src/components/CodeInput";
+import { DoorPhoto } from "../../src/components/DoorPhoto";
+import { LocationNote } from "../../src/components/LocationNote";
 import {
   DELIVERY_CODE_LENGTH,
   DeliveryError,
@@ -213,6 +215,10 @@ function DeliveryScreen() {
             />
           </Card>
         ) : null}
+        {delivery.status === "at_customer" ? (
+          <DoorPhoto deliveryId={delivery.id} uploaded={Boolean(delivery.podUploaded)} />
+        ) : null}
+        <LocationNote />
         <Card>
           <View style={styles.placeRow}>
             <View
@@ -451,6 +457,11 @@ function Delivered({ delivery, onDone }: { delivery: Delivery; onDone: () => voi
           ) : null}
           <Line label="Distance" value={`${delivery.distanceKm} km`} />
         </View>
+        {!delivery.podUploaded && recentlyDelivered(delivery) ? (
+          <View style={styles.donePhoto}>
+            <DoorPhoto deliveryId={delivery.id} uploaded={false} compact />
+          </View>
+        ) : null}
         {delivery.codPaise ? (
           <View style={styles.deposit}>
             <Ionicons name="cash" size={20} color={colors.accent[900]} />
@@ -474,6 +485,13 @@ function Delivered({ delivery, onDone }: { delivery: Delivery; onDone: () => voi
   );
 }
 
+/** The server takes a door photo for 30 minutes after delivery */
+function recentlyDelivered(delivery: Delivery): boolean {
+  return (
+    delivery.deliveredAt !== null && Date.now() - Date.parse(delivery.deliveredAt) < 25 * 60_000
+  );
+}
+
 function Line({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.line}>
@@ -484,6 +502,7 @@ function Line({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  donePhoto: { marginTop: space[3] },
   root: { flex: 1, backgroundColor: colors.surface[100] },
   flex: { flex: 1 },
   pressed: { opacity: 0.85 },

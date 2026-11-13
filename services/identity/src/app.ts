@@ -7,6 +7,7 @@ import {
 } from "@qc/service-kit";
 import { env } from "./config/env";
 import type { DB } from "./db/types.generated";
+import { registerAddressRoutes } from "./modules/addresses/routes";
 import { registerAdminRoutes } from "./modules/admin/routes";
 import { createMsg91Sender } from "./modules/auth/msg91";
 import { demoSender, parseTestNumbers, type OtpSender } from "./modules/auth/otp";
@@ -82,6 +83,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
 
   registerAuthRoutes(app, auth, db);
   registerAdminRoutes(app, db);
+  registerAddressRoutes(app, db);
   registerInternalRoutes(app, db);
   return app;
 }

@@ -1,4 +1,12 @@
 import {
+  adminCouponSchema,
+  adminCouponsResponseSchema,
+  couponOffersResponseSchema,
+  couponParamsSchema,
+  createCouponBodySchema,
+  updateCouponBodySchema,
+  validateCouponBodySchema,
+  validateCouponResponseSchema,
   adminOrderDetailSchema,
   adminOrdersQuerySchema,
   adminOrdersResponseSchema,
@@ -25,6 +33,8 @@ import { badRequest } from "./errors";
 import { STAFF_ROLES, toOrder, type OrderService } from "./service";
 
 export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void {
+  registerCouponRoutes(app, orders);
+
   app.post(
     "/v1/orders",
     {
@@ -294,3 +304,110 @@ export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void
 }
 
 export { toOrder };
+
+function registerCouponRoutes(app: ServiceApp, orders: OrderService): void {
+  app.post(
+    "/v1/orders/coupons/validate",
+    {
+      schema: {
+        tags: ["coupons"],
+        summary: "Price a cart with a coupon code and say whether it applies",
+        body: validateCouponBodySchema,
+        response: { 200: validateCouponResponseSchema },
+      },
+    },
+    async (request) => orders.validateCoupon(requireIdentity(request), request.body),
+  );
+
+  app.get(
+    "/v1/orders/coupons/available",
+    {
+      schema: {
+        tags: ["coupons"],
+        summary: "Offers the customer can see now, with whether each one can be used",
+        response: { 200: couponOffersResponseSchema },
+      },
+    },
+    async (request) => ({ items: await orders.availableCoupons(requireIdentity(request)) }),
+  );
+
+  app.get(
+    "/v1/orders/admin/coupons",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Every coupon with its state, uses and discount given",
+        response: { 200: adminCouponsResponseSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      return { items: await orders.adminListCoupons() };
+    },
+  );
+
+  app.get(
+    "/v1/orders/admin/coupons/:id",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "One coupon",
+        params: couponParamsSchema,
+        response: { 200: adminCouponSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      return orders.adminGetCoupon(request.params.id);
+    },
+  );
+
+  app.post(
+    "/v1/orders/admin/coupons",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Create a coupon",
+        body: createCouponBodySchema,
+        response: { 201: adminCouponSchema },
+      },
+    },
+    async (request, reply) => {
+      requireRole(request, "admin");
+      return reply.status(201).send(await orders.adminCreateCoupon(request.body));
+    },
+  );
+
+  app.patch(
+    "/v1/orders/admin/coupons/:id",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Change a coupon (send active false to deactivate it)",
+        params: couponParamsSchema,
+        body: updateCouponBodySchema,
+        response: { 200: adminCouponSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      return orders.adminUpdateCoupon(request.params.id, request.body);
+    },
+  );
+
+  app.post(
+    "/v1/orders/admin/coupons/:id/deactivate",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Stop a coupon. Orders already placed with it keep their discount.",
+        params: couponParamsSchema,
+        response: { 200: adminCouponSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      return orders.adminUpdateCoupon(request.params.id, { active: false });
+    },
+  );
+}

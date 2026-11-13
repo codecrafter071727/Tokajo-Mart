@@ -37,6 +37,8 @@ export const riderDeliverySchema = z.object({
   /** Cash to collect at the door, or null when the order is already paid */
   codPaise: z.number().int().nullable(),
   deliveredAt: z.string().nullable(),
+  /** True once a door photo has been uploaded for this delivery */
+  podUploaded: z.boolean().optional(),
 });
 export type RiderDelivery = z.infer<typeof riderDeliverySchema>;
 
@@ -200,3 +202,79 @@ export const createDeliveryBodySchema = z.object({
   deliveryCode: z.string().regex(/^[0-9]{4}$/),
 });
 export type CreateDeliveryBody = z.infer<typeof createDeliveryBodySchema>;
+
+// --- Live location and tracking ----------------------------------------------------------------
+
+/** One reading from the rider's phone. Only the latest is kept. */
+export const riderLocationBodySchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  accuracyM: z.number().min(0).max(10_000).nullable().optional(),
+  heading: z.number().min(0).lt(360).nullable().optional(),
+  /** Metres per second, as the phone reports it */
+  speed: z.number().min(0).max(100).nullable().optional(),
+  /** When the phone took the reading (ISO time) */
+  recordedAt: z.iso.datetime({ offset: true }),
+});
+export type RiderLocationBody = z.input<typeof riderLocationBodySchema>;
+
+export const riderLocationAckSchema = z.object({
+  accepted: z.literal(true),
+  nextInSeconds: z.number(),
+});
+
+const pointSchema = z.object({ lat: z.number(), lng: z.number() });
+
+export const riderPositionSchema = pointSchema.extend({
+  heading: z.number().nullable(),
+  updatedAt: z.string(),
+  /** Seconds since the phone took the reading */
+  ageSeconds: z.number().int(),
+});
+export type RiderPosition = z.infer<typeof riderPositionSchema>;
+
+/**
+ * What the customer sees while their order is on the way. `active` is false before pickup and
+ * after delivery, and then nothing about the rider's position is returned.
+ */
+export const trackingSchema = z.object({
+  active: z.boolean(),
+  status: z.string(),
+  rider: riderPositionSchema.nullable(),
+  store: pointSchema.nullable(),
+  destination: pointSchema.nullable(),
+  /** Straight line distance from the rider (or the store) to the customer */
+  distanceKm: z.number().nullable(),
+  etaMins: z.number().int().nullable(),
+  podAvailable: z.boolean(),
+});
+export type Tracking = z.infer<typeof trackingSchema>;
+export const trackingParamsSchema = z.object({ orderId: z.uuid() });
+
+// --- Proof of delivery photo ---------------------------------------------------------------------
+
+/** Largest door photo we keep, after the app has compressed it */
+export const POD_MAX_BYTES = 1_500_000;
+
+export const podUploadBodySchema = z.object({
+  contentType: z.literal("image/jpeg"),
+  /** The JPEG, base64 encoded (no data: prefix) */
+  // A loose bound: the service decodes it and answers 413 when the photo itself is too big
+  imageBase64: z.string().min(100).max(2_250_000),
+});
+export type PodUploadBody = z.infer<typeof podUploadBodySchema>;
+export const podUploadResponseSchema = z.object({
+  uploaded: z.literal(true),
+  bytes: z.number().int(),
+  uploadedAt: z.string(),
+});
+
+/** The delivery side of an order, for the admin order page */
+export const adminOrderDeliverySchema = z.object({
+  deliveryId: z.uuid(),
+  status: adminDeliveryStatusSchema,
+  riderLocation: riderPositionSchema.nullable(),
+  podAvailable: z.boolean(),
+  podUploadedAt: z.string().nullable(),
+});
+export type AdminOrderDelivery = z.infer<typeof adminOrderDeliverySchema>;

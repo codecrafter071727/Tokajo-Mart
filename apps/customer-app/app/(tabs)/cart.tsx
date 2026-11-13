@@ -10,6 +10,8 @@ import { AddButton } from "../../src/components/AddButton";
 import { ProductCard } from "../../src/components/ProductCard";
 import { ProductImage } from "../../src/components/ProductImage";
 import { useCartStore } from "../../src/store/cart";
+import { useCouponStore } from "../../src/store/coupon";
+import { CouponSection } from "../../src/components/CouponSection";
 import { useSelectedAddress } from "../../src/store/addresses";
 import { addressSummary, addressTag } from "../../src/lib/addresses";
 import { KIND_ICON } from "../../src/lib/addressIcons";
@@ -37,8 +39,12 @@ export default function CartScreen() {
   const address = useSelectedAddress();
   const eta = useServiceability().data;
 
+  const applied = useCouponStore((s) => s.applied);
+
   // One pricing function for the cart, checkout and the order, so the totals always agree
-  const bill = priceCart(toPriceLines(items), tipRupees * 100);
+  const lines = toPriceLines(items);
+  const bill = priceCart(lines, tipRupees * 100, applied);
+  const couponItems = items.map((i) => ({ productId: i.id, quantity: i.quantity }));
   const progress = Math.min(1, bill.itemTotalPaise / FREE_DELIVERY_MIN_PAISE);
 
   // Suggestions are real catalog items that are not in the cart yet, cheapest first
@@ -190,6 +196,8 @@ export default function CartScreen() {
           </View>
         ) : null}
 
+        <CouponSection lines={lines} items={couponItems} tipPaise={tipRupees * 100} bill={bill} />
+
         {/* Bill */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Bill details</Text>
@@ -217,15 +225,24 @@ export default function CartScreen() {
               <Text style={styles.billValue}>{formatPaise(bill.tipPaise)}</Text>
             </BillRow>
           ) : null}
+          {bill.discountPaise > 0 && bill.appliedCoupon ? (
+            <BillRow icon="pricetag-outline" label={`Coupon (${bill.appliedCoupon.code})`}>
+              <Text style={[styles.billValue, styles.free]}>
+                -{formatPaise(bill.discountPaise)}
+              </Text>
+            </BillRow>
+          ) : null}
           <View style={styles.billDivider} />
           <View style={styles.billTotalRow}>
             <Text style={styles.billTotalLabel}>Grand total</Text>
             <Text style={styles.billTotalValue}>{formatPaise(bill.totalPaise)}</Text>
           </View>
-          {bill.savingsPaise > 0 ? (
+          {bill.savingsPaise + bill.couponSavingsPaise > 0 ? (
             <View style={styles.savings}>
               <Text style={styles.savingsText}>Your total savings</Text>
-              <Text style={styles.savingsValue}>{formatPaise(bill.savingsPaise)}</Text>
+              <Text style={styles.savingsValue}>
+                {formatPaise(bill.savingsPaise + bill.couponSavingsPaise)}
+              </Text>
             </View>
           ) : null}
         </View>

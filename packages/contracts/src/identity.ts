@@ -145,3 +145,90 @@ export const updateStaffBodySchema = z
   });
 
 export const resetPasswordBodySchema = z.object({ password: z.string().min(10).max(200) });
+
+// --- Customer addresses ------------------------------------------------------------------------
+
+export const MAX_ADDRESSES = 20;
+
+export const addressKindSchema = z.enum(["home", "work", "other"]);
+export type AddressKind = z.infer<typeof addressKindSchema>;
+
+export const customerAddressSchema = z.object({
+  id: z.uuid(),
+  kind: addressKindSchema,
+  /** Name shown for an "other" address, for example "Parents". Empty for home and work. */
+  label: z.string(),
+  line1: z.string(),
+  line2: z.string(),
+  landmark: z.string(),
+  instructions: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  pincode: z.string().nullable(),
+  /** The service area preset picked in the app, when there is one */
+  areaId: z.string().nullable(),
+  isDefault: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type CustomerAddress = z.infer<typeof customerAddressSchema>;
+
+const addressFields = {
+  kind: addressKindSchema,
+  label: z.string().trim().max(30),
+  line1: z.string().trim().min(3).max(200),
+  line2: z.string().trim().max(150),
+  landmark: z.string().trim().max(150),
+  instructions: z.string().trim().max(200),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  pincode: z
+    .string()
+    .trim()
+    .regex(/^[1-9][0-9]{5}$/, "A pincode has 6 digits.")
+    .nullable(),
+  areaId: z.string().trim().min(1).max(40).nullable(),
+};
+
+/** "Other" addresses need a name; home and work never keep one. */
+const labelRule = (body: { kind?: AddressKind; label?: string }) =>
+  body.kind !== "other" || (body.label ?? "").length >= 2;
+
+export const createAddressBodySchema = z
+  .object({
+    ...addressFields,
+    label: addressFields.label.default(""),
+    line2: addressFields.line2.default(""),
+    landmark: addressFields.landmark.default(""),
+    instructions: addressFields.instructions.default(""),
+    pincode: addressFields.pincode.default(null),
+    areaId: addressFields.areaId.default(null),
+    isDefault: z.boolean().default(false),
+  })
+  .strict()
+  .refine(labelRule, { message: "Give this address a name, like Parents.", path: ["label"] });
+export type CreateAddressBody = z.input<typeof createAddressBodySchema>;
+
+export const updateAddressBodySchema = z
+  .object({
+    kind: addressFields.kind.optional(),
+    label: addressFields.label.optional(),
+    line1: addressFields.line1.optional(),
+    line2: addressFields.line2.optional(),
+    landmark: addressFields.landmark.optional(),
+    instructions: addressFields.instructions.optional(),
+    lat: addressFields.lat.optional(),
+    lng: addressFields.lng.optional(),
+    pincode: addressFields.pincode.optional(),
+    areaId: addressFields.areaId.optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: "Send at least one field to change." })
+  .refine((body) => (body.lat === undefined) === (body.lng === undefined), {
+    message: "Send latitude and longitude together.",
+  });
+export type UpdateAddressBody = z.input<typeof updateAddressBodySchema>;
+
+export const addressParamsSchema = z.object({ id: z.uuid() });
+export const addressListResponseSchema = z.object({ items: z.array(customerAddressSchema) });
+export type AddressListResponse = z.infer<typeof addressListResponseSchema>;

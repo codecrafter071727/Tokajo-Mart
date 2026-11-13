@@ -14,6 +14,9 @@ import { ProductImage } from "../../src/components/ProductImage";
 import { Skeleton } from "../../src/components/Skeleton";
 import { formatPaise } from "../../src/lib/pricing";
 import { PaymentPanel } from "../../src/components/payments/PaymentPanel";
+import { DoorPhotoCard } from "../../src/components/tracking/DoorPhotoCard";
+import { LiveTrackingCard } from "../../src/components/tracking/LiveTrackingCard";
+import { ON_THE_WAY, useTracking } from "../../src/lib/tracking";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -85,6 +88,12 @@ export default function OrderTrackingScreen() {
   const now = useNow(1000);
   const order = orderQuery.data;
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // Live rider position while the order is on its way; its ETA replaces the clock based guess
+  const liveTracking = useTracking(
+    order?.id,
+    Boolean(order?.server && ON_THE_WAY.has(order.server.status)),
+  );
+  const live = liveTracking.data?.active ? liveTracking.data : null;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -131,7 +140,7 @@ export default function OrderTrackingScreen() {
   const cancelled = status === "cancelled";
   const delivered = status === "delivered";
   const inFlight = !cancelled && !delivered;
-  const eta = etaMinutes(order, now);
+  const eta = live?.etaMins ?? etaMinutes(order, now);
   const rider = order.server ? order.server.rider : DEMO_RIDER;
   const hasRider = (status === "on_the_way" || delivered) && rider;
   const serverStatus = order.server?.status;
@@ -213,7 +222,7 @@ export default function OrderTrackingScreen() {
           </View>
         ) : null}
 
-        {!cancelled && !awaitingPayment ? (
+        {!cancelled && !awaitingPayment && !live ? (
           <RouteProgress
             progress={riderProgress(order, now)}
             title={
@@ -226,6 +235,12 @@ export default function OrderTrackingScreen() {
             subtitle={`${itemCount} item${itemCount !== 1 ? "s" : ""} from the store near you`}
           />
         ) : null}
+
+        {order.server && serverStatus && ON_THE_WAY.has(serverStatus) ? (
+          <LiveTrackingCard orderId={order.id} />
+        ) : null}
+
+        {order.server && delivered ? <DoorPhotoCard orderId={order.id} /> : null}
 
         {hasRider && rider ? (
           <View style={styles.card}>
@@ -300,8 +315,15 @@ export default function OrderTrackingScreen() {
             </Text>
             <Text style={styles.totalValue}>{formatPaise(order.totalPaise)}</Text>
           </View>
-          {order.savingsPaise > 0 && !cancelled ? (
-            <Text style={styles.saved}>You saved {formatPaise(order.savingsPaise)}</Text>
+          {order.appliedCoupon && order.couponSavingsPaise > 0 && !cancelled ? (
+            <Text style={styles.saved}>
+              Coupon {order.appliedCoupon.code}: -{formatPaise(order.couponSavingsPaise)}
+            </Text>
+          ) : null}
+          {order.savingsPaise + order.couponSavingsPaise > 0 && !cancelled ? (
+            <Text style={styles.saved}>
+              You saved {formatPaise(order.savingsPaise + order.couponSavingsPaise)}
+            </Text>
           ) : null}
         </View>
 

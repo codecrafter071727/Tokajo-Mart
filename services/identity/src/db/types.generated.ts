@@ -14,6 +14,25 @@ export type Numeric = ColumnType<string, number | string, number | string>;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface IdentityAddresses {
+  areaId: string | null;
+  createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  id: Generated<string>;
+  instructions: Generated<string>;
+  isDefault: Generated<boolean>;
+  kind: Generated<string>;
+  label: Generated<string>;
+  landmark: Generated<string>;
+  lat: number;
+  line1: string;
+  line2: Generated<string>;
+  lng: number;
+  pincode: string | null;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
 export interface IdentityOtpChallenges {
   attempts: Generated<number>;
   codeHash: string;
@@ -56,6 +75,7 @@ export interface IdentityUsers {
 }
 
 export interface DB {
+  "identity.addresses": IdentityAddresses;
   "identity.otpChallenges": IdentityOtpChallenges;
   "identity.refreshTokens": IdentityRefreshTokens;
   "identity.riderProfiles": IdentityRiderProfiles;

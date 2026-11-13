@@ -24,6 +24,9 @@ import { addressSummary, addressTag, type SavedAddress } from "../../src/lib/add
 import { useAddressStore, useSelectedAddress } from "../../src/store/addresses";
 import { KIND_ICON } from "../../src/lib/addressIcons";
 import { useOnlinePaymentsAvailable } from "../../src/lib/paymentQueries";
+import { useCouponStore } from "../../src/store/coupon";
+import { CouponSection } from "../../src/components/CouponSection";
+import { isCouponError } from "../../src/lib/coupons";
 
 type PaymentChoice = "online" | "cod";
 
@@ -218,8 +221,12 @@ export default function CheckoutScreen() {
   const tipRupees = useCartStore((s) => s.tipRupees);
   const clearCart = useCartStore((s) => s.clearCart);
 
-  // The same pricing the cart used, including the tip, so the total never changes at checkout
-  const bill = priceCart(toPriceLines(items), tipRupees * 100);
+  const applied = useCouponStore((s) => s.applied);
+  const removeCoupon = useCouponStore((s) => s.remove);
+
+  // The same pricing the cart used, including the tip and coupon, so the total never changes here
+  const lines = toPriceLines(items);
+  const bill = priceCart(lines, tipRupees * 100, applied);
 
   const selectedAddress = useSelectedAddress();
   const { line1: addressLine1, line2: addressLine2 } = addressSummary(selectedAddress);
@@ -256,22 +263,34 @@ export default function CheckoutScreen() {
         },
         payment: payOnline ? "online" : "cod",
         promisedMins: eta?.etaMins ?? 10,
+        // Only the code goes to the server, which prices the discount itself
+        ...(bill.appliedCoupon ? { couponCode: bill.appliedCoupon.code } : {}),
       },
       {
         onSuccess: (order) => {
           clearCart();
+          removeCoupon();
           // An online order goes straight into the payment sheet on its tracking screen
           router.replace({
             pathname: "/orders/[id]",
             params: payOnline ? { id: order.id, pay: "1" } : { id: order.id },
           });
         },
-        onError: (error) =>
+        onError: (error) => {
+          if (isCouponError(error)) {
+            // The code stopped working (used up, expired): drop it so the next tap goes through
+            removeCoupon();
+            setPlaceError(
+              `${(error as Error).message} The coupon was removed. Check the new total and place the order again.`,
+            );
+            return;
+          }
           setPlaceError(
             error instanceof OrderError
               ? error.message
               : describeOrderError(error, Object.fromEntries(items.map((i) => [i.id, i.name]))),
-          ),
+          );
+        },
       },
     );
   };
@@ -402,6 +421,13 @@ export default function CheckoutScreen() {
           })}
         </View>
 
+        <CouponSection
+          lines={lines}
+          items={items.map((i) => ({ productId: i.id, quantity: i.quantity }))}
+          tipPaise={tipRupees * 100}
+          bill={bill}
+        />
+
         {/* Bill summary */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Bill summary</Text>
@@ -427,14 +453,22 @@ export default function CheckoutScreen() {
               <Text style={styles.billValue}>{formatPaise(bill.tipPaise)}</Text>
             </View>
           )}
+          {bill.discountPaise > 0 && bill.appliedCoupon && (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Coupon ({bill.appliedCoupon.code})</Text>
+              <Text style={styles.billFree}>-{formatPaise(bill.discountPaise)}</Text>
+            </View>
+          )}
           <View style={styles.billDivider} />
           <View style={styles.billRow}>
             <Text style={styles.billTotalLabel}>Grand total</Text>
             <Text style={styles.billTotalValue}>{formatPaise(bill.totalPaise)}</Text>
           </View>
-          {bill.savingsPaise > 0 && (
+          {bill.savingsPaise + bill.couponSavingsPaise > 0 && (
             <View style={styles.savingsRow}>
-              <Text style={styles.savingsText}>You save {formatPaise(bill.savingsPaise)}</Text>
+              <Text style={styles.savingsText}>
+                You save {formatPaise(bill.savingsPaise + bill.couponSavingsPaise)}
+              </Text>
             </View>
           )}
         </View>

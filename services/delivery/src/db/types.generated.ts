@@ -5,9 +5,10 @@
 
 import type { ColumnType } from "kysely";
 
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export type Json = JsonValue;
 
@@ -48,6 +49,9 @@ export interface DeliveryDeliveries {
   orderId: string;
   orderNumber: string;
   payoutPaise: number;
+  podBytes: number | null;
+  podKey: string | null;
+  podUploadedAt: Timestamp | null;
   riderId: string | null;
   status: Generated<string>;
   storeAddress: string;
@@ -59,6 +63,17 @@ export interface DeliveryDeliveries {
   warehouseId: string;
 }
 
+export interface DeliveryRiderLocations {
+  accuracyM: number | null;
+  heading: number | null;
+  lat: number;
+  lng: number;
+  recordedAt: Timestamp;
+  riderId: string;
+  speed: number | null;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface DeliveryRiderState {
   online: Generated<boolean>;
   riderId: string;
@@ -67,5 +82,6 @@ export interface DeliveryRiderState {
 
 export interface DB {
   "delivery.deliveries": DeliveryDeliveries;
+  "delivery.riderLocations": DeliveryRiderLocations;
   "delivery.riderState": DeliveryRiderState;
 }

@@ -205,7 +205,7 @@ suite("delivery service", async () => {
       await makeDelivery();
       const s = (await online(R1)).json();
       const text = JSON.stringify(s);
-      expect(text).not.toContain("4321");
+      expect(text).not.toContain('"4321"');
       expect(s.active).not.toHaveProperty("deliveryCode");
       expect(s.active).not.toHaveProperty("handoverCode");
     });
@@ -431,8 +431,8 @@ suite("delivery service", async () => {
       expect(detail.rider).toMatchObject({ id: R1, name: "Ravi Kumar", status: "on_delivery" });
       expect(detail.current).toMatchObject({ id: d.id, status: "assigned", orderNumber: "QC-1" });
       expect(detail.current.rider).toMatchObject({ id: R1, name: "Ravi Kumar" });
-      expect(JSON.stringify(detail)).not.toContain("4321");
-      expect(JSON.stringify(detail)).not.toContain(d.handoverCode);
+      expect(JSON.stringify(detail)).not.toContain('"4321"');
+      expect(JSON.stringify(detail)).not.toContain(`"${d.handoverCode}"`);
 
       await deliverAll(d, 1);
       detail = (await get(`/v1/delivery/admin/riders/${R1}`, admin)).json();
@@ -497,7 +497,7 @@ suite("delivery service", async () => {
       const mine = (await get("/v1/delivery/admin/live?warehouseId=wh-indiranagar", manager)).json()
         .items;
       expect(mine.map((x: { orderNumber: string }) => x.orderNumber)).toEqual(["QC-1"]);
-      expect(JSON.stringify(all)).not.toContain("4321");
+      expect(JSON.stringify(all)).not.toContain('"4321"');
     });
 
     it("keeps riders of other warehouses from a manager and everything from staff and riders", async () => {

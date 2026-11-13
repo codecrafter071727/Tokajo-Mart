@@ -1,4 +1,8 @@
+import type { CreateAddressBody, CustomerAddress } from "@qc/contracts";
 import { findArea } from "./serviceAreas";
+
+/** areaId for an address placed with the device location instead of a preset area. */
+export const CURRENT_LOCATION_AREA = "current";
 
 export type AddressKind = "home" | "work" | "other";
 
@@ -16,9 +20,15 @@ export type SavedAddress = {
   areaId: string;
   lat: number;
   lng: number;
+  /** The account default on the server. Only set for addresses saved to the server. */
+  isDefault?: boolean;
 };
 
-export type AddressDraft = Omit<SavedAddress, "id" | "lat" | "lng">;
+/** What the form edits. Coordinates come from the area preset, or from the device location. */
+export type AddressDraft = Omit<SavedAddress, "id" | "lat" | "lng" | "isDefault"> & {
+  lat?: number;
+  lng?: number;
+};
 
 export type AddressBook = { addresses: SavedAddress[]; selectedId: string };
 
@@ -73,7 +83,11 @@ export function addressTag(a: Pick<SavedAddress, "kind" | "label">): string {
 
 export function addressSummary(a: SavedAddress): { line1: string; line2: string } {
   const area = findArea(a.areaId);
-  const place = area ? `${area.name}, ${area.city} - ${area.pincode}` : "";
+  const place = area
+    ? `${area.name}, ${area.city} - ${area.pincode}`
+    : a.areaId === CURRENT_LOCATION_AREA
+      ? "Pinned with your location"
+      : "";
   return { line1: a.line1, line2: [a.line2, place].filter(Boolean).join(", ") };
 }
 
@@ -100,11 +114,14 @@ export function validateDraft(draft: AddressDraft): DraftErrors {
     if (draft.label.trim().length < 2) errors.label = "Give this address a name, like Parents.";
     else if (draft.label.trim().length > 20) errors.label = "Keep the name under 20 characters.";
   }
-  if (!findArea(draft.areaId)) errors.areaId = "Choose the area this address is in.";
+  const pinned = draft.areaId === CURRENT_LOCATION_AREA && validCoordinates(draft.lat, draft.lng);
+  if (!findArea(draft.areaId) && !pinned) {
+    errors.areaId = "Choose the area this address is in, or use your current location.";
+  }
   return errors;
 }
 
-const clean = (d: AddressDraft): AddressDraft => ({
+const clean = ({ lat: _lat, lng: _lng, ...d }: AddressDraft) => ({
   ...d,
   label: d.kind === "other" ? d.label.trim() : "",
   line1: d.line1.trim(),
@@ -112,7 +129,21 @@ const clean = (d: AddressDraft): AddressDraft => ({
   instructions: d.instructions.trim(),
 });
 
+export function validCoordinates(lat: unknown, lng: unknown): lat is number {
+  return (
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180
+  );
+}
+
 function withCoordinates(draft: AddressDraft, fallback?: SavedAddress) {
+  if (draft.areaId === CURRENT_LOCATION_AREA && validCoordinates(draft.lat, draft.lng)) {
+    return { lat: draft.lat as number, lng: draft.lng as number };
+  }
   const area = findArea(draft.areaId);
   return { lat: area?.lat ?? fallback?.lat ?? 0, lng: area?.lng ?? fallback?.lng ?? 0 };
 }
@@ -120,7 +151,7 @@ function withCoordinates(draft: AddressDraft, fallback?: SavedAddress) {
 /** Adds an address and selects it. */
 export function addAddress(book: AddressBook, draft: AddressDraft, id: string): AddressBook {
   const d = clean(draft);
-  const added: SavedAddress = { ...d, id, ...withCoordinates(d) };
+  const added: SavedAddress = { ...d, id, ...withCoordinates(draft) };
   return { addresses: [...book.addresses, added], selectedId: id };
 }
 
@@ -129,7 +160,7 @@ export function updateAddress(book: AddressBook, id: string, draft: AddressDraft
   return {
     ...book,
     addresses: book.addresses.map((a) =>
-      a.id === id ? { ...d, id, ...withCoordinates(d, a) } : a,
+      a.id === id ? { ...d, id, isDefault: a.isDefault, ...withCoordinates(draft, a) } : a,
     ),
   };
 }
@@ -179,7 +210,9 @@ export function migrateAddressBook(persisted: unknown): AddressBook {
       kind = tag === "home" ? "home" : tag === "work" ? "work" : "other";
       label = kind === "other" ? e.tag.trim() : "";
     }
-    const areaId = typeof e.areaId === "string" && findArea(e.areaId) ? e.areaId : "noida-62";
+    const pinned = e.areaId === CURRENT_LOCATION_AREA && validCoordinates(e.lat, e.lng);
+    const areaId =
+      typeof e.areaId === "string" && (findArea(e.areaId) || pinned) ? e.areaId : "noida-62";
     const area = findArea(areaId);
     const lat = typeof e.lat === "number" ? e.lat : (area?.lat ?? 0);
     const lng = typeof e.lng === "number" ? e.lng : (area?.lng ?? 0);
@@ -205,5 +238,104 @@ export function migrateAddressBook(persisted: unknown): AddressBook {
       typeof selectedId === "string" && seen.has(selectedId)
         ? selectedId
         : (addresses[0] as SavedAddress).id,
+  };
+}
+
+// -------------------------------------------------------------------------------------------
+// Server sync: the account's addresses live in the identity service when a backend is set
+// -------------------------------------------------------------------------------------------
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Saved on the server (a uuid), as opposed to the starting addresses or one still being saved. */
+export const isServerId = (id: string) => UUID.test(id);
+
+export function fromServer(row: CustomerAddress): SavedAddress {
+  const area = row.areaId ? findArea(row.areaId) : undefined;
+  return {
+    id: row.id,
+    kind: row.kind,
+    label: row.label,
+    line1: row.line1,
+    line2: row.line2,
+    instructions: row.instructions,
+    areaId: area ? area.id : CURRENT_LOCATION_AREA,
+    lat: row.lat,
+    lng: row.lng,
+    isDefault: row.isDefault,
+  };
+}
+
+export function toServer(a: SavedAddress): CreateAddressBody {
+  const area = findArea(a.areaId);
+  return {
+    kind: a.kind,
+    label: a.kind === "other" ? a.label : "",
+    line1: a.line1,
+    line2: a.line2,
+    landmark: "",
+    instructions: a.instructions,
+    lat: a.lat,
+    lng: a.lng,
+    pincode: area?.pincode ?? null,
+    areaId: area ? area.id : null,
+  };
+}
+
+const sameSpot = (a: Pick<SavedAddress, "line1" | "lat" | "lng">, b: typeof a) =>
+  a.line1.trim().toLowerCase() === b.line1.trim().toLowerCase() &&
+  Math.abs(a.lat - b.lat) < 0.0005 &&
+  Math.abs(a.lng - b.lng) < 0.0005;
+
+/** True for one of the starting addresses that the customer never changed. */
+export function isUntouchedSeed(a: SavedAddress): boolean {
+  const seed = SEED_ADDRESSES.find((s) => s.id === a.id);
+  return Boolean(
+    seed &&
+    seed.kind === a.kind &&
+    seed.label === a.label &&
+    seed.line1 === a.line1 &&
+    seed.line2 === a.line2 &&
+    seed.instructions === a.instructions &&
+    seed.areaId === a.areaId,
+  );
+}
+
+/**
+ * Addresses saved only on this device that should move to the account the first time the
+ * customer signs in: anything they added or edited, minus what the server already has.
+ */
+export function pendingUploads(local: SavedAddress[], server: SavedAddress[]): SavedAddress[] {
+  const out: SavedAddress[] = [];
+  for (const a of local) {
+    if (isServerId(a.id) || isUntouchedSeed(a)) continue;
+    if (server.some((s) => sameSpot(s, a)) || out.some((o) => sameSpot(o, a))) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+/**
+ * The address book after loading the account's addresses. Keeps the customer's current choice
+ * when it still exists, else the account default. With nothing saved on the account yet, the
+ * starting addresses stay so the app can still show prices and delivery times.
+ */
+export function bookFromServer(server: SavedAddress[], current: AddressBook): AddressBook {
+  if (server.length === 0) {
+    const local = current.addresses.filter((a) => !isServerId(a.id));
+    return local.length > 0
+      ? { addresses: local, selectedId: selectedOf({ ...current, addresses: local }).id }
+      : initialBook();
+  }
+  const keep = server.some((a) => a.id === current.selectedId);
+  const fallback = server.find((a) => a.isDefault) ?? (server[0] as SavedAddress);
+  return { addresses: server, selectedId: keep ? current.selectedId : fallback.id };
+}
+
+/** Swaps a temporary id for the one the server gave, keeping the selection on it. */
+export function replaceId(book: AddressBook, from: string, saved: SavedAddress): AddressBook {
+  return {
+    addresses: book.addresses.map((a) => (a.id === from ? saved : a)),
+    selectedId: book.selectedId === from ? saved.id : book.selectedId,
   };
 }

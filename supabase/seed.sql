@@ -87,3 +87,7 @@ insert into identity.users (id, role, name, phone) values ('00000000-0000-4000-8
 insert into identity.rider_profiles (user_id, vehicle, rating, warehouse_id) values ('00000000-0000-4000-8000-000000000012', 'Bike, UP 16 AB 7710', 4.6, 'wh-noida-62') on conflict (user_id) do nothing;
 insert into identity.users (id, role, name, phone) values ('00000000-0000-4000-8000-000000000013', 'rider', 'Imran Ali', '+919810000013') on conflict (id) do nothing;
 insert into identity.rider_profiles (user_id, vehicle, rating, warehouse_id) values ('00000000-0000-4000-8000-000000000013', 'Scooter, UP 14 CD 2231', 4.9, 'wh-noida-62') on conflict (user_id) do nothing;
+
+-- orders: sample coupons
+insert into orders.coupons (id, code, title, description, type, value, min_order_paise, usage_limit_per_user, first_order_only) values ('00000000-0000-4000-9000-000000000001', 'WELCOME50', '₹50 off your first order', 'On orders above ₹199', 'flat', 5000, 19900, 1, true) on conflict (id) do nothing;
+insert into orders.coupons (id, code, title, description, type, value, min_order_paise, usage_limit_per_user, first_order_only) values ('00000000-0000-4000-9000-000000000002', 'FREEDEL', 'Free delivery', 'On orders above ₹149', 'free_delivery', 0, 14900, 3, false) on conflict (id) do nothing;

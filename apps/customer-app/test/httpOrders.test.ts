@@ -28,6 +28,8 @@ const server = (over: Partial<ServerOrder> = {}): ServerOrder => ({
   deliveryFeePaise: 2900,
   handlingFeePaise: 500,
   tipPaise: 0,
+  discountPaise: 0,
+  couponCode: null,
   totalPaise: 9400,
   paymentMethod: "cod",
   promisedMins: 10,

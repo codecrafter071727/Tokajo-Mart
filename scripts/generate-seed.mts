@@ -115,6 +115,12 @@ for (const r of riders) {
   );
 }
 
+lines.push("", "-- orders: sample coupons");
+lines.push(
+  `insert into orders.coupons (id, code, title, description, type, value, min_order_paise, usage_limit_per_user, first_order_only) values ('00000000-0000-4000-9000-000000000001', 'WELCOME50', '₹50 off your first order', 'On orders above ₹199', 'flat', 5000, 19900, 1, true) on conflict (id) do nothing;`,
+  `insert into orders.coupons (id, code, title, description, type, value, min_order_paise, usage_limit_per_user, first_order_only) values ('00000000-0000-4000-9000-000000000002', 'FREEDEL', 'Free delivery', 'On orders above ₹149', 'free_delivery', 0, 14900, 3, false) on conflict (id) do nothing;`,
+);
+
 writeFileSync(
   path.resolve(import.meta.dirname, "..", "supabase", "seed.sql"),
   lines.join("\n") + "\n",

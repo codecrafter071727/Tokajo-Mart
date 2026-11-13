@@ -48,6 +48,7 @@ import { rupees } from "../../../lib/api";
 import { dateTime, minutesBetween, timeAgo, timeOnly } from "../../../lib/format";
 import { GwError, errorMessage } from "../../../lib/gw";
 import { ORDER_STATUS } from "../../../lib/order-status";
+import { DeliveryExtras } from "./delivery-extras";
 
 const FLOW: { status: OrderStatus; label: string }[] = [
   { status: "confirmed", label: "Placed" },
@@ -311,6 +312,7 @@ export function OrderDetail({ id }: { id: string }) {
                   : "No rider was assigned."}
               </p>
             )}
+            {o.rider ? <DeliveryExtras orderId={o.id} live={isActive(o.status)} /> : null}
           </Card>
 
           <PaymentCard

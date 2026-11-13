@@ -83,6 +83,7 @@ export function toRiderDelivery(row: Row): RiderDelivery {
     tipPaise: row.tipPaise,
     codPaise: row.codPaise,
     deliveredAt: row.deliveredAt ? row.deliveredAt.toISOString() : null,
+    podUploaded: Boolean(row.podKey),
   };
 }
 

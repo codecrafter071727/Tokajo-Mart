@@ -1,5 +1,7 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,12 +16,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, FontSize, Radius, Spacing } from "../../src/theme";
 import {
+  CURRENT_LOCATION_AREA,
   validateDraft,
   type AddressDraft,
   type AddressKind,
   type DraftErrors,
 } from "../../src/lib/addresses";
-import { SERVICE_AREAS, servedLocally } from "../../src/lib/serviceAreas";
+import { SERVICE_AREAS, coveringWarehouse, servedLocally } from "../../src/lib/serviceAreas";
+import { getCurrentPosition, LocationError } from "../../src/lib/location";
+import { api } from "../../src/lib/api";
 import { useAddressStore } from "../../src/store/addresses";
 import { ScreenHeader } from "../../src/components/ScreenHeader";
 
@@ -87,17 +92,52 @@ export default function EditAddressScreen() {
     line2: existing?.line2 ?? "",
     instructions: existing?.instructions ?? "",
     areaId: existing?.areaId ?? "noida-62",
+    lat: existing?.lat,
+    lng: existing?.lng,
   }));
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const pinned = draft.areaId === CURRENT_LOCATION_AREA && draft.lat != null && draft.lng != null;
+  const syncError = useAddressStore((s) => s.syncError);
+
+  // Whether we deliver to a pinned spot comes from the server; offline it mirrors the warehouses
+  const served = useQuery({
+    queryKey: ["inventory", "serviceability", draft.lat, draft.lng],
+    enabled: pinned,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      const lat = draft.lat as number;
+      const lng = draft.lng as number;
+      if (!api) return { serviceable: coveringWarehouse(lat, lng) !== null };
+      return api.inventory.serviceability({ lat, lng }, { signal });
+    },
+  });
+
+  const locateMe = async () => {
+    setLocating(true);
+    setLocationError(null);
+    try {
+      const p = await getCurrentPosition();
+      setDraft((d) => ({ ...d, areaId: CURRENT_LOCATION_AREA, lat: p.lat, lng: p.lng }));
+      setErrors((e) => ({ ...e, areaId: undefined }));
+    } catch (e) {
+      setLocationError(e instanceof LocationError ? e.message : "We could not find your location.");
+    } finally {
+      setLocating(false);
+    }
+  };
   const [errors, setErrors] = useState<DraftErrors>({});
   const set = <K extends keyof AddressDraft>(key: K, value: AddressDraft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
   };
 
+  const clearSyncError = useAddressStore((s) => s.clearSyncError);
   const save = () => {
     const found = validateDraft(draft);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
+    clearSyncError();
     if (existing) update(existing.id, draft);
     else add(draft);
     router.back();
@@ -147,7 +187,65 @@ export default function EditAddressScreen() {
           />
         ) : null}
 
-        <Text style={styles.section}>Area</Text>
+        <Text style={styles.section}>Location</Text>
+        <Pressable
+          style={[styles.locate, pinned && styles.locateActive]}
+          onPress={() => void locateMe()}
+          disabled={locating}
+          accessibilityRole="button"
+          accessibilityLabel="Use my current location"
+        >
+          {locating ? (
+            <ActivityIndicator size="small" color={Colors.brandText} />
+          ) : (
+            <Ionicons name="locate" size={18} color={Colors.brandText} />
+          )}
+          <View style={styles.locateText}>
+            <Text style={styles.locateTitle}>
+              {locating
+                ? "Finding you..."
+                : pinned
+                  ? "Pinned to your location"
+                  : "Use my current location"}
+            </Text>
+            <Text style={styles.locateSub}>
+              {pinned
+                ? `${(draft.lat as number).toFixed(5)}, ${(draft.lng as number).toFixed(5)}. Type the address below.`
+                : "So the rider finds the exact door"}
+            </Text>
+          </View>
+          {pinned ? <Ionicons name="checkmark-circle" size={18} color={Colors.brandText} /> : null}
+        </Pressable>
+        {pinned ? (
+          <View
+            style={[
+              styles.pill,
+              served.data?.serviceable === false ? styles.pillNo : styles.pillOk,
+            ]}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                served.data?.serviceable === false ? styles.pillTextNo : styles.pillTextOk,
+              ]}
+            >
+              {served.isLoading
+                ? "Checking delivery..."
+                : served.data?.serviceable === false
+                  ? "We do not deliver here yet"
+                  : served.isError
+                    ? "Could not check delivery right now"
+                    : "We deliver here"}
+            </Text>
+          </View>
+        ) : null}
+        {locationError ? (
+          <Text style={styles.error} accessibilityRole="alert">
+            {locationError}
+          </Text>
+        ) : null}
+
+        <Text style={styles.section}>{pinned ? "Or pick an area" : "Area"}</Text>
         <View style={styles.areas}>
           {SERVICE_AREAS.map((area) => {
             const active = draft.areaId === area.id;
@@ -156,7 +254,10 @@ export default function EditAddressScreen() {
               <Pressable
                 key={area.id}
                 style={[styles.area, active && styles.areaActive]}
-                onPress={() => set("areaId", area.id)}
+                onPress={() => {
+                  setDraft((d) => ({ ...d, areaId: area.id, lat: undefined, lng: undefined }));
+                  setErrors((e) => ({ ...e, areaId: undefined }));
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={`${area.name}, ${area.city}. ${served ? "We deliver here" : "Not served yet"}`}
@@ -213,6 +314,11 @@ export default function EditAddressScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing[12] }]}>
+        {syncError ? (
+          <Text style={[styles.error, styles.footerError]} accessibilityRole="alert">
+            {syncError}
+          </Text>
+        ) : null}
         <Pressable style={styles.save} onPress={save} accessibilityRole="button">
           <Text style={styles.saveText}>{existing ? "Save changes" : "Save address"}</Text>
         </Pressable>
@@ -252,6 +358,22 @@ const styles = StyleSheet.create({
   kindText: { fontSize: FontSize.caption, fontWeight: "700", color: Colors.textSecondary },
   kindTextActive: { color: Colors.brandPressed },
   areas: { flexDirection: "row", flexWrap: "wrap", gap: Spacing[8] },
+  locate: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[12],
+    minHeight: 56,
+    paddingHorizontal: Spacing[12],
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  locateActive: { borderColor: Colors.brandGreen, backgroundColor: Colors.greenTint },
+  locateText: { flex: 1, gap: 2 },
+  locateTitle: { fontSize: FontSize.body, fontWeight: "700", color: Colors.brandText },
+  locateSub: { fontSize: FontSize.caption, color: Colors.textSecondary },
+  footerError: { marginBottom: Spacing[8] },
   area: {
     flexBasis: "48%",
     flexGrow: 1,

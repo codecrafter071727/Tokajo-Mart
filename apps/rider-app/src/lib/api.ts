@@ -99,3 +99,52 @@ export function toDeliveryError(error: unknown): unknown {
   const reason = known.find((r) => r === error.reason);
   return reason ? new DeliveryError(reason, error.message) : error;
 }
+
+/**
+ * Sends a JSON body and reports upload progress (0 to 1). fetch cannot report progress, so this
+ * uses XMLHttpRequest. A 401 refreshes the session once and tries again.
+ */
+export async function authedUpload<T>(
+  path: string,
+  body: unknown,
+  onProgress: (fraction: number) => void,
+): Promise<T> {
+  const payload = JSON.stringify(body);
+  const attempt = () =>
+    new Promise<{ status: number; text: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_URL}${path}`);
+      xhr.setRequestHeader("content-type", "application/json");
+      xhr.setRequestHeader("accept", "application/json");
+      const token = useSession.getState().accessToken;
+      if (token) xhr.setRequestHeader("authorization", `Bearer ${token}`);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && e.total > 0) onProgress(Math.min(1, e.loaded / e.total));
+      };
+      xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText });
+      xhr.onerror = () =>
+        reject(new ApiError("Cannot reach the server. Check your connection.", 0, "NETWORK"));
+      xhr.ontimeout = () => reject(new ApiError("The upload took too long.", 0, "NETWORK"));
+      xhr.timeout = 60_000;
+      xhr.send(payload);
+    });
+
+  let res = await attempt();
+  if (res.status === 401 && (await refresh())) res = await attempt();
+  let parsed: (ErrorBody & T) | null;
+  try {
+    parsed = JSON.parse(res.text) as ErrorBody & T;
+  } catch {
+    parsed = null;
+  }
+  if (res.status < 200 || res.status >= 300) {
+    if (res.status === 401) useSession.getState().signOut();
+    throw new ApiError(
+      parsed?.error?.message ?? `Upload failed (${res.status}).`,
+      res.status,
+      parsed?.error?.details?.reason ?? parsed?.error?.code,
+    );
+  }
+  onProgress(1);
+  return parsed as T;
+}

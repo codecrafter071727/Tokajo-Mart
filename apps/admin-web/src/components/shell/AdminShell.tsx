@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronsUpDown,
   CreditCard,
+  Percent,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -47,7 +48,10 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Money",
-    items: [{ href: "/payments", label: "Payments", icon: CreditCard }],
+    items: [
+      { href: "/payments", label: "Payments", icon: CreditCard },
+      { href: "/promotions", label: "Promotions", icon: Percent },
+    ],
   },
   {
     label: "Storefront",

@@ -47,6 +47,8 @@ export type Delivery = {
   deliveryCode?: string;
   /** ISO time the delivery was completed, set when status becomes "delivered" */
   deliveredAt: string | null;
+  /** True once a door photo has been uploaded */
+  podUploaded?: boolean;
 };
 
 export type Action =

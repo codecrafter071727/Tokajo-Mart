@@ -59,6 +59,8 @@ export type PlaceOrderInput = {
   promisedMins: number;
   /** Where to deliver, sent to the order service so it can pick the serving warehouse */
   location?: { lat: number; lng: number; instructions?: string | null };
+  /** A coupon the customer applied. Only the code is sent; the server works out the discount. */
+  couponCode?: string;
 };
 
 export class OrderError extends Error {

@@ -21,6 +21,7 @@ export function createHttpOrderRepository(): OrderRepository {
             instructions: input.location?.instructions ?? null,
           },
           payment: input.payment,
+          ...(input.couponCode ? { couponCode: input.couponCode } : {}),
         },
       });
       return fromServer(order);

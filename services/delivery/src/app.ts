@@ -8,13 +8,18 @@ import {
 } from "@qc/service-kit";
 import { env } from "./config/env";
 import type { DB } from "./db/types.generated";
+import { createLocalPodStorage, type PodStorage } from "./modules/delivery/pod-storage";
 import { registerDeliveryRoutes } from "./modules/delivery/routes";
+import { TrackingService } from "./modules/delivery/tracking";
+import { registerTrackingRoutes } from "./modules/delivery/tracking-routes";
 import { DeliveryService } from "./modules/delivery/service";
 
 export type BuildAppOptions = {
   db?: Kysely<DB>;
   clients?: { order: InternalClient; identity: InternalClient };
   now?: () => Date;
+  /** Door photo storage. Null turns uploads off. */
+  podStorage?: PodStorage | null;
 };
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -48,5 +53,15 @@ export async function buildApp(options: BuildAppOptions = {}) {
     }),
   };
   registerDeliveryRoutes(app, new DeliveryService(db, clients, options.now));
+
+  // Production must name its storage: a container's own disk is wiped on every deploy
+  const podDir = env.POD_STORAGE_DIR ?? (env.NODE_ENV === "production" ? undefined : ".data/pod");
+  const podStorage =
+    options.podStorage !== undefined
+      ? options.podStorage
+      : podDir
+        ? createLocalPodStorage(podDir)
+        : null;
+  registerTrackingRoutes(app, new TrackingService(db, clients.order, podStorage, options.now));
   return app;
 }

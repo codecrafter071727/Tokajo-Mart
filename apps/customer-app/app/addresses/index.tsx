@@ -1,5 +1,15 @@
-import React from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,6 +38,16 @@ export default function AddressesScreen() {
   const selectedId = useAddressStore((s) => s.selectedId);
   const select = useAddressStore((s) => s.select);
   const remove = useAddressStore((s) => s.remove);
+  const refresh = useAddressStore((s) => s.refresh);
+  const syncing = useAddressStore((s) => s.syncing);
+  const syncError = useAddressStore((s) => s.syncError);
+  const clearSyncError = useAddressStore((s) => s.clearSyncError);
+  const [pulling, setPulling] = React.useState(false);
+
+  // Pick up changes made on another device
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -36,7 +56,33 @@ export default function AddressesScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={pulling}
+            onRefresh={() => {
+              setPulling(true);
+              void refresh().finally(() => setPulling(false));
+            }}
+          />
+        }
       >
+        {syncing ? (
+          <View style={styles.notice}>
+            <ActivityIndicator size="small" color={Colors.brandText} />
+            <Text style={styles.noticeText}>Loading your saved addresses...</Text>
+          </View>
+        ) : null}
+        {syncError ? (
+          <Pressable
+            style={[styles.notice, styles.noticeError]}
+            onPress={clearSyncError}
+            accessibilityRole="alert"
+            accessibilityLabel={`${syncError}. Tap to dismiss`}
+          >
+            <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+            <Text style={[styles.noticeText, styles.noticeErrorText]}>{syncError}</Text>
+          </Pressable>
+        ) : null}
         {addresses.map((a) => {
           const active = a.id === selectedId;
           const { line1, line2 } = addressSummary(a);
@@ -111,6 +157,22 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   title: { fontSize: FontSize.h2, fontWeight: "700", color: Colors.textPrimary },
   content: { padding: Spacing[16], gap: Spacing[12] },
+  notice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[8],
+    padding: Spacing[12],
+    borderRadius: Radius.md,
+    backgroundColor: Colors.greenTint,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: FontSize.caption,
+    fontWeight: "600",
+    color: Colors.textSecondary,
+  },
+  noticeError: { backgroundColor: "#FDF1F1" },
+  noticeErrorText: { color: Colors.danger },
   card: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.lg,

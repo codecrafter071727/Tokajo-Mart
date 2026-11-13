@@ -11,6 +11,9 @@ const gateway = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "");
 
 export const backendEnabled = Boolean(gateway);
 
+/** The gateway address, for the few calls that cannot go through apiFetch (images with a token). */
+export const gatewayBase = gateway ?? "";
+
 const TIMEOUT_MS = 10_000;
 
 async function send(
@@ -69,7 +72,7 @@ async function refreshSession(): Promise<boolean> {
 
 /** Calls the gateway as the signed in user. On a 401 it refreshes the session once and retries. */
 export async function apiFetch<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   options: { body?: unknown; headers?: Record<string, string>; auth?: boolean } = {},
 ): Promise<T> {
