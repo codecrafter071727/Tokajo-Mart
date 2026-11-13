@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { Product, StockRow } from "@qc/contracts";
+import type { ExpiringBatch, Product, StockRow } from "@qc/contracts";
 import {
   Badge,
   Button,
@@ -24,7 +24,34 @@ import { useWarehouse } from "../../../lib/providers";
 const LOW_STOCK = 5;
 
 type Row = { stock: StockRow; product: Product | undefined };
-type Filter = "all" | "low" | "out";
+type Filter = "all" | "low" | "out" | "expiring";
+
+/** How far ahead "expiring soon" looks, in days. */
+const EXPIRY_DAYS = 7;
+
+function useExpiring() {
+  const { scope, warehouseId } = useWarehouse();
+  return useQuery({
+    queryKey: ["expiring", warehouseId],
+    queryFn: () =>
+      api<{ items: ExpiringBatch[] }>(
+        `/v1/inventory/expiring?days=${EXPIRY_DAYS}${scope ? `&${scope}` : ""}`,
+      ).then((r) => r.items),
+    refetchInterval: 60_000,
+  });
+}
+
+const expiryText = (daysLeft: number) =>
+  daysLeft < 0
+    ? `Expired ${-daysLeft} day${daysLeft === -1 ? "" : "s"} ago`
+    : daysLeft === 0
+      ? "Expires today"
+      : daysLeft === 1
+        ? "Expires tomorrow"
+        : `Expires in ${daysLeft} days`;
+
+/** Today in India as YYYY-MM-DD, the earliest expiry date a new batch can have. */
+const todayIst = () => new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
 
 const level = (s: StockRow): "out" | "low" | "ok" =>
   s.available === 0 ? "out" : s.available <= LOW_STOCK ? "low" : "ok";
@@ -62,7 +89,8 @@ function ReceiveDialog({
 }) {
   const { warehouseId, me } = useWarehouse();
   const queryClient = useQueryClient();
-  const [lines, setLines] = useState([{ productId: "", quantity: "" }]);
+  const blank = { productId: "", quantity: "", expiresOn: "", batchCode: "" };
+  const [lines, setLines] = useState([blank]);
   const [reference, setReference] = useState("");
   const receive = useMutation({
     mutationFn: () =>
@@ -73,14 +101,20 @@ function ReceiveDialog({
           reference: reference.trim() || undefined,
           items: lines
             .filter((l) => l.productId && Number(l.quantity) > 0)
-            .map((l) => ({ productId: l.productId, quantity: Number(l.quantity) })),
+            .map((l) => ({
+              productId: l.productId,
+              quantity: Number(l.quantity),
+              ...(l.expiresOn ? { expiresOn: l.expiresOn } : {}),
+              ...(l.batchCode.trim() ? { batchCode: l.batchCode.trim() } : {}),
+            })),
         },
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["stock"] });
+      void queryClient.invalidateQueries({ queryKey: ["expiring"] });
       const n = lines.filter((l) => l.productId && Number(l.quantity) > 0).length;
       onSaved(`Stock received for ${n === 1 ? "1 product" : `${n} products`}.`);
-      setLines([{ productId: "", quantity: "" }]);
+      setLines([blank]);
       setReference("");
       onClose();
     },
@@ -108,6 +142,9 @@ function ReceiveDialog({
       }
     >
       {receive.error ? <ErrorBanner>{receive.error.message}</ErrorBanner> : null}
+      <p className="mb-4 text-sm text-ink-500">
+        Add the expiry date for anything perishable so it is flagged before it goes bad.
+      </p>
       <label className="mb-4 block text-sm font-bold text-ink-700">
         Supplier invoice or GRN number (optional)
         <input
@@ -153,6 +190,31 @@ function ReceiveDialog({
                 placeholder="0"
               />
             </label>
+            <label className="w-40 text-sm font-bold text-ink-700">
+              Expiry (optional)
+              <input
+                type="date"
+                min={todayIst()}
+                value={line.expiresOn}
+                onChange={(e) =>
+                  setLines(lines.map((l, j) => (j === i ? { ...l, expiresOn: e.target.value } : l)))
+                }
+                className={`${inputClass} mt-1`}
+                aria-label="Expiry or best before date"
+              />
+            </label>
+            <label className="hidden w-28 text-sm font-bold text-ink-700 lg:block">
+              Batch
+              <input
+                value={line.batchCode}
+                maxLength={60}
+                onChange={(e) =>
+                  setLines(lines.map((l, j) => (j === i ? { ...l, batchCode: e.target.value } : l)))
+                }
+                className={`${inputClass} mt-1`}
+                placeholder="LOT-12"
+              />
+            </label>
             <Button
               variant="ghost"
               aria-label="Remove line"
@@ -168,7 +230,7 @@ function ReceiveDialog({
         variant="secondary"
         size="sm"
         className="mt-4"
-        onClick={() => setLines([...lines, { productId: "", quantity: "" }])}
+        onClick={() => setLines([...lines, blank])}
       >
         <Icon name="plus" size={16} />
         Add another product
@@ -389,6 +451,7 @@ function AdjustDialog({
 
 export default function InventoryPage() {
   const { data, error, isLoading } = useStock();
+  const expiring = useExpiring();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [receiving, setReceiving] = useState(false);
@@ -405,11 +468,13 @@ export default function InventoryPage() {
     all: rows.length,
     low: rows.filter((r) => level(r.stock) === "low").length,
     out: rows.filter((r) => level(r.stock) === "out").length,
+    expiring: expiring.data?.length ?? 0,
   };
+  const productById = new Map(rows.map((r) => [r.stock.productId, r]));
   const needle = q.trim().toLowerCase();
   const order = { out: 0, low: 1, ok: 2 } as const;
   const shown = rows
-    .filter((r) => filter === "all" || level(r.stock) === filter)
+    .filter((r) => filter === "all" || filter === "expiring" || level(r.stock) === filter)
     .filter(
       (r) =>
         !needle ||
@@ -426,6 +491,7 @@ export default function InventoryPage() {
     { value: "all", label: "All" },
     { value: "low", label: "Low" },
     { value: "out", label: "Out" },
+    { value: "expiring", label: "Expiring" },
   ];
 
   return (
@@ -475,7 +541,8 @@ export default function InventoryPage() {
                 className={`rounded-full px-2 text-xs tabular-nums ${
                   filter === f.value
                     ? "bg-white/20"
-                    : f.value === "out" && counts.out > 0
+                    : (f.value === "out" && counts.out > 0) ||
+                        (f.value === "expiring" && counts.expiring > 0)
                       ? "bg-red-100 text-red-800"
                       : f.value === "low" && counts.low > 0
                         ? "bg-amber-100 text-amber-900"
@@ -489,7 +556,79 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {filter === "expiring" ? (
+        expiring.isLoading ? (
+          <Skeleton className="h-64" />
+        ) : (expiring.data ?? []).length === 0 ? (
+          <Empty icon="check" title="Nothing expiring this week">
+            Batches received with an expiry date show here {EXPIRY_DAYS} days before their date.
+          </Empty>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-line bg-white shadow-card">
+            <table className="w-full">
+              <thead className="border-b border-line bg-surface/60">
+                <tr>
+                  <th className={th}>Product</th>
+                  <th className={th}>Batch</th>
+                  <th className={th}>Expiry</th>
+                  <th className={`${th} text-right`}>In batch</th>
+                  <th className={`${th} text-right`}>On hand</th>
+                  <th className={th}>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {(expiring.data ?? []).map((b) => {
+                  const r = productById.get(b.productId);
+                  const gone = b.daysLeft < 0;
+                  return (
+                    <tr key={b.id} className={gone ? "bg-red-50/60" : "hover:bg-brand-50/40"}>
+                      <td className={td}>
+                        <span className="flex items-center gap-3">
+                          <Thumb
+                            imageUrl={r?.product?.imageUrl}
+                            emoji={r?.product?.emoji ?? "?"}
+                            size={44}
+                          />
+                          <span className="block font-bold leading-5">
+                            {r?.product?.name ?? b.productId}
+                          </span>
+                        </span>
+                      </td>
+                      <td className={`${td} font-mono text-sm text-ink-700`}>
+                        {b.batchCode ?? <span className="text-ink-500">None</span>}
+                      </td>
+                      <td className={td}>
+                        <Badge tone={gone || b.daysLeft <= 1 ? "red" : "amber"} dot>
+                          {expiryText(b.daysLeft)}
+                        </Badge>
+                        <span className="ml-2 text-sm tabular-nums text-ink-500">
+                          {b.expiresOn}
+                        </span>
+                      </td>
+                      <td className={`${td} text-right tabular-nums`}>{b.quantity}</td>
+                      <td className={`${td} text-right font-extrabold tabular-nums`}>{b.onHand}</td>
+                      <td className={`${td} text-right`}>
+                        {r ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setEditing(r)}
+                            aria-label={`Write off ${r.product?.name ?? b.productId}`}
+                          >
+                            Write off
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : isLoading ? (
         <Skeleton className="h-96" />
       ) : shown.length === 0 ? (
         <Empty icon="search" title="No products match">

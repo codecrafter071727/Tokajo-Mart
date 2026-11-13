@@ -1,4 +1,15 @@
 import {
+  addProductImageBodySchema,
+  adminProductDetailSchema,
+  catalogImportQuerySchema,
+  catalogImportResultSchema,
+  createProductGroupBodySchema,
+  listProductGroupsResponseSchema,
+  listProductImagesResponseSchema,
+  productDetailSchema,
+  productGroupSchema,
+  productImageParamsSchema,
+  reorderProductImagesBodySchema,
   bannerParamsSchema,
   bannerSchema,
   categoryParamsSchema,
@@ -6,7 +17,6 @@ import {
   createBannerBodySchema,
   createCategoryBodySchema,
   createProductBodySchema,
-  adminProductSchema,
   listAdminProductsResponseSchema,
   listBannersResponseSchema,
   listCategoriesResponseSchema,
@@ -21,7 +31,12 @@ import {
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 import { requireRole, type ServiceApp } from "@qc/service-kit";
+import { parseImportCsv, productsToCsv } from "./depth";
+import { CatalogError } from "./errors";
 import type { CatalogRepository } from "./repository";
+
+/** Largest CSV the import accepts */
+const MAX_IMPORT_BYTES = 1024 * 1024;
 
 function decodeCursor(cursor: string | undefined): number | null {
   if (cursor === undefined) return 0;
@@ -80,16 +95,17 @@ export function registerCatalogRoutes(app: ServiceApp, repository: CatalogReposi
     {
       schema: {
         tags: ["catalog"],
-        summary: "Get one product",
+        summary: "Get one product with its variants and photos",
         params: productParamsSchema,
-        response: { 200: productSchema },
+        response: { 200: productDetailSchema },
       },
     },
     async (request) => {
-      const product = await repository.getProduct(request.params.id);
-      if (!product) {
+      const detail = await repository.getProductDetail(request.params.id);
+      if (!detail) {
         throw app.httpErrors.notFound("Product not found.");
       }
+      const { archived: _archived, ...product } = detail;
       return product;
     },
   );
@@ -158,14 +174,14 @@ export function registerCatalogRoutes(app: ServiceApp, repository: CatalogReposi
       preValidation: adminOnly,
       schema: {
         tags: ["admin"],
-        summary: "One product, archived or not (admin)",
+        summary: "One product, archived or not, with its variants and photos (admin)",
         params: productParamsSchema,
-        response: { 200: adminProductSchema },
+        response: { 200: adminProductDetailSchema },
       },
     },
     async (request) => {
       requireRole(request, "admin");
-      const product = await repository.getAdminProduct(request.params.id);
+      const product = await repository.getProductDetail(request.params.id, true);
       if (!product) throw app.httpErrors.notFound("Product not found.");
       return product;
     },
@@ -224,6 +240,191 @@ export function registerCatalogRoutes(app: ServiceApp, repository: CatalogReposi
       const product = await repository.restoreProduct(request.params.id);
       if (!product) throw app.httpErrors.notFound("Archived product not found.");
       return product;
+    },
+  );
+
+  // --- Admin: product groups (variants) -----------------------------------------------------
+  app.get(
+    "/v1/catalog/admin/product-groups",
+    {
+      preValidation: adminOnly,
+      schema: {
+        tags: ["admin"],
+        summary: "Product groups that hold variants (admin)",
+        response: { 200: listProductGroupsResponseSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      return { items: await repository.listProductGroups() };
+    },
+  );
+
+  app.post(
+    "/v1/catalog/admin/product-groups",
+    {
+      preValidation: adminOnly,
+      schema: {
+        tags: ["admin"],
+        summary: "Make a product group, then give products its id and a variant label (admin)",
+        body: createProductGroupBodySchema,
+        response: { 201: productGroupSchema },
+      },
+    },
+    async (request, reply) => {
+      requireRole(request, "admin");
+      return reply.status(201).send(await repository.createProductGroup(request.body));
+    },
+  );
+
+  // --- Admin: product photos -----------------------------------------------------------------
+  app.post(
+    "/v1/catalog/admin/products/:id/images",
+    {
+      preValidation: adminOnly,
+      schema: {
+        tags: ["admin"],
+        summary: "Add a photo after the others (admin)",
+        params: productParamsSchema,
+        body: addProductImageBodySchema,
+        response: { 201: listProductImagesResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      requireRole(request, "admin");
+      const items = await repository.addProductImage(request.params.id, request.body);
+      if (!items) throw app.httpErrors.notFound("Product not found.");
+      return reply.status(201).send({ items });
+    },
+  );
+
+  app.put(
+    "/v1/catalog/admin/products/:id/images/order",
+    {
+      preValidation: adminOnly,
+      schema: {
+        tags: ["admin"],
+        summary: "Set the order of the extra photos (admin)",
+        params: productParamsSchema,
+        body: reorderProductImagesBodySchema,
+        response: { 200: listProductImagesResponseSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      const items = await repository.reorderProductImages(request.params.id, request.body.ids);
+      if (!items) throw app.httpErrors.notFound("Product not found.");
+      return { items };
+    },
+  );
+
+  app.post(
+    "/v1/catalog/admin/products/:id/images/:imageId/primary",
+    {
+      preValidation: adminOnly,
+      schema: {
+        tags: ["admin"],
+        summary: "Make a photo the main one (admin)",
+        params: productImageParamsSchema,
+        response: { 200: listProductImagesResponseSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      const items = await repository.makePrimaryImage(request.params.id, request.params.imageId);
+      if (!items) throw app.httpErrors.notFound("Photo not found.");
+      return { items };
+    },
+  );
+
+  app.delete(
+    "/v1/catalog/admin/products/:id/images/:imageId",
+    {
+      preValidation: adminOnly,
+      schema: {
+        tags: ["admin"],
+        summary: "Remove an extra photo (admin)",
+        params: productImageParamsSchema,
+        response: { 200: z.object({ id: z.string(), deleted: z.literal(true) }) },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      if (!(await repository.removeProductImage(request.params.id, request.params.imageId))) {
+        throw app.httpErrors.notFound("Photo not found.");
+      }
+      return { id: request.params.imageId, deleted: true as const };
+    },
+  );
+
+  // --- Admin: CSV import and export ----------------------------------------------------------
+  app.addContentTypeParser(
+    "text/csv",
+    { parseAs: "string", bodyLimit: MAX_IMPORT_BYTES },
+    (_request, body, done) => done(null, body),
+  );
+
+  app.post(
+    "/v1/catalog/admin/import",
+    {
+      preValidation: adminOnly,
+      bodyLimit: MAX_IMPORT_BYTES,
+      schema: {
+        tags: ["admin"],
+        summary: "Import products from CSV, all or nothing. ?dryRun=true only checks (admin)",
+        querystring: catalogImportQuerySchema,
+        response: { 200: catalogImportResultSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      if (typeof request.body !== "string") {
+        throw new CatalogError(400, "Send the file as text/csv.");
+      }
+      const { rows, errors: fileErrors } = parseImportCsv(request.body);
+      const dryRun = request.query.dryRun;
+      if (dryRun) {
+        const plan = await repository.planImport(rows);
+        const errors = [...fileErrors, ...plan.errors].sort((a, b) => a.line - b.line);
+        return {
+          dryRun: true,
+          ok: errors.length === 0,
+          rows: rows.length + new Set(fileErrors.filter((e) => e.line > 1).map((e) => e.line)).size,
+          creates: plan.creates,
+          updates: plan.updates,
+          groupsCreated: plan.groupsCreated,
+          errors,
+        };
+      }
+      if (fileErrors.length > 0) {
+        throw new CatalogError(400, "The file has problems. Nothing was imported.", fileErrors);
+      }
+      const plan = await repository.applyImport(rows);
+      return {
+        dryRun: false,
+        ok: true,
+        rows: rows.length,
+        creates: plan.creates,
+        updates: plan.updates,
+        groupsCreated: plan.groupsCreated,
+        errors: [],
+      };
+    },
+  );
+
+  app.get(
+    "/v1/catalog/admin/export",
+    {
+      preValidation: adminOnly,
+      schema: { tags: ["admin"], summary: "Every product on sale as CSV (admin)" },
+    },
+    async (request, reply) => {
+      requireRole(request, "admin");
+      const csv = productsToCsv(await repository.exportProducts());
+      return reply
+        .type("text/csv; charset=utf-8")
+        .header("content-disposition", 'attachment; filename="catalog.csv"')
+        .send(csv);
     },
   );
 

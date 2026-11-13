@@ -84,7 +84,7 @@ export const seedCategories: Category[] = [
   },
 ];
 
-export const seedProducts: Product[] = [
+const baseProducts: Product[] = [
   {
     id: "p1",
     name: "Fresho Banana - Robusta",
@@ -406,6 +406,105 @@ export const seedProducts: Product[] = [
     description: null,
   },
 ];
+
+/** Brands, tags and variant groups for the seed products, so search and variants have real data. */
+const DEPTH: Record<string, Partial<Product>> = {
+  p1: { brand: "Fresho", tags: ["fruit", "banana"] },
+  p2: { tags: ["vegetable", "tomato"] },
+  p3: { tags: ["vegetable", "pyaz"] },
+  p4: { tags: ["vegetable", "shimla mirch"] },
+  p5: { brand: "Amul", tags: ["milk", "toned"], groupId: "g-amul-taaza", variantLabel: "500 ml" },
+  p6: { brand: "Amul", tags: ["butter", "makhan"] },
+  p7: { brand: "Amul", tags: ["paneer", "cottage cheese", "protein"] },
+  p8: { brand: "Mother Dairy", tags: ["curd", "dahi"] },
+  p9: { brand: "Lay's", tags: ["chips", "crisps"] },
+  p10: { brand: "Haldiram's", tags: ["namkeen", "bhujia"] },
+  p11: { brand: "Bingo", tags: ["chips", "masala"] },
+  p12: { brand: "Kurkure", tags: ["namkeen", "masala"] },
+  p13: {
+    brand: "Coca-Cola",
+    tags: ["cola", "soft drink"],
+    groupId: "g-coca-cola",
+    variantLabel: "750 ml",
+  },
+  p14: { brand: "Paper Boat", tags: ["coconut water", "nariyal pani"] },
+  p15: { brand: "Red Bull", tags: ["energy drink"] },
+  p16: { brand: "Sprite", tags: ["lemon", "soft drink"] },
+  p17: { brand: "Britannia", tags: ["cookies", "biscuits"] },
+  p18: { brand: "Modern", tags: ["bread", "atta"] },
+  p19: { brand: "Sunfeast", tags: ["cookies", "chocolate"] },
+  p20: { brand: "Parle", tags: ["biscuits", "glucose"] },
+};
+
+/** Bigger packs that sit in the same groups as p5 and p13. */
+const variantProducts: Product[] = [
+  {
+    id: "p21",
+    name: "Amul Taaza Toned Fresh Milk",
+    unit: "1 L",
+    pricePaise: 5600,
+    mrpPaise: 5800,
+    discountPercent: 3,
+    categoryId: "dairy",
+    emoji: "🥛",
+    imageUrl: null,
+    imageFit: "contain",
+    deliveryMins: 10,
+    optionsCount: null,
+    description: null,
+    brand: "Amul",
+    tags: ["milk", "toned"],
+    groupId: "g-amul-taaza",
+    variantLabel: "1 L",
+  },
+  {
+    id: "p22",
+    name: "Coca-Cola Soft Drink",
+    unit: "2.25 L",
+    pricePaise: 9500,
+    mrpPaise: 10000,
+    discountPercent: 5,
+    categoryId: "beverages",
+    emoji: "🥤",
+    imageUrl: null,
+    imageFit: "contain",
+    deliveryMins: 10,
+    optionsCount: null,
+    description: null,
+    brand: "Coca-Cola",
+    tags: ["cola", "soft drink"],
+    groupId: "g-coca-cola",
+    variantLabel: "2.25 L",
+  },
+];
+
+export const seedProductGroups = [
+  { id: "g-amul-taaza", name: "Amul Taaza Toned Fresh Milk", categoryId: "dairy", brand: "Amul" },
+  { id: "g-coca-cola", name: "Coca-Cola Soft Drink", categoryId: "beverages", brand: "Coca-Cola" },
+];
+
+const withDepth = (p: Product): Product => ({
+  brand: null,
+  tags: [],
+  groupId: null,
+  variantLabel: null,
+  ...p,
+  ...DEPTH[p.id],
+});
+
+export const seedProducts: Product[] = [...baseProducts, ...variantProducts].map(withDepth);
+
+const imageOf = (id: string) => baseProducts.find((p) => p.id === id)?.imageUrl ?? null;
+const categoryImage = (id: string) => seedCategories.find((c) => c.id === id)?.imageUrl ?? null;
+
+/** Second photos for a few products, so the product page gallery has something to show. */
+export const seedProductImages = [
+  { productId: "p1", url: categoryImage("fruits"), alt: "Fresh fruit counter" },
+  { productId: "p7", url: categoryImage("dairy"), alt: "Dairy shelf" },
+  { productId: "p13", url: categoryImage("beverages"), alt: "Cold drinks" },
+  { productId: "p21", url: imageOf("p5"), alt: "Amul Taaza pack" },
+  { productId: "p22", url: imageOf("p13"), alt: "Coca-Cola bottle" },
+].filter((i): i is { productId: string; url: string; alt: string } => i.url !== null);
 
 export const seedBanners: Banner[] = [
   {

@@ -13,6 +13,12 @@ suite("Postgres catalog repository", () => {
   afterAll(async () => {
     // The contract tests archive what they create. Remove it for good so runs stay repeatable.
     await db.deleteFrom("catalog.products").where("id", "like", "p-%").execute();
+    await db
+      .deleteFrom("catalog.productGroups")
+      .where("id", "not in", ["g-amul-taaza", "g-coca-cola"])
+      .execute();
+    // Sub categories first, then their parents
+    await db.deleteFrom("catalog.categories").where("parentId", "like", "test-cat-%").execute();
     await db.deleteFrom("catalog.categories").where("id", "like", "test-cat-%").execute();
     await db.deleteFrom("catalog.categories").where("id", "like", "edit-cat-%").execute();
     await db.deleteFrom("catalog.categories").where("id", "like", "full-cat-%").execute();

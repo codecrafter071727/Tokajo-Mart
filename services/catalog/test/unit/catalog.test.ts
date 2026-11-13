@@ -8,6 +8,7 @@ import {
 } from "@qc/contracts";
 import { DEV_INTERNAL_KEY, signIdentityHeaders } from "@qc/service-kit";
 import { buildApp } from "../../src/app";
+import { seedProducts } from "../../src/modules/catalog";
 
 const app = await buildApp();
 
@@ -48,7 +49,7 @@ describe("GET /v1/catalog/products", () => {
     const res = await get("/v1/catalog/products?limit=100");
     expect(res.statusCode).toBe(200);
     const body = listProductsResponseSchema.parse(res.json());
-    expect(body.items).toHaveLength(20);
+    expect(body.items).toHaveLength(seedProducts.length);
     expect(body.nextCursor).toBeNull();
     expect(body.items.every((p) => Number.isInteger(p.pricePaise))).toBe(true);
   });
@@ -374,6 +375,155 @@ describe("banners", () => {
           title: "x",
         })
       ).statusCode,
+    ).toBe(404);
+  });
+});
+
+describe("catalog depth over HTTP", () => {
+  const csv = (body: string, query = "", headers: Record<string, string> = admin) =>
+    app.inject({
+      method: "POST",
+      url: `/v1/catalog/admin/import${query}`,
+      payload: body,
+      headers: { ...headers, "content-type": "text/csv" },
+    });
+  const header =
+    "id,name,unit,price,mrp,category,brand,tags,image_url,variant_group,variant_label,description";
+
+  it("returns variants, photos and the group on the public product page", async () => {
+    const res = await get("/v1/catalog/products/p13");
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.variants.map((v: { id: string }) => v.id)).toEqual(["p13", "p22"]);
+    expect(body.group).toEqual({ id: "g-coca-cola", name: "Coca-Cola Soft Drink" });
+    expect(body.images[0]).toMatchObject({ primary: true });
+    expect(body).not.toHaveProperty("archived");
+    expect(productSchema.parse(body).id).toBe("p13");
+  });
+
+  it("sends parentId on categories", async () => {
+    const body = listCategoriesResponseSchema.parse((await get("/v1/catalog/categories")).json());
+    expect(body.items.every((c) => c.parentId === null)).toBe(true);
+  });
+
+  it("keeps groups, photos, import and export for admins only", async () => {
+    for (const headers of [customer, {}]) {
+      expect(
+        (await get("/v1/catalog/admin/product-groups", headers)).statusCode,
+      ).toBeGreaterThanOrEqual(401);
+      expect((await get("/v1/catalog/admin/export", headers)).statusCode).toBeGreaterThanOrEqual(
+        401,
+      );
+      expect((await csv(header, "?dryRun=true", headers)).statusCode).toBeGreaterThanOrEqual(401);
+      expect(
+        (
+          await send(
+            "POST",
+            "/v1/catalog/admin/products/p1/images",
+            { url: "https://x.com/a.jpg" },
+            headers,
+          )
+        ).statusCode,
+      ).toBeGreaterThanOrEqual(401);
+    }
+  });
+
+  it("checks a CSV in a dry run, reports row errors, and changes nothing", async () => {
+    const res = await csv(
+      [
+        header,
+        ",Dry Run Snack,50 g,20,25,snacks,,,,,,",
+        ",Bad Price,50 g,abc,25,snacks,,,,,,",
+        ",Expensive,50 g,30,25,snacks,,,,,,",
+        ",Lost,50 g,10,12,nowhere,,,,,,",
+      ].join("\n"),
+      "?dryRun=true",
+    );
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ dryRun: true, ok: false, rows: 4, creates: 1, updates: 0 });
+    expect(body.errors.map((e: { line: number; column: string }) => [e.line, e.column])).toEqual([
+      [3, "price"],
+      [4, "price"],
+      [5, "category"],
+    ]);
+    const after = await get("/v1/catalog/products?q=dry%20run%20snack");
+    expect(after.json().items).toEqual([]);
+  });
+
+  it("refuses a file with errors when applying, and applies a clean one", async () => {
+    const bad = await csv([header, ",No Price,50 g,,25,snacks,,,,,,"].join("\n"));
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error.details[0]).toMatchObject({ line: 2, column: "price" });
+
+    const good = await csv(
+      [header, "p-http-import,Http Import Cookie,100 g,40,50,bakery,Testco,cookie,,,,"].join("\n"),
+    );
+    expect(good.statusCode).toBe(200);
+    expect(good.json()).toMatchObject({ dryRun: false, ok: true, creates: 1 });
+    const product = await get("/v1/catalog/products/p-http-import");
+    expect(product.json()).toMatchObject({ pricePaise: 4000, brand: "Testco", tags: ["cookie"] });
+  });
+
+  it("refuses an unknown column or a missing required one", async () => {
+    const res = await csv("name,unit,price,colour\nX,1,1,red", "?dryRun=true");
+    expect(res.json().errors.map((e: { column: string }) => e.column)).toEqual(
+      expect.arrayContaining(["colour", "mrp", "category"]),
+    );
+  });
+
+  it("exports the catalog as CSV that the import can read back", async () => {
+    const res = await get("/v1/catalog/admin/export", admin);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/csv");
+    const lines = res.body.trim().split("\n");
+    expect(lines[0]).toBe(header);
+    expect(
+      lines.some((l) =>
+        l.startsWith("p5,Amul Taaza Toned Fresh Milk,500 ml,29,31,dairy,Amul,milk|toned,"),
+      ),
+    ).toBe(true);
+    const roundTrip = await csv(res.body, "?dryRun=true");
+    expect(roundTrip.json()).toMatchObject({ ok: true, creates: 0 });
+  });
+
+  it("makes a group and manages photos through the admin routes", async () => {
+    const group = await send("POST", "/v1/catalog/admin/product-groups", {
+      name: "Http Group",
+      categoryId: "snacks",
+    });
+    expect(group.statusCode).toBe(201);
+    expect(
+      (await get("/v1/catalog/admin/product-groups", admin))
+        .json()
+        .items.some((g: { id: string }) => g.id === group.json().id),
+    ).toBe(true);
+
+    const added = await send("POST", "/v1/catalog/admin/products/p10/images", {
+      url: "https://example.com/bhujia-2.jpg",
+      alt: "Back of pack",
+    });
+    expect(added.statusCode).toBe(201);
+    const extra = added.json().items.at(-1);
+    expect(extra).toMatchObject({ url: "https://example.com/bhujia-2.jpg", primary: false });
+    expect(
+      (
+        await send("POST", "/v1/catalog/admin/products/p10/images", {
+          url: "http://insecure.com/a.jpg",
+        })
+      ).statusCode,
+    ).toBe(400);
+    const order = await app.inject({
+      method: "PUT",
+      url: "/v1/catalog/admin/products/p10/images/order",
+      payload: { ids: [extra.id] },
+      headers: admin,
+    });
+    expect(order.statusCode).toBe(200);
+    const removed = await send("DELETE", `/v1/catalog/admin/products/p10/images/${extra.id}`);
+    expect(removed.statusCode).toBe(200);
+    expect(
+      (await send("DELETE", `/v1/catalog/admin/products/p10/images/${extra.id}`)).statusCode,
     ).toBe(404);
   });
 });

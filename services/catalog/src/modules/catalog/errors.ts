@@ -1,10 +1,13 @@
 /** A problem with an admin request, carrying the HTTP status the service kit answers with. */
 export class CatalogError extends Error {
   readonly statusCode: 400 | 404 | 409;
-  constructor(statusCode: 400 | 404 | 409, message: string) {
+  /** Structured detail for the caller, for example the rows of an import that failed */
+  readonly details?: unknown;
+  constructor(statusCode: 400 | 404 | 409, message: string, details?: unknown) {
     super(message);
     this.name = "CatalogError";
     this.statusCode = statusCode;
+    this.details = details;
   }
 }
 
@@ -33,4 +36,10 @@ export function bannerIsLive(
   if (banner.startsAt && Date.parse(banner.startsAt) > now.getTime()) return false;
   if (banner.endsAt && Date.parse(banner.endsAt) <= now.getTime()) return false;
   return true;
+}
+
+/** "g-" and 8 hex characters for a product group made in the admin. */
+export function newGroupId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  return `g-${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 }

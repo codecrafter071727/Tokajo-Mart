@@ -14,13 +14,31 @@ import {
 import type { ServiceApp } from "@qc/service-kit";
 import { z } from "zod";
 import { DEFAULT_MAX_PER_ORDER, etaMinutes, stockStatus } from "./domain";
+import { withRestockCheck, type RestockNotifier } from "./alerts";
 import { registerStaffRoutes } from "./staff-routes";
 import { coveringWarehouses, resolveBasket, type InventoryRepository } from "./repository";
 
 const idParams = z.object({ id: z.string().min(1) });
 
-export function registerInventoryRoutes(app: ServiceApp, repository: InventoryRepository): void {
-  registerStaffRoutes(app, repository);
+export function registerInventoryRoutes(
+  app: ServiceApp,
+  repository: InventoryRepository,
+  notifier?: RestockNotifier,
+): void {
+  registerStaffRoutes(app, repository, notifier);
+
+  /** Giving stock back (a cancelled or unpaid order) can bring an out of stock item back. */
+  const givingBack = async <T>(reference: string, change: () => Promise<T>) => {
+    const reservation = notifier ? await repository.reservationLines(reference) : null;
+    if (!reservation) return change();
+    return withRestockCheck(
+      repository,
+      notifier,
+      reservation.warehouseId,
+      reservation.lines.map((l) => l.productId),
+      change,
+    );
+  };
 
   // ---------------------------------------------------------------------------------------
   // Public (through the gateway)
@@ -168,7 +186,9 @@ export function registerInventoryRoutes(app: ServiceApp, repository: InventoryRe
       },
     },
     async (request) => {
-      const reservation = await repository.release(request.params.reference);
+      const reservation = await givingBack(request.params.reference, () =>
+        repository.release(request.params.reference),
+      );
       if (!reservation) throw app.httpErrors.notFound("Reservation not found.");
       return reservation;
     },
@@ -185,7 +205,9 @@ export function registerInventoryRoutes(app: ServiceApp, repository: InventoryRe
       },
     },
     async (request) => {
-      const reservation = await repository.restock(request.params.reference);
+      const reservation = await givingBack(request.params.reference, () =>
+        repository.restock(request.params.reference),
+      );
       if (!reservation) throw app.httpErrors.notFound("Reservation not found.");
       return reservation;
     },

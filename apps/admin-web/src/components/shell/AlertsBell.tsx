@@ -1,6 +1,6 @@
 "use client";
 
-import type { AdminPaymentsResponse } from "@qc/contracts";
+import type { AdminPaymentsResponse, StockAlertsResponse } from "@qc/contracts";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -8,6 +8,7 @@ import { useAttention, type AttentionItem } from "../../lib/attention";
 import { indiaDay } from "../../lib/dates";
 import { gw, qs } from "../../lib/gw";
 import { cn } from "../ui/core";
+import { useWarehouse } from "./warehouse-context";
 import {
   AlertCircle,
   AlertTriangle,
@@ -32,7 +33,44 @@ const ICON: Record<string, { icon: IconComponent; tone: string }> = {
   unpaid: { icon: CreditCard, tone: "bg-warn-soft text-warn" },
   low: { icon: Boxes, tone: "bg-warn-soft text-warn" },
   payment_failed: { icon: AlertCircle, tone: "bg-bad-soft text-bad" },
+  expired: { icon: AlertTriangle, tone: "bg-bad-soft text-bad" },
+  expiring: { icon: Clock, tone: "bg-warn-soft text-warn" },
 };
+
+/** Stock past or near its expiry date, for the warehouse in view (or all), every minute. */
+function useExpiryAlerts(): Alert[] {
+  const { warehouseId } = useWarehouse();
+  const alerts = useQuery({
+    queryKey: ["bell-expiry", warehouseId],
+    refetchInterval: 60_000,
+    queryFn: () =>
+      gw<StockAlertsResponse>(
+        "GET",
+        `/v1/inventory/alerts${qs({ warehouseId: warehouseId || undefined, expiryDays: 3 })}`,
+      ),
+  });
+  const counts = alerts.data?.counts;
+  const out: Alert[] = [];
+  if (counts?.expired) {
+    out.push({
+      kind: "expired",
+      title: `${counts.expired} ${counts.expired === 1 ? "batch is" : "batches are"} past expiry`,
+      detail: "Take them off the shelf and write them off",
+      href: "/inventory",
+      rank: 1,
+    });
+  }
+  if (counts?.expiring) {
+    out.push({
+      kind: "expiring",
+      title: `${counts.expiring} ${counts.expiring === 1 ? "batch expires" : "batches expire"} within 3 days`,
+      detail: "Sell these first or plan a markdown",
+      href: "/inventory",
+      rank: 3,
+    });
+  }
+  return out;
+}
 
 /** Failed online payments today, refreshed every minute. */
 function usePaymentAlerts(): Alert[] {
@@ -64,8 +102,11 @@ function usePaymentAlerts(): Alert[] {
 export function AlertsBell() {
   const attention = useAttention();
   const payments = usePaymentAlerts();
+  const expiry = useExpiryAlerts();
   const [open, setOpen] = useState(false);
-  const items: Alert[] = [...attention.items, ...payments].sort((a, b) => a.rank - b.rank);
+  const items: Alert[] = [...attention.items, ...payments, ...expiry].sort(
+    (a, b) => a.rank - b.rank,
+  );
   const urgent = items.filter((i) => i.rank <= 2).length;
 
   useEffect(() => {

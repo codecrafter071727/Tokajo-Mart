@@ -8,6 +8,7 @@ const envSchema = baseEnvSchema.extend({
   CATALOG_SERVICE_URL: optionalUrl(),
   WAREHOUSE_INVENTORY_SERVICE_URL: optionalUrl(),
   DELIVERY_SERVICE_URL: optionalUrl(),
+  NOTIFICATION_SERVICE_URL: optionalUrl(),
   PAYMENT_SERVICE_URL: optionalUrl(),
 });
 

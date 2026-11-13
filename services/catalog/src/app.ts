@@ -7,6 +7,8 @@ import {
   registerCatalogRoutes,
   seedBanners,
   seedCategories,
+  seedProductGroups,
+  seedProductImages,
   seedProducts,
   type CatalogRepository,
 } from "./modules/catalog";
@@ -31,7 +33,13 @@ export async function buildApp(options: BuildAppOptions = {}) {
     options.repository ??
     (env.DATABASE_URL && env.NODE_ENV !== "test"
       ? createPostgresCatalogRepository(createDb<DB>(env.DATABASE_URL, env.DATABASE_POOL_MAX))
-      : createInMemoryCatalogRepository(seedCategories, seedProducts, seedBanners));
+      : createInMemoryCatalogRepository(
+          seedCategories,
+          seedProducts,
+          seedBanners,
+          seedProductGroups,
+          seedProductImages,
+        ));
 
   registerCatalogRoutes(app, repository);
 

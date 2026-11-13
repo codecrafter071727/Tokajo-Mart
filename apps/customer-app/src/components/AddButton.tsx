@@ -5,7 +5,12 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Colors, Radius, Motion } from "../theme";
 import { useCartStore, type CartState } from "../store/cart";
-import { useStock } from "../lib/queries";
+import { useServiceability, useStock } from "../lib/queries";
+import {
+  useInboxAvailable,
+  useStockSubscriptions,
+  useToggleStockSubscription,
+} from "../lib/notifications";
 
 interface AddButtonProps {
   productId: string;
@@ -48,7 +53,18 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
   const outOfStock = stock?.status === "out";
   const maxPerOrder = stock?.maxPerOrder ?? null;
   const atLimit = maxPerOrder !== null && quantity >= maxPerOrder;
-  const [notified, setNotified] = useState(false);
+  // Notify me: with a real account it is saved on the server and survives restarts; in demo mode
+  // it only remembers the tap for this screen
+  const [notifiedLocally, setNotifiedLocally] = useState(false);
+  const inbox = useInboxAvailable();
+  const warehouseId = useServiceability().data?.warehouseId ?? null;
+  const subscriptions = useStockSubscriptions();
+  const toggleSubscription = useToggleStockSubscription();
+  const subscribed = inbox
+    ? (subscriptions.data ?? []).some(
+        (s) => s.productId === productId && s.warehouseId === warehouseId,
+      )
+    : notifiedLocally;
 
   const scale = useSharedValue(1);
 
@@ -76,17 +92,54 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
   if (outOfStock && quantity === 0) {
     return (
       <Pressable
-        style={[styles.notifyBtn, { height: btnH, width: btnW }, notified && styles.notifyBtnDone]}
+        style={[
+          styles.notifyBtn,
+          { height: btnH, width: btnW },
+          subscribed && styles.notifyBtnDone,
+        ]}
         onPress={() => {
           tap();
-          setNotified(true);
+          if (!inbox) {
+            setNotifiedLocally(true);
+            return;
+          }
+          if (!warehouseId) return;
+          // Tapping again stops the reminder
+          toggleSubscription.mutate({ productId, warehouseId, subscribe: !subscribed });
         }}
-        disabled={notified}
+        disabled={(!inbox && subscribed) || toggleSubscription.isPending}
         accessibilityRole="button"
-        accessibilityLabel={notified ? "You will be notified" : "Notify me when back in stock"}
+        accessibilityState={{ selected: subscribed }}
+        accessibilityLabel={
+          subscribed
+            ? inbox
+              ? "We will tell you when it is back. Tap to stop"
+              : "You will be notified"
+            : "Notify me when back in stock"
+        }
       >
-        <Text style={[styles.notifyText, big && styles.notifyTextMd]}>
-          {notified ? "Noted" : size === "sm" ? "Notify" : "Notify me"}
+        {subscribed ? (
+          <Ionicons
+            name="notifications"
+            size={big ? 14 : 12}
+            color={Colors.brandText}
+            style={styles.notifyIcon}
+          />
+        ) : null}
+        <Text
+          style={[
+            styles.notifyText,
+            big && styles.notifyTextMd,
+            subscribed && styles.notifyTextDone,
+          ]}
+        >
+          {subscribed
+            ? size === "sm"
+              ? "Noted"
+              : "We'll notify"
+            : size === "sm"
+              ? "Notify"
+              : "Notify me"}
         </Text>
       </Pressable>
     );
@@ -202,6 +255,7 @@ const styles = StyleSheet.create({
     color: Colors.onBrand,
   },
   notifyBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.25,
@@ -211,9 +265,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   notifyBtnDone: {
-    borderColor: Colors.border,
-    backgroundColor: Colors.canvas,
+    borderColor: Colors.brandTint,
+    backgroundColor: Colors.greenTint,
   },
+  notifyIcon: { marginRight: 3 },
+  notifyTextDone: { color: Colors.brandText },
   notifyText: {
     fontSize: 11,
     fontWeight: "800",

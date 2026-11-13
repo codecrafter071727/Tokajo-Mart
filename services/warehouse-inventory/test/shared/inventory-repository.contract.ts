@@ -172,6 +172,50 @@ export function inventoryRepositoryContract(
     describe("stock tools", () => {
       const ACTOR = "99999999-0000-4000-8000-000000000009";
 
+      it("records a batch for lines received with an expiry date, soonest first", async () => {
+        const repo = await make();
+        await repo.receiveStock({
+          warehouseId: WH,
+          reference: "GRN-EXP",
+          items: [
+            { productId: "p2", quantity: 6, expiresOn: "2026-11-20", batchCode: "LOT-A" },
+            { productId: "p1", quantity: 4, expiresOn: "2026-11-15" },
+            { productId: "p3", quantity: 1 },
+          ],
+          actorId: ACTOR,
+        });
+        const soon = await repo.listBatches({ warehouseId: WH, expiresOnOrBefore: "2026-11-16" });
+        expect(soon.map((b) => [b.productId, b.expiresOn, b.quantity])).toEqual([
+          ["p1", "2026-11-15", 4],
+        ]);
+        const all = await repo.listBatches({ expiresOnOrBefore: "2026-12-31" });
+        expect(all.map((b) => b.productId)).toEqual(["p1", "p2"]);
+        expect(all[1]).toMatchObject({ batchCode: "LOT-A", warehouseId: WH });
+        expect(all[1]!.onHand).toBeGreaterThanOrEqual(6);
+        expect(
+          await repo.listBatches({
+            warehouseId: "wh-indiranagar",
+            expiresOnOrBefore: "2026-12-31",
+          }),
+        ).toEqual([]);
+      });
+
+      it("lists every stock row for alerts and tells which products a reservation covers", async () => {
+        const repo = await make();
+        const rows = await repo.allStock(WH);
+        expect(rows.length).toBeGreaterThan(5);
+        expect(rows.every((r) => r.warehouseId === WH)).toBe(true);
+        expect((await repo.allStock()).length).toBeGreaterThanOrEqual(rows.length);
+        await reserve(repo, "lines-1", [
+          { productId: "p1", quantity: 1 },
+          { productId: "p2", quantity: 2 },
+        ]);
+        const lines = await repo.reservationLines("lines-1");
+        expect(lines?.warehouseId).toBe(WH);
+        expect(lines?.lines.map((l) => l.productId).sort()).toEqual(["p1", "p2"]);
+        expect(await repo.reservationLines("ghost")).toBeNull();
+      });
+
       it("lists a warehouse's stock with available worked out, paged and searchable", async () => {
         const repo = await make();
         await reserve(repo, "list-1", [{ productId: "p1", quantity: 2 }]);

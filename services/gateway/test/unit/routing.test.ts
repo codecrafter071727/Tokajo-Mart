@@ -69,6 +69,17 @@ describe("routing", () => {
     expect(resolveRoute("GET", "/v1/delivery/mine")?.service).toBe("delivery");
   });
 
+  it("routes notifications to the notification service for signed in users", () => {
+    expect(resolveRoute("GET", "/v1/notifications/me")).toMatchObject({
+      service: "notification",
+      access: "authenticated",
+    });
+    expect(resolveRoute("POST", "/v1/notifications/me/subscriptions")?.service).toBe(
+      "notification",
+    );
+    expect(resolveRoute("POST", "/v1/notifications/internal/notify")).toBeNull();
+  });
+
   it("routes payments to the payment service and keeps the webhook public and anonymous", () => {
     expect(resolveRoute("POST", "/v1/payments/verify")).toMatchObject({
       service: "payment",
@@ -86,5 +97,14 @@ describe("routing", () => {
     expect(isAllowed("authenticated", "customer")).toBe(true);
     expect(isAllowed(["admin"], "customer")).toBe(false);
     expect(isAllowed(["admin"], "admin")).toBe(true);
+  });
+
+  it("keeps reports for managers and admins", () => {
+    const route = resolveRoute("GET", "/v1/analytics/sales?from=2026-11-01");
+    expect(route?.service).toBe("analytics");
+    expect(route?.access).toEqual(["warehouse_manager", "admin"]);
+    expect(isAllowed(route!.access, "customer")).toBe(false);
+    expect(isAllowed(route!.access, "warehouse_staff")).toBe(false);
+    expect(isAllowed(route!.access, "warehouse_manager")).toBe(true);
   });
 });

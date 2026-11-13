@@ -90,7 +90,11 @@ export function toRiderDelivery(row: Row): RiderDelivery {
 export class DeliveryService {
   constructor(
     private readonly db: Kysely<DB>,
-    private readonly clients: { order: InternalClient; identity: InternalClient },
+    private readonly clients: {
+      order: InternalClient;
+      identity: InternalClient;
+      notification?: InternalClient;
+    },
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -340,6 +344,7 @@ export class DeliveryService {
         .executeTakeFirst();
       if (!claimed)
         throw new DeliveryError(409, "OFFER_EXPIRED", "That offer is no longer available.");
+      this.tellCustomerRiderAssigned(row, riderId);
       return this.state(riderId, warehouseHint);
     }
 
@@ -410,6 +415,30 @@ export class DeliveryService {
       .executeTakeFirst();
     if (!moved) throw new DeliveryError(409, "INVALID_TRANSITION", "That step was already done.");
     return this.state(riderId, warehouseHint);
+  }
+
+  /**
+   * "Ravi is on it": looks up who owns the order and the rider's first name, then notifies. Not
+   * awaited and errors are swallowed, so accepting an offer never waits on or fails for this.
+   */
+  private tellCustomerRiderAssigned(row: Row, riderId: string): void {
+    const notification = this.clients.notification;
+    if (!notification) return;
+    void (async () => {
+      const order = await this.clients.order.get<{ userId: string; number: string }>(
+        `/internal/orders/${row.orderId}/payment-info`,
+      );
+      const riders = await this.riderNames([riderId]).catch(() => new Map<string, IdentityRider>());
+      const first = riders.get(riderId)?.name.split(" ")[0];
+      await notification.post("/internal/notify", {
+        userId: order.userId,
+        type: "delivery.rider_assigned",
+        title: first ? `${first} will deliver your order` : "A rider is on the way to the store",
+        body: "They are heading to the store to pick it up.",
+        data: { orderId: row.orderId, orderNumber: row.orderNumber },
+        dedupeKey: `order:${row.orderId}:rider:${riderId}`,
+      });
+    })().catch(() => undefined);
   }
 
   private async bumpAttempts(deliveryId: string) {

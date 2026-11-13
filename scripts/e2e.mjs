@@ -208,6 +208,36 @@ assert.equal(done.status, "delivered");
 assert.ok(done.rider?.name, "the customer sees who delivered it");
 assert.ok(done.deliveredAt);
 
+// The customer was told along the way (notifications are sent in the background, so allow a moment)
+let inbox = { items: [] };
+for (let i = 0; i < 10; i += 1) {
+  inbox = await ok(
+    "customer reads notifications",
+    call("GET", "/v1/notifications/me?limit=50", { token: customer.accessToken }),
+  );
+  if (inbox.items.some((n) => n.type === "order.delivered")) break;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+}
+const told = new Set(inbox.items.filter((n) => n.data?.orderId === order.id).map((n) => n.type));
+for (const type of [
+  "order.confirmed",
+  "order.packing",
+  "delivery.rider_assigned",
+  "order.out_for_delivery",
+  "order.delivered",
+]) {
+  assert.ok(told.has(type), `the customer was told: ${type}`);
+}
+const unread = await ok(
+  "customer sees an unread count",
+  call("GET", "/v1/notifications/me/unread-count", { token: customer.accessToken }),
+);
+assert.ok(unread.unread >= 5);
+await ok(
+  "customer marks all read",
+  call("POST", "/v1/notifications/me/read-all", { token: customer.accessToken, body: {} }),
+);
+
 // 8. Admin sees it in the all-orders view and the riders view
 const admin = await ok(
   "admin signs in",

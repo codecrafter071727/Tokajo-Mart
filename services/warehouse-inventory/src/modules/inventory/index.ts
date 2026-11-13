@@ -3,6 +3,7 @@ export { registerStaffRoutes } from "./staff-routes";
 export {
   createInMemoryInventoryRepository,
   resolveBasket,
+  type BatchRecord,
   type InventoryRepository,
 } from "./repository";
 export { createPostgresInventoryRepository } from "./postgres-repository";
@@ -16,3 +17,12 @@ export {
   WarehouseExistsError,
 } from "./errors";
 export { seedStock, seedWarehouses } from "./seed";
+export {
+  addDays,
+  daysBetween,
+  expiringBatches,
+  indiaToday,
+  stockAlerts,
+  withRestockCheck,
+  type RestockNotifier,
+} from "./alerts";

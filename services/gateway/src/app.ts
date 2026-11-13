@@ -19,6 +19,8 @@ const LOCAL_TARGETS: Record<ServiceName, string> = {
   order: "http://localhost:4004",
   delivery: "http://localhost:4006",
   payment: "http://localhost:4005",
+  notification: "http://localhost:4007",
+  analytics: "http://localhost:4008",
 };
 
 function configuredTargets(): Record<ServiceName, string> {
@@ -29,6 +31,8 @@ function configuredTargets(): Record<ServiceName, string> {
     order: env.ORDER_SERVICE_URL ?? LOCAL_TARGETS.order,
     delivery: env.DELIVERY_SERVICE_URL ?? LOCAL_TARGETS.delivery,
     payment: env.PAYMENT_SERVICE_URL ?? LOCAL_TARGETS.payment,
+    notification: env.NOTIFICATION_SERVICE_URL ?? LOCAL_TARGETS.notification,
+    analytics: env.ANALYTICS_SERVICE_URL ?? LOCAL_TARGETS.analytics,
   };
 }
 

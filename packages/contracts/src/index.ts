@@ -39,6 +39,35 @@ export {
   type UpdateCategoryBody,
   type UpdateProductBody,
 } from "./catalog";
+// Catalog depth: sub categories, variants, images, CSV import
+export {
+  addProductImageBodySchema,
+  adminProductDetailSchema,
+  CATALOG_CSV_COLUMNS,
+  catalogImportQuerySchema,
+  catalogImportResultSchema,
+  createProductGroupBodySchema,
+  importRowErrorSchema,
+  listProductGroupsResponseSchema,
+  listProductImagesResponseSchema,
+  MAX_EXTRA_PRODUCT_IMAGES,
+  productDetailSchema,
+  productGroupSchema,
+  productImageParamsSchema,
+  productImageSchema,
+  productVariantSchema,
+  reorderProductImagesBodySchema,
+  type AddProductImageBody,
+  type AdminProductDetail,
+  type CatalogImportResult,
+  type CreateProductGroupBody,
+  type ImportRowError,
+  type NewProductGroup,
+  type ProductDetail,
+  type ProductGroup,
+  type ProductImage,
+  type ProductVariant,
+} from "./catalog";
 export {
   availabilityItemSchema,
   availabilityQuerySchema,
@@ -94,9 +123,23 @@ export {
   type StockStatus,
   productStockResponseSchema,
   type ProductStockResponse,
+  expiringQuerySchema,
+  expiringBatchSchema,
+  expiringResponseSchema,
+  stockAlertKindSchema,
+  stockAlertSchema,
+  stockAlertsQuerySchema,
+  stockAlertsResponseSchema,
+  type ExpiringBatch,
+  type ExpiringResponse,
+  type StockAlert,
+  type StockAlertKind,
+  type StockAlertsResponse,
 } from "./inventory";
 export * from "./pricing";
 export * from "./identity";
 export * from "./order";
 export * from "./payment";
 export * from "./delivery";
+export * from "./notification";
+export * from "./analytics";

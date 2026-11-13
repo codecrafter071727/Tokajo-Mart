@@ -23,6 +23,7 @@ suite("Postgres inventory repository", () => {
   async function fresh() {
     await db.deleteFrom("inventory.reservations").execute(); // lines go with them
     await db.deleteFrom("inventory.stockMovements").execute();
+    await db.deleteFrom("inventory.batches").execute();
     await db.deleteFrom("inventory.stockItems").where("productId", "=", "brand-new").execute();
     await db.deleteFrom("inventory.warehouses").where("id", "like", "wh-test-%").execute();
     for (const s of seedStock) {

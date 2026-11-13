@@ -17,7 +17,7 @@ Node 22 or newer must be on your PATH.
 ## Start and stop the backend
 
 ```bash
-scripts/dev-stack.sh          # identity 4001, catalog 4002, inventory 4003, order 4004, payment 4005, delivery 4006, gateway 4000
+scripts/dev-stack.sh          # identity 4001, catalog 4002, inventory 4003, order 4004, payment 4005, delivery 4006, payment 4005, notification 4007, gateway 4000
 scripts/dev-stack.sh stop
 ```
 
@@ -121,3 +121,11 @@ Services call each other over HTTP, not Pub/Sub. Payments are cash on delivery o
 demo code until an SMS provider (MSG91 with DLT registration) is configured. Not built:
 push notifications, live map and rider location, proof of delivery photo, address book,
 notification and analytics services.
+
+## More docs
+
+- [Load tests](../tests/load/README.md): k6 scripts for browsing, checkout, warehouse and rider
+  traffic against this local stack.
+- [Runbooks](runbooks/README.md): what to do when payments, SMS, stock, dispatch or a service go
+  wrong.
+- [Decision records](adr/README.md): why the platform is built the way it is.

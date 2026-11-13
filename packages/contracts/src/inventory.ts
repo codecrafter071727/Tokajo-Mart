@@ -153,6 +153,10 @@ export const receiveStockBodySchema = z.object({
       z.object({
         productId: z.string().min(1),
         quantity: z.number().int().min(1).max(100_000),
+        /** Best before or expiry date (YYYY-MM-DD). Recorded as a batch so it can be flagged. */
+        expiresOn: z.iso.date().optional(),
+        /** The supplier's batch or lot code, if any */
+        batchCode: z.string().trim().min(1).max(60).optional(),
       }),
     )
     .min(1)
@@ -273,3 +277,62 @@ export const updateWarehouseBodySchema = z
   .refine((b) => Object.keys(b).length > 0, { message: "Send at least one field to change." });
 export type UpdateWarehouseBody = z.infer<typeof updateWarehouseBodySchema>;
 export const warehouseParamsSchema = z.object({ id: z.string().min(1) });
+
+// ---------------------------------------------------------------------------------------------
+// Expiry and stock alerts (staff and admin)
+// ---------------------------------------------------------------------------------------------
+
+export const expiringQuerySchema = z.object({
+  warehouseId: z.string().min(1).optional(),
+  days: z.coerce.number().int().min(0).max(90).default(7),
+});
+
+export const expiringBatchSchema = z.object({
+  id: z.string(),
+  warehouseId: z.string(),
+  productId: z.string(),
+  batchCode: z.string().nullable(),
+  quantity: z.number().int(),
+  /** What is still on hand for the product, so a batch is never shown as more than exists */
+  onHand: z.number().int(),
+  expiresOn: z.string(),
+  /** Negative once the date has passed */
+  daysLeft: z.number().int(),
+  receivedAt: z.string(),
+});
+export type ExpiringBatch = z.infer<typeof expiringBatchSchema>;
+export const expiringResponseSchema = z.object({ items: z.array(expiringBatchSchema) });
+export type ExpiringResponse = z.infer<typeof expiringResponseSchema>;
+
+export const stockAlertKindSchema = z.enum(["out_of_stock", "low_stock", "expiring", "expired"]);
+export type StockAlertKind = z.infer<typeof stockAlertKindSchema>;
+
+export const stockAlertSchema = z.object({
+  kind: stockAlertKindSchema,
+  warehouseId: z.string(),
+  productId: z.string(),
+  /** Free to sell now (on hand minus held) */
+  available: z.number().int(),
+  /** For expiry alerts */
+  expiresOn: z.string().nullable(),
+  daysLeft: z.number().int().nullable(),
+  quantity: z.number().int().nullable(),
+});
+export type StockAlert = z.infer<typeof stockAlertSchema>;
+
+export const stockAlertsQuerySchema = z.object({
+  warehouseId: z.string().min(1).optional(),
+  /** Low stock means available is above zero and at or below this */
+  lowThreshold: z.coerce.number().int().min(1).max(1000).default(5),
+  expiryDays: z.coerce.number().int().min(0).max(90).default(7),
+});
+export const stockAlertsResponseSchema = z.object({
+  items: z.array(stockAlertSchema),
+  counts: z.object({
+    outOfStock: z.number().int(),
+    lowStock: z.number().int(),
+    expiring: z.number().int(),
+    expired: z.number().int(),
+  }),
+});
+export type StockAlertsResponse = z.infer<typeof stockAlertsResponseSchema>;

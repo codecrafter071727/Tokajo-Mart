@@ -15,6 +15,8 @@ export const categorySchema = z.object({
   imageUrl: z.url().nullable(),
   imageFit: imageFitSchema,
   sortOrder: z.number().int(),
+  /** Set on a sub category. Two levels at most. Always sent by the server; optional for old data. */
+  parentId: z.string().nullable().optional(),
 });
 export type Category = z.infer<typeof categorySchema>;
 
@@ -33,11 +35,57 @@ export const productSchema = z.object({
   imageFit: imageFitSchema,
   /** Delivery promise for this item, in minutes */
   deliveryMins: z.number().int().positive(),
-  /** Greater than 1 when the product has variants */
+  /** Greater than 1 when the product has variants: the number of variants in its group */
   optionsCount: z.number().int().positive().nullable(),
   description: z.string().nullable(),
+  // The fields below are always sent by the server. They are optional so older fixtures still fit.
+  brand: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+  /** The product group this is a variant of, for example "500 ml" of a milk */
+  groupId: z.string().nullable().optional(),
+  /** What tells this variant apart in its group, for example "1 L". Falls back to the unit. */
+  variantLabel: z.string().nullable().optional(),
 });
 export type Product = z.infer<typeof productSchema>;
+
+/** A sibling variant shown on the product page so the customer can switch size. */
+export const productVariantSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  unit: z.string(),
+  pricePaise: paise,
+  mrpPaise: paise,
+  imageUrl: z.string().nullable(),
+});
+export type ProductVariant = z.infer<typeof productVariantSchema>;
+
+/** A product photo. The main photo (the product's imageUrl) comes first with id null. */
+export const productImageSchema = z.object({
+  id: z.uuid().nullable(),
+  url: z.string(),
+  alt: z.string(),
+  primary: z.boolean(),
+});
+export type ProductImage = z.infer<typeof productImageSchema>;
+
+export const productGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  categoryId: z.string(),
+  brand: z.string().nullable(),
+  /** Variants in the group that are on sale */
+  variantCount: z.number().int().nonnegative(),
+});
+export type ProductGroup = z.infer<typeof productGroupSchema>;
+
+/** One product with everything the product page needs. A superset of Product. */
+export const productDetailSchema = productSchema.extend({
+  /** Every variant in the group, this one included, cheapest first. Empty when not in a group. */
+  variants: z.array(productVariantSchema),
+  images: z.array(productImageSchema),
+  group: z.object({ id: z.string(), name: z.string() }).nullable(),
+});
+export type ProductDetail = z.infer<typeof productDetailSchema>;
 
 export const listCategoriesResponseSchema = z.object({
   items: z.array(categorySchema),
@@ -70,6 +118,13 @@ const imageUrlField = z.url({ protocol: /^https$/, message: "Use an https image 
 const nameField = z.string().trim().min(1).max(120);
 const unitField = z.string().trim().min(1).max(40);
 const descriptionField = z.string().trim().max(2000);
+const brandField = z.string().trim().min(1).max(60);
+const tagsField = z
+  .array(z.string().trim().toLowerCase().min(1).max(30))
+  .max(10)
+  .transform((tags) => [...new Set(tags)]);
+const groupIdField = z.string().min(1).max(60);
+const variantLabelField = z.string().trim().min(1).max(40);
 
 /** Admin: add a product. The server makes the id. The price may not be above the MRP. */
 export const createProductBodySchema = z
@@ -85,6 +140,10 @@ export const createProductBodySchema = z
     deliveryMins: z.number().int().min(1).max(120).default(10),
     optionsCount: z.number().int().min(1).max(50).nullable().default(null),
     description: descriptionField.nullable().default(null),
+    brand: brandField.nullable().default(null),
+    tags: tagsField.default([]),
+    groupId: groupIdField.nullable().default(null),
+    variantLabel: variantLabelField.nullable().default(null),
   })
   .strict()
   .refine((body) => body.pricePaise <= body.mrpPaise, {
@@ -108,6 +167,10 @@ export const updateProductBodySchema = z
     imageFit: imageFitSchema.optional(),
     deliveryMins: z.number().int().min(1).max(120).optional(),
     optionsCount: z.number().int().min(1).max(50).nullable().optional(),
+    brand: brandField.nullable().optional(),
+    tags: tagsField.optional(),
+    groupId: groupIdField.nullable().optional(),
+    variantLabel: variantLabelField.nullable().optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, {
@@ -125,6 +188,10 @@ export type UpdateProductBody = {
   imageFit?: "cover" | "contain";
   deliveryMins?: number;
   optionsCount?: number | null;
+  brand?: string | null;
+  tags?: string[];
+  groupId?: string | null;
+  variantLabel?: string | null;
 };
 
 /** What the admin table shows: every product, with whether it has been taken off sale. */
@@ -135,6 +202,80 @@ export const listAdminProductsResponseSchema = z.object({
   nextCursor: z.string().nullable(),
 });
 export type ListAdminProductsResponse = z.infer<typeof listAdminProductsResponseSchema>;
+export const adminProductDetailSchema = productDetailSchema.extend({ archived: z.boolean() });
+export type AdminProductDetail = z.infer<typeof adminProductDetailSchema>;
+
+// --- Product groups (variants) ---------------------------------------------------------------
+
+export const createProductGroupBodySchema = z
+  .object({
+    name: nameField,
+    categoryId: z.string().min(1),
+    brand: brandField.nullable().default(null),
+  })
+  .strict();
+export type CreateProductGroupBody = z.input<typeof createProductGroupBodySchema>;
+export type NewProductGroup = z.output<typeof createProductGroupBodySchema>;
+export const listProductGroupsResponseSchema = z.object({ items: z.array(productGroupSchema) });
+
+// --- Product images --------------------------------------------------------------------------
+
+export const addProductImageBodySchema = z
+  .object({ url: imageUrlField, alt: z.string().trim().max(120).default("") })
+  .strict();
+export type AddProductImageBody = z.input<typeof addProductImageBodySchema>;
+/** The new order of the extra photos, by id. Must list every extra photo exactly once. */
+export const reorderProductImagesBodySchema = z.object({ ids: z.array(z.uuid()).max(20) }).strict();
+export const productImageParamsSchema = z.object({ id: z.string().min(1), imageId: z.uuid() });
+export const listProductImagesResponseSchema = z.object({ items: z.array(productImageSchema) });
+/** Extra photos a product may have, besides its main photo */
+export const MAX_EXTRA_PRODUCT_IMAGES = 8;
+
+// --- CSV import and export -------------------------------------------------------------------
+
+export const CATALOG_CSV_COLUMNS = [
+  "id",
+  "name",
+  "unit",
+  "price",
+  "mrp",
+  "category",
+  "brand",
+  "tags",
+  "image_url",
+  "variant_group",
+  "variant_label",
+  "description",
+] as const;
+
+export const catalogImportQuerySchema = z.object({
+  /** "true" checks the file and reports what would change, without changing anything */
+  dryRun: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+});
+
+export const importRowErrorSchema = z.object({
+  /** Line in the file, 1 is the header */
+  line: z.number().int(),
+  column: z.string().nullable(),
+  message: z.string(),
+});
+export type ImportRowError = z.infer<typeof importRowErrorSchema>;
+
+export const catalogImportResultSchema = z.object({
+  dryRun: z.boolean(),
+  /** True when the file has no errors (and, when not a dry run, was applied) */
+  ok: z.boolean(),
+  rows: z.number().int(),
+  creates: z.number().int(),
+  updates: z.number().int(),
+  /** Product groups the import makes because a variant_group name was new */
+  groupsCreated: z.array(z.string()),
+  errors: z.array(importRowErrorSchema),
+});
+export type CatalogImportResult = z.infer<typeof catalogImportResultSchema>;
 
 // --- Categories ------------------------------------------------------------------------------
 
@@ -148,6 +289,8 @@ export const createCategoryBodySchema = z
     imageUrl: imageUrlField.nullable().default(null),
     imageFit: imageFitSchema.default("cover"),
     sortOrder: z.number().int().min(0).max(10_000).optional(),
+    /** Make it a sub category of this top level category */
+    parentId: z.string().min(1).nullable().default(null),
   })
   .strict();
 export type CreateCategoryBody = z.input<typeof createCategoryBodySchema>;
@@ -161,6 +304,7 @@ export const updateCategoryBodySchema = z
     imageUrl: imageUrlField.nullable().optional(),
     imageFit: imageFitSchema.optional(),
     sortOrder: z.number().int().min(0).max(10_000).optional(),
+    parentId: z.string().min(1).nullable().optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, {

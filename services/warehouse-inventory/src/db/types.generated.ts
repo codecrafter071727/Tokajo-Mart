@@ -5,16 +5,26 @@
 
 import type { ColumnType } from "kysely";
 
-export type Generated<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 
 export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
 
 export type Numeric = ColumnType<string, number | string, number | string>;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface InventoryBatches {
+  actorId: string | null;
+  batchCode: string | null;
+  expiresOn: Timestamp;
+  id: Generated<string>;
+  productId: string;
+  quantity: number;
+  receivedAt: Generated<Timestamp>;
+  warehouseId: string;
+}
 
 export interface InventoryReservationLines {
   productId: string;
@@ -67,6 +77,7 @@ export interface InventoryWarehouses {
 }
 
 export interface DB {
+  "inventory.batches": InventoryBatches;
   "inventory.reservationLines": InventoryReservationLines;
   "inventory.reservations": InventoryReservations;
   "inventory.stockItems": InventoryStockItems;

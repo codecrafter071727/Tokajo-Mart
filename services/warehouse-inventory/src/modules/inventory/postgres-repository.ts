@@ -329,6 +329,22 @@ export function createPostgresInventoryRepository(db: Kysely<DB>): InventoryRepo
     async receiveStock({ warehouseId, reference, items, actorId }) {
       const lines = mergeLines(items);
       return db.transaction().execute(async (trx) => {
+        const dated = items.filter((line) => line.expiresOn);
+        if (dated.length > 0) {
+          await trx
+            .insertInto("inventory.batches")
+            .values(
+              dated.map((line) => ({
+                warehouseId,
+                productId: line.productId,
+                batchCode: line.batchCode ?? null,
+                quantity: line.quantity,
+                expiresOn: line.expiresOn as string,
+                actorId,
+              })),
+            )
+            .execute();
+        }
         const out: StockRow[] = [];
         for (const line of lines) {
           const row = await trx
@@ -499,6 +515,53 @@ export function createPostgresInventoryRepository(db: Kysely<DB>): InventoryRepo
         }
         return toReservation(row);
       });
+    },
+
+    async allStock(warehouseId) {
+      let query = db.selectFrom("inventory.stockItems").select([...STOCK_COLUMNS]);
+      if (warehouseId) query = query.where("warehouseId", "=", warehouseId);
+      const rows = await query.orderBy("warehouseId").orderBy("productId").execute();
+      return rows.map(toStockRow);
+    },
+
+    async listBatches({ warehouseId, expiresOnOrBefore }) {
+      let query = db
+        .selectFrom("inventory.batches as b")
+        .leftJoin("inventory.stockItems as s", (join) =>
+          join
+            .onRef("s.warehouseId", "=", "b.warehouseId")
+            .onRef("s.productId", "=", "b.productId"),
+        )
+        .select([
+          "b.id",
+          "b.warehouseId",
+          "b.productId",
+          "b.batchCode",
+          "b.quantity",
+          "b.receivedAt",
+          // As text, so a date never shifts with the server's time zone
+          sql<string>`to_char(b.expires_on, 'YYYY-MM-DD')`.as("expiresOn"),
+          sql<number>`coalesce(s.on_hand, 0)`.as("onHand"),
+        ])
+        .where(sql<boolean>`b.expires_on <= ${expiresOnOrBefore}::date`);
+      if (warehouseId) query = query.where("b.warehouseId", "=", warehouseId);
+      const rows = await query.orderBy("b.expiresOn").orderBy("b.productId").execute();
+      return rows.map((r) => ({
+        ...r,
+        onHand: Number(r.onHand),
+        receivedAt: new Date(r.receivedAt).toISOString(),
+      }));
+    },
+
+    async reservationLines(reference) {
+      const reservation = await db
+        .selectFrom("inventory.reservations")
+        .select(["id", "warehouseId"])
+        .where("reference", "=", reference)
+        .executeTakeFirst();
+      if (!reservation) return null;
+      const lines = await linesOf(db, reservation.id);
+      return { warehouseId: reservation.warehouseId, lines };
     },
 
     async expireDue(now) {

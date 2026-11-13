@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useWarehouse } from "../lib/providers";
 import { WAREHOUSES, isLate } from "../lib/helpers";
 import { useHandovers, useNow, useQueue } from "../lib/live";
+import { useStockAlerts } from "../lib/alerts";
 import { Icon, type IconName } from "./ui";
 
 const ITEMS: { href: string; label: string; icon: IconName }[] = [
@@ -43,11 +44,16 @@ export function TopBar() {
   const waiting = handovers.data?.items.length ?? 0;
   const riderHere = handovers.data?.items.some((h) => h.status === "at_store") ?? false;
   const offline = queue.isError && !queue.isFetching;
+  const alerts = useStockAlerts().data?.counts;
+  const stockProblems = alerts ? alerts.outOfStock + alerts.expiring + alerts.expired : 0;
 
   const counts: Record<string, { n: number; alert: boolean } | null> = {
     "/": { n: toPack, alert: late > 0 },
     "/handover": { n: waiting, alert: riderHere },
-    "/inventory": null,
+    "/inventory":
+      stockProblems > 0
+        ? { n: stockProblems, alert: (alerts?.expired ?? 0) > 0 || (alerts?.outOfStock ?? 0) > 0 }
+        : null,
   };
 
   async function signOut() {

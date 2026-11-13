@@ -37,17 +37,38 @@ export interface CatalogCategories {
   imageFit: Generated<string>;
   imageUrl: string | null;
   name: string;
+  parentId: string | null;
   sortOrder: Generated<number>;
   updatedAt: Generated<Timestamp>;
 }
 
+export interface CatalogProductGroups {
+  brand: string | null;
+  categoryId: string;
+  createdAt: Generated<Timestamp>;
+  id: string;
+  name: string;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface CatalogProductImages {
+  alt: Generated<string>;
+  createdAt: Generated<Timestamp>;
+  id: Generated<string>;
+  productId: string;
+  sortOrder: Generated<number>;
+  url: string;
+}
+
 export interface CatalogProducts {
+  brand: string | null;
   categoryId: string;
   createdAt: Generated<Timestamp>;
   deletedAt: Timestamp | null;
   deliveryMins: Generated<number>;
   description: string | null;
   emoji: Generated<string>;
+  groupId: string | null;
   id: string;
   imageFit: Generated<string>;
   imageUrl: string | null;
@@ -55,12 +76,17 @@ export interface CatalogProducts {
   name: string;
   optionsCount: number | null;
   pricePaise: number;
+  searchVector: string | null;
+  tags: Generated<string[]>;
   unit: Generated<string>;
   updatedAt: Generated<Timestamp>;
+  variantLabel: string | null;
 }
 
 export interface DB {
   "catalog.banners": CatalogBanners;
   "catalog.categories": CatalogCategories;
+  "catalog.productGroups": CatalogProductGroups;
+  "catalog.productImages": CatalogProductImages;
   "catalog.products": CatalogProducts;
 }

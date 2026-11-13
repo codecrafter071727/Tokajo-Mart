@@ -35,6 +35,7 @@ function fakeServices() {
     reason: null as string | null,
     reserveError: null as InternalCallError | null,
     deliveryDown: false,
+    notificationMode: "up" as "up" | "down" | "hang",
   };
   const make = (
     service: string,
@@ -89,6 +90,13 @@ function fakeServices() {
       if (state.deliveryDown) throw new InternalCallError("down", 0, "SERVICE_UNAVAILABLE");
       return { ok: true };
     }),
+    notification: make("notification", () => {
+      if (state.notificationMode === "down") {
+        throw new InternalCallError("down", 0, "SERVICE_UNAVAILABLE");
+      }
+      if (state.notificationMode === "hang") return new Promise(() => undefined);
+      return { id: "n", created: true };
+    }),
     identity: make("identity", (_m, path) => {
       if (path.startsWith("/internal/riders/batch")) {
         return { items: [{ id: RIDER, name: "Ravi Kumar", phone: "+919810000011", rating: 4.8 }] };
@@ -137,6 +145,7 @@ suite("order service", async () => {
       reason: null,
       reserveError: null,
       deliveryDown: false,
+      notificationMode: "up",
     });
     await db.deleteFrom("orders.orders").where("userId", "in", [ALICE, BOB]).execute();
   });
@@ -650,6 +659,60 @@ suite("order service", async () => {
       expect(daily).toHaveLength(7);
       expect(daily[0].date).toBe(from);
       expect(daily[6].date).toBe(to);
+    });
+  });
+
+  describe("customer notifications", () => {
+    const sent = () =>
+      fake.calls
+        .filter((c) => c.service === "notification")
+        .map(
+          (c) =>
+            c.body as {
+              userId: string;
+              type: string;
+              title: string;
+              dedupeKey: string;
+              data: { orderId: string };
+            },
+        );
+
+    it("tells the customer when a cash order is confirmed, once, with a link to the order", async () => {
+      const order = (await place(alice, undefined, {}, "notify-key-12345")).json();
+      await place(alice, undefined, {}, "notify-key-12345");
+      const mine = sent();
+      expect(mine).toHaveLength(1);
+      expect(mine[0]).toMatchObject({
+        userId: ALICE,
+        type: "order.confirmed",
+        dedupeKey: `order:${order.id}:confirmed`,
+        data: { orderId: order.id },
+      });
+      expect(mine[0]?.title).not.toContain("\u2014");
+    });
+
+    it("tells them about packing and cancellation as they happen", async () => {
+      const order = (await place()).json();
+      await post(`/v1/orders/${order.id}/start-packing`, staff);
+      await post(`/v1/orders/${order.id}/cancel`, admin, { reason: "Out of stock" });
+      expect(sent().map((n) => n.type)).toEqual([
+        "order.confirmed",
+        "order.packing",
+        "order.cancelled",
+      ]);
+      expect(sent()[2]?.title).toBe("Order cancelled");
+    });
+
+    it("never fails or delays an order when notifications are down or hanging", async () => {
+      fake.state.notificationMode = "down";
+      expect((await place()).statusCode).toBe(201);
+      fake.state.notificationMode = "hang";
+      const started = Date.now();
+      const res = await place();
+      expect(res.statusCode).toBe(201);
+      expect(Date.now() - started).toBeLessThan(1000);
+      const order = res.json();
+      expect((await post(`/v1/orders/${order.id}/start-packing`, staff)).statusCode).toBe(200);
     });
   });
 

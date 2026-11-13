@@ -8,6 +8,8 @@ import path from "node:path";
 import {
   seedBanners,
   seedCategories,
+  seedProductGroups,
+  seedProductImages,
   seedProducts,
 } from "../services/catalog/src/modules/catalog/seed";
 import {
@@ -30,12 +32,24 @@ const lines: string[] = [
 
 for (const c of seedCategories) {
   lines.push(
-    `insert into catalog.categories (id, name, emoji, color, image_url, image_fit, sort_order) values (${q(c.id)}, ${q(c.name)}, ${q(c.emoji)}, ${q(c.color)}, ${q(c.imageUrl)}, ${q(c.imageFit)}, ${c.sortOrder}) on conflict (id) do nothing;`,
+    `insert into catalog.categories (id, name, emoji, color, image_url, image_fit, sort_order, parent_id) values (${q(c.id)}, ${q(c.name)}, ${q(c.emoji)}, ${q(c.color)}, ${q(c.imageUrl)}, ${q(c.imageFit)}, ${c.sortOrder}, ${q(c.parentId)}) on conflict (id) do nothing;`,
   );
 }
+for (const g of seedProductGroups) {
+  lines.push(
+    `insert into catalog.product_groups (id, name, category_id, brand) values (${q(g.id)}, ${q(g.name)}, ${q(g.categoryId)}, ${q(g.brand)}) on conflict (id) do nothing;`,
+  );
+}
+const textArray = (values: string[] | undefined) =>
+  `array[${(values ?? []).map((v) => q(v)).join(", ")}]::text[]`;
 for (const p of seedProducts) {
   lines.push(
-    `insert into catalog.products (id, category_id, name, unit, price_paise, mrp_paise, emoji, image_url, image_fit, delivery_mins, options_count, description) values (${q(p.id)}, ${q(p.categoryId)}, ${q(p.name)}, ${q(p.unit)}, ${p.pricePaise}, ${p.mrpPaise}, ${q(p.emoji)}, ${q(p.imageUrl)}, ${q(p.imageFit)}, ${p.deliveryMins}, ${q(p.optionsCount)}, ${q(p.description)}) on conflict (id) do nothing;`,
+    `insert into catalog.products (id, category_id, name, unit, price_paise, mrp_paise, emoji, image_url, image_fit, delivery_mins, options_count, description, brand, tags, group_id, variant_label) values (${q(p.id)}, ${q(p.categoryId)}, ${q(p.name)}, ${q(p.unit)}, ${p.pricePaise}, ${p.mrpPaise}, ${q(p.emoji)}, ${q(p.imageUrl)}, ${q(p.imageFit)}, ${p.deliveryMins}, ${q(p.optionsCount)}, ${q(p.description)}, ${q(p.brand)}, ${textArray(p.tags)}, ${q(p.groupId)}, ${q(p.variantLabel)}) on conflict (id) do nothing;`,
+  );
+}
+for (const [i, img] of seedProductImages.entries()) {
+  lines.push(
+    `insert into catalog.product_images (product_id, url, alt, sort_order) select ${q(img.productId)}, ${q(img.url)}, ${q(img.alt)}, ${i} where not exists (select 1 from catalog.product_images where product_id = ${q(img.productId)} and url = ${q(img.url)});`,
   );
 }
 for (const b of seedBanners) {

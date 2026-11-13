@@ -1,5 +1,9 @@
 import {
   adjustStockBodySchema,
+  expiringQuerySchema,
+  expiringResponseSchema,
+  stockAlertsQuerySchema,
+  stockAlertsResponseSchema,
   adminWarehouseSchema,
   adminWarehousesResponseSchema,
   createWarehouseBodySchema,
@@ -23,6 +27,7 @@ import {
   type Identity,
   type ServiceApp,
 } from "@qc/service-kit";
+import { expiringBatches, stockAlerts, withRestockCheck, type RestockNotifier } from "./alerts";
 import { NotFoundError } from "./errors";
 import type { InventoryRepository } from "./repository";
 
@@ -50,7 +55,17 @@ function warehouseFor(identity: Identity, requested: string | undefined): string
 }
 
 /** Stock tools for the warehouse team and admins. Roles are checked here as well as at the gateway. */
-export function registerStaffRoutes(app: ServiceApp, repository: InventoryRepository): void {
+/** Like warehouseFor, but an admin may leave it out to mean every warehouse. */
+function warehouseOrAll(identity: Identity, requested: string | undefined): string | undefined {
+  if (identity.role === "admin") return requested;
+  return warehouseFor(identity, requested);
+}
+
+export function registerStaffRoutes(
+  app: ServiceApp,
+  repository: InventoryRepository,
+  notifier?: RestockNotifier,
+): void {
   const knownWarehouse = async (id: string) => {
     if (!(await repository.getWarehouse(id))) throw new NotFoundError("Warehouse not found.");
   };
@@ -110,6 +125,43 @@ export function registerStaffRoutes(app: ServiceApp, repository: InventoryReposi
     },
   );
 
+  app.get(
+    "/v1/inventory/expiring",
+    {
+      schema: {
+        tags: ["inventory"],
+        summary: "Stock expiring soon (and past its date) that is still on the shelf",
+        querystring: expiringQuerySchema,
+        response: { 200: expiringResponseSchema },
+      },
+    },
+    async (request) => {
+      const identity = requireRole(request, ...STAFF);
+      const warehouseId = warehouseOrAll(identity, request.query.warehouseId);
+      return { items: await expiringBatches(repository, warehouseId, request.query.days) };
+    },
+  );
+
+  app.get(
+    "/v1/inventory/alerts",
+    {
+      schema: {
+        tags: ["inventory"],
+        summary: "Out of stock, low stock, expiring and expired items",
+        querystring: stockAlertsQuerySchema,
+        response: { 200: stockAlertsResponseSchema },
+      },
+    },
+    async (request) => {
+      const identity = requireRole(request, ...STAFF);
+      return stockAlerts(repository, {
+        warehouseId: warehouseOrAll(identity, request.query.warehouseId),
+        lowThreshold: request.query.lowThreshold,
+        expiryDays: request.query.expiryDays,
+      });
+    },
+  );
+
   app.post(
     "/v1/inventory/stock/receive",
     {
@@ -124,12 +176,19 @@ export function registerStaffRoutes(app: ServiceApp, repository: InventoryReposi
       const identity = requireRole(request, ...STAFF);
       const warehouseId = warehouseFor(identity, request.body.warehouseId);
       await knownWarehouse(warehouseId);
-      const items = await repository.receiveStock({
+      const items = await withRestockCheck(
+        repository,
+        notifier,
         warehouseId,
-        reference: request.body.reference,
-        items: request.body.items,
-        actorId: identity.userId,
-      });
+        request.body.items.map((i) => i.productId),
+        () =>
+          repository.receiveStock({
+            warehouseId,
+            reference: request.body.reference,
+            items: request.body.items,
+            actorId: identity.userId,
+          }),
+      );
       return { items };
     },
   );
@@ -149,14 +208,21 @@ export function registerStaffRoutes(app: ServiceApp, repository: InventoryReposi
       const body = request.body;
       const warehouseId = warehouseFor(identity, body.warehouseId);
       await knownWarehouse(warehouseId);
-      return repository.adjustStock({
+      return withRestockCheck(
+        repository,
+        body.quantityDelta > 0 ? notifier : undefined,
         warehouseId,
-        productId: body.productId,
-        type: body.type,
-        quantityDelta: body.quantityDelta,
-        reason: body.reason,
-        actorId: identity.userId,
-      });
+        [body.productId],
+        () =>
+          repository.adjustStock({
+            warehouseId,
+            productId: body.productId,
+            type: body.type,
+            quantityDelta: body.quantityDelta,
+            reason: body.reason,
+            actorId: identity.userId,
+          }),
+      );
     },
   );
 

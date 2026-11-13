@@ -6,6 +6,7 @@ const envSchema = baseEnvSchema.extend({
   DATABASE_POOL_MAX: z.coerce.number().int().positive().optional(),
   IDENTITY_SERVICE_URL: optionalUrl(),
   ORDER_SERVICE_URL: optionalUrl(),
+  NOTIFICATION_SERVICE_URL: optionalUrl(),
   GOOGLE_MAPS_SERVER_KEY: optionalString(),
   /**
    * Where door photos are kept. Development defaults to services/delivery/.data/pod. Production

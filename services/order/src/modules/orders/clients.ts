@@ -7,6 +7,8 @@ export type Clients = {
   delivery: InternalClient;
   identity: InternalClient;
   payment: InternalClient;
+  /** Optional so a missing notification service never blocks orders */
+  notification?: InternalClient;
 };
 
 export function createClients(): Clients {
@@ -18,6 +20,12 @@ export function createClients(): Clients {
     inventory: make(env.WAREHOUSE_INVENTORY_SERVICE_URL, "http://localhost:4003"),
     delivery: make(env.DELIVERY_SERVICE_URL, "http://localhost:4006"),
     payment: make(env.PAYMENT_SERVICE_URL, "http://localhost:4005"),
+    // A short timeout: a slow inbox must never hold up an order
+    notification: createInternalClient({
+      baseUrl: env.NOTIFICATION_SERVICE_URL ?? "http://localhost:4007",
+      apiKey: env.INTERNAL_API_KEY,
+      timeoutMs: 1500,
+    }),
   };
 }
 

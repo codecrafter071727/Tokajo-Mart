@@ -16,7 +16,7 @@ import { DeliveryService } from "./modules/delivery/service";
 
 export type BuildAppOptions = {
   db?: Kysely<DB>;
-  clients?: { order: InternalClient; identity: InternalClient };
+  clients?: { order: InternalClient; identity: InternalClient; notification?: InternalClient };
   now?: () => Date;
   /** Door photo storage. Null turns uploads off. */
   podStorage?: PodStorage | null;
@@ -50,6 +50,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     identity: createInternalClient({
       baseUrl: env.IDENTITY_SERVICE_URL ?? "http://localhost:4001",
       apiKey: env.INTERNAL_API_KEY,
+    }),
+    // A short timeout: a slow inbox must never hold up a rider
+    notification: createInternalClient({
+      baseUrl: env.NOTIFICATION_SERVICE_URL ?? "http://localhost:4007",
+      apiKey: env.INTERNAL_API_KEY,
+      timeoutMs: 1500,
     }),
   };
   registerDeliveryRoutes(app, new DeliveryService(db, clients, options.now));

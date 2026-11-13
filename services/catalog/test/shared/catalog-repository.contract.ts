@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CatalogError, type CatalogRepository } from "../../src/modules/catalog";
+import { CatalogError, parseImportCsv, type CatalogRepository } from "../../src/modules/catalog";
 
 /**
  * Behaviour every CatalogRepository must have. It runs against the in-memory repository and
@@ -115,6 +115,13 @@ export function catalogRepositoryContract(
       description: null,
       ...extra,
     });
+    const categoryBase = {
+      name: "",
+      emoji: "",
+      color: "#F3F6F5",
+      imageUrl: null,
+      imageFit: "cover" as const,
+    };
     const rejectsWith = async (promise: Promise<unknown>, status: number, pattern: RegExp) => {
       const error = await promise.then(
         () => null,
@@ -382,6 +389,329 @@ export function catalogRepositoryContract(
           expect(await repo.deleteBanner(banner.id)).toBe(true);
         }
         expect(await repo.deleteBanner(banner.id)).toBe(false);
+      });
+    });
+
+    // ---------------------------------------------------------------------------------------
+    // Catalog depth: sub categories, variants, photos, brand and tags search, CSV import
+    // ---------------------------------------------------------------------------------------
+    describe("sub categories", () => {
+      it("nests one level, lists the child after its parent, and filters a parent with its children", async () => {
+        const repo = await make();
+        const parent = await repo.createCategory({
+          ...categoryBase,
+          name: `Test Cat Parent ${unique()}`,
+        });
+        const child = await repo.createCategory({
+          ...categoryBase,
+          name: `Test Cat Child ${unique()}`,
+          parentId: parent.id,
+        });
+        const product = await repo.createProduct(
+          newProduct(child.id, { name: `Subcat Item ${unique()}` }),
+        );
+        try {
+          expect(child.parentId).toBe(parent.id);
+          const list = await repo.listCategories();
+          const at = list.findIndex((c) => c.id === parent.id);
+          expect(list[at + 1]).toMatchObject({ id: child.id, parentId: parent.id });
+          expect(list.find((c) => c.id === "dairy")?.parentId ?? null).toBeNull();
+
+          const byParent = await repo.listProducts({ categoryId: parent.id, limit: 40, offset: 0 });
+          expect(byParent.items.map((p) => p.id)).toContain(product.id);
+
+          await rejectsWith(
+            repo.createCategory({
+              ...categoryBase,
+              name: `Test Cat Deep ${unique()}`,
+              parentId: child.id,
+            }),
+            400,
+            /one level deep/,
+          );
+          await rejectsWith(
+            repo.updateCategory(parent.id, { parentId: "dairy" }),
+            400,
+            /has sub categories/,
+          );
+          await rejectsWith(
+            repo.updateCategory(child.id, { parentId: child.id }),
+            400,
+            /own parent/,
+          );
+          await rejectsWith(
+            repo.createCategory({
+              ...categoryBase,
+              name: `Test Cat Orphan ${unique()}`,
+              parentId: "nope",
+            }),
+            400,
+            /parent category does not exist/,
+          );
+          await rejectsWith(repo.deleteCategory(parent.id), 409, /sub categor/);
+        } finally {
+          await repo.archiveProduct(product.id);
+          expect(await repo.deleteCategory(child.id)).toBe(true);
+          expect(await repo.deleteCategory(parent.id)).toBe(true);
+        }
+      });
+    });
+
+    describe("variants", () => {
+      it("returns every variant of a group on the product page, cheapest first, and counts options", async () => {
+        const repo = await make();
+        const detail = (await repo.getProductDetail("p5"))!;
+        expect(detail.group).toEqual({ id: "g-amul-taaza", name: "Amul Taaza Toned Fresh Milk" });
+        expect(detail.variants.map((v) => [v.id, v.label])).toEqual([
+          ["p5", "500 ml"],
+          ["p21", "1 L"],
+        ]);
+        expect(detail.optionsCount).toBe(2);
+        expect((await repo.getProduct("p21"))?.optionsCount).toBe(2);
+        // A product outside any group keeps its own optionsCount and has no variants
+        const plain = (await repo.getProductDetail("p9"))!;
+        expect(plain.variants).toEqual([]);
+        expect(plain.group).toBeNull();
+        expect(plain.optionsCount).toBe(3);
+      });
+
+      it("makes a group, adds variants to it, and drops archived ones from the list", async () => {
+        const repo = await make();
+        const group = await repo.createProductGroup({
+          name: `Test Group ${unique()}`,
+          categoryId: "snacks",
+          brand: "Testco",
+        });
+        expect(group).toMatchObject({ categoryId: "snacks", brand: "Testco", variantCount: 0 });
+        await rejectsWith(
+          repo.createProductGroup({
+            name: group.name.toUpperCase(),
+            categoryId: "snacks",
+            brand: null,
+          }),
+          409,
+          /already exists/,
+        );
+        const small = await repo.createProduct(
+          newProduct("snacks", {
+            groupId: group.id,
+            variantLabel: "Small",
+            pricePaise: 1000,
+            mrpPaise: 1200,
+          }),
+        );
+        const big = await repo.createProduct(
+          newProduct("snacks", {
+            groupId: group.id,
+            variantLabel: "Big",
+            pricePaise: 3000,
+            mrpPaise: 3200,
+          }),
+        );
+        try {
+          const detail = (await repo.getProductDetail(big.id))!;
+          expect(detail.variants.map((v) => v.label)).toEqual(["Small", "Big"]);
+          expect(detail.optionsCount).toBe(2);
+          expect(
+            (await repo.listProductGroups()).find((g) => g.id === group.id)?.variantCount,
+          ).toBe(2);
+
+          await repo.archiveProduct(small.id);
+          const after = (await repo.getProductDetail(big.id))!;
+          expect(after.variants.map((v) => v.id)).toEqual([big.id]);
+          expect(after.optionsCount).toBe(1);
+
+          await rejectsWith(
+            repo.createProduct(newProduct("snacks", { variantLabel: "Lonely" })),
+            400,
+            /needs a product group/,
+          );
+          await rejectsWith(
+            repo.createProduct(newProduct("snacks", { groupId: "g-nope" })),
+            400,
+            /group does not exist/,
+          );
+          await rejectsWith(
+            repo.updateProduct(big.id, { groupId: "g-nope" }),
+            400,
+            /group does not exist/,
+          );
+          const moved = (await repo.updateProduct(big.id, { groupId: null, variantLabel: null }))!;
+          expect(moved.groupId).toBeNull();
+        } finally {
+          await repo.archiveProduct(small.id);
+          await repo.archiveProduct(big.id);
+        }
+      });
+    });
+
+    describe("photos", () => {
+      it("puts the main photo first and the extras after, in their order", async () => {
+        const repo = await make();
+        const images = (await repo.getProductDetail("p7"))!.images;
+        expect(images[0]).toMatchObject({ id: null, primary: true });
+        expect(images.length).toBeGreaterThanOrEqual(2);
+        expect(images.slice(1).every((i) => i.primary === false && i.id !== null)).toBe(true);
+      });
+
+      it("adds, reorders, promotes and removes photos, with a limit", async () => {
+        const repo = await make();
+        const product = await repo.createProduct(
+          newProduct("snacks", { imageUrl: "https://example.com/main.jpg" }),
+        );
+        try {
+          const a = (await repo.addProductImage(product.id, {
+            url: "https://example.com/a.jpg",
+            alt: "A",
+          }))!;
+          const b = (await repo.addProductImage(product.id, {
+            url: "https://example.com/b.jpg",
+            alt: "B",
+          }))!;
+          expect(a.map((i) => i.url)).toEqual([
+            "https://example.com/main.jpg",
+            "https://example.com/a.jpg",
+          ]);
+          const [idA, idB] = [b[1]!.id!, b[2]!.id!];
+
+          const reordered = (await repo.reorderProductImages(product.id, [idB, idA]))!;
+          expect(reordered.slice(1).map((i) => i.url)).toEqual([
+            "https://example.com/b.jpg",
+            "https://example.com/a.jpg",
+          ]);
+          await rejectsWith(repo.reorderProductImages(product.id, [idA]), 400, /exactly once/);
+
+          const promoted = (await repo.makePrimaryImage(product.id, idA))!;
+          expect(promoted[0]).toMatchObject({ url: "https://example.com/a.jpg", primary: true });
+          expect(promoted.slice(1).map((i) => i.url)).toContain("https://example.com/main.jpg");
+          expect((await repo.getProduct(product.id))?.imageUrl).toBe("https://example.com/a.jpg");
+
+          expect(await repo.removeProductImage(product.id, idB)).toBe(true);
+          expect(await repo.removeProductImage(product.id, idB)).toBe(false);
+          expect(
+            await repo.addProductImage("nope", { url: "https://example.com/x.jpg", alt: "" }),
+          ).toBeNull();
+
+          for (let i = 0; i < 7; i += 1) {
+            await repo.addProductImage(product.id, {
+              url: `https://example.com/${i}.jpg`,
+              alt: "",
+            });
+          }
+          await rejectsWith(
+            repo.addProductImage(product.id, { url: "https://example.com/over.jpg", alt: "" }),
+            409,
+            /extra photos/,
+          );
+        } finally {
+          await repo.archiveProduct(product.id);
+        }
+      });
+    });
+
+    describe("search by brand, tags and typos", () => {
+      const ids = async (repo: CatalogRepository, q: string) =>
+        (await repo.listProducts({ q, limit: 40, offset: 0 })).items.map((p) => p.id);
+
+      it("finds a product by a tag that is not in its name", async () => {
+        const repo = await make();
+        expect(await ids(repo, "dahi")).toContain("p8");
+        expect(await ids(repo, "nariyal")).toContain("p14");
+        expect(await ids(repo, "cottage cheese")).toContain("p7");
+      });
+
+      it("tolerates a typo in the name, and still finds amul first by name", async () => {
+        const repo = await make();
+        expect((await ids(repo, "panir"))[0]).toBe("p7");
+        expect(await ids(repo, "bred")).toContain("p18");
+        const amul = await repo.listProducts({ q: "amul", limit: 40, offset: 0 });
+        expect(amul.items.every((p) => p.name.toLowerCase().includes("amul"))).toBe(true);
+      });
+
+      it("returns brand and tags on products", async () => {
+        const repo = await make();
+        expect(await repo.getProduct("p7")).toMatchObject({
+          brand: "Amul",
+          tags: expect.arrayContaining(["paneer"]),
+        });
+      });
+    });
+
+    describe("CSV import", () => {
+      const header =
+        "id,name,unit,price,mrp,category,brand,tags,image_url,variant_group,variant_label,description";
+
+      it("plans an import without changing anything", async () => {
+        const repo = await make();
+        const name = `Importtest ${unique()}`;
+        const csv = [
+          header,
+          `,${name},50 g,20,25,snacks,Crunchy,chips|salted,,,,`,
+          "p8,Mother Dairy Curd,400 g,45,50,Dairy & Breakfast,Mother Dairy,curd|dahi,,,,",
+        ].join("\n");
+        const { rows, errors } = parseImportCsv(csv);
+        expect(errors).toEqual([]);
+        const plan = await repo.planImport(rows);
+        expect(plan).toMatchObject({ creates: 1, updates: 1, errors: [] });
+        const before = await repo.listProducts({ q: name, limit: 40, offset: 0 });
+        expect(before.items.filter((p) => p.name === name)).toEqual([]);
+      });
+
+      it("applies all rows, makes new groups by name, and is all or nothing", async () => {
+        const repo = await make();
+        const tag = unique();
+        const groupName = `Test Import Group ${tag}`;
+        const csv = [
+          header,
+          `p-imp-${tag}-a,Import Juice ${tag},200 ml,30,35,beverages,Juicy,juice,,${groupName},Small,`,
+          `p-imp-${tag}-b,Import Juice ${tag},1 L,90,99,beverages,Juicy,juice,,${groupName},Large,"Big, family size"`,
+        ].join("\n");
+        const parsed = parseImportCsv(csv);
+        expect(parsed.errors).toEqual([]);
+        const plan = await repo.applyImport(parsed.rows);
+        try {
+          expect(plan).toMatchObject({ creates: 2, updates: 0 });
+          expect(plan.groupsCreated).toHaveLength(1);
+          const detail = (await repo.getProductDetail(`p-imp-${tag}-b`))!;
+          expect(detail).toMatchObject({
+            pricePaise: 9000,
+            mrpPaise: 9900,
+            brand: "Juicy",
+            description: "Big, family size",
+          });
+          expect(detail.variants.map((v) => v.label)).toEqual(["Small", "Large"]);
+
+          // Updating one row works; a bad row anywhere stops the whole file
+          const again = [
+            header,
+            `p-imp-${tag}-a,Import Juice ${tag},200 ml,28,35,beverages,Juicy,juice,,${groupName},Small,`,
+            `,Import Ghost ${tag},1 pc,10,12,no-such-category,,,,,,`,
+          ].join("\n");
+          const second = parseImportCsv(again);
+          expect(second.errors).toEqual([]);
+          const failed = await repo.applyImport(second.rows).then(
+            () => null,
+            (e) => e,
+          );
+          expect(failed).toBeInstanceOf(CatalogError);
+          expect((failed as CatalogError).details).toEqual([
+            { line: 3, column: "category", message: 'No category "no-such-category".' },
+          ]);
+          expect((await repo.getProduct(`p-imp-${tag}-a`))?.pricePaise).toBe(3000);
+        } finally {
+          await repo.archiveProduct(`p-imp-${tag}-a`);
+          await repo.archiveProduct(`p-imp-${tag}-b`);
+        }
+      });
+
+      it("exports every product on sale with its depth fields", async () => {
+        const repo = await make();
+        const all = await repo.exportProducts();
+        expect(all.find((p) => p.id === "p5")).toMatchObject({
+          groupId: "g-amul-taaza",
+          brand: "Amul",
+        });
+        expect(all.length).toBeGreaterThanOrEqual(22);
       });
     });
   });

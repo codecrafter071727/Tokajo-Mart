@@ -43,11 +43,27 @@ export type MovementFilter = {
 };
 export type MovementPage = { items: StockMovement[]; nextBeforeId: number | null };
 
+/** A received line. With an expiry date it is also recorded as a batch. */
+export type ReceiveLine = StockLine & { expiresOn?: string; batchCode?: string };
+
 export type ReceiveInput = {
   warehouseId: string;
   reference?: string;
-  items: StockLine[];
+  items: ReceiveLine[];
   actorId: string | null;
+};
+
+/** A received batch with what is on hand for its product now (selling does not touch batches). */
+export type BatchRecord = {
+  id: string;
+  warehouseId: string;
+  productId: string;
+  batchCode: string | null;
+  quantity: number;
+  /** YYYY-MM-DD */
+  expiresOn: string;
+  receivedAt: string;
+  onHand: number;
 };
 export type AdjustInput = {
   warehouseId: string;
@@ -103,6 +119,12 @@ export interface InventoryRepository {
   updateWarehouse(id: string, patch: WarehousePatch): Promise<Warehouse | null>;
   /** Release every hold whose time is up. Returns how many were released. */
   expireDue(now: Date): Promise<number>;
+  /** Every stock row of one warehouse, or of all of them (for alerts) */
+  allStock(warehouseId?: string): Promise<StockRow[]>;
+  /** Batches expiring on or before a date (YYYY-MM-DD), soonest first */
+  listBatches(filter: { warehouseId?: string; expiresOnOrBefore: string }): Promise<BatchRecord[]>;
+  /** Which products a reservation covers, to tell who was waiting when its stock comes back */
+  reservationLines(reference: string): Promise<{ warehouseId: string; lines: StockLine[] } | null>;
 }
 
 // -------------------------------------------------------------------------------------------
@@ -280,6 +302,7 @@ export function createInMemoryInventoryRepository(
   });
   const reservations = new Map<string, MemoryReservation>();
   const key = (warehouseId: string, productId: string) => `${warehouseId}/${productId}`;
+  const batches: Omit<BatchRecord, "onHand">[] = [];
 
   const view = (r: MemoryReservation): Reservation => ({
     id: r.id,
@@ -399,6 +422,18 @@ export function createInMemoryInventoryRepository(
     },
 
     async receiveStock({ warehouseId, reference, items: lines, actorId }) {
+      for (const line of lines) {
+        if (!line.expiresOn) continue;
+        batches.push({
+          id: `batch-${batches.length + 1}`,
+          warehouseId,
+          productId: line.productId,
+          batchCode: line.batchCode ?? null,
+          quantity: line.quantity,
+          expiresOn: line.expiresOn,
+          receivedAt: new Date().toISOString(),
+        });
+      }
       const merged = mergeLines(lines);
       const now = new Date().toISOString();
       for (const line of merged) {
@@ -493,6 +528,35 @@ export function createInMemoryInventoryRepository(
         }
       }
       return count;
+    },
+
+    async allStock(warehouseId) {
+      return [...items]
+        .map(([k, s]) => ({ w: k.split("/")[0]!, p: k.split("/")[1]!, s }))
+        .filter(({ w }) => !warehouseId || w === warehouseId)
+        .map(({ w, p, s }) => row(w, p, s))
+        .sort(
+          (a, b) =>
+            a.warehouseId.localeCompare(b.warehouseId) || a.productId.localeCompare(b.productId),
+        );
+    },
+
+    async listBatches({ warehouseId, expiresOnOrBefore }) {
+      return batches
+        .filter(
+          (b) =>
+            (!warehouseId || b.warehouseId === warehouseId) && b.expiresOn <= expiresOnOrBefore,
+        )
+        .map((b) => ({ ...b, onHand: items.get(key(b.warehouseId, b.productId))?.onHand ?? 0 }))
+        .sort(
+          (a, b) =>
+            a.expiresOn.localeCompare(b.expiresOn) || a.productId.localeCompare(b.productId),
+        );
+    },
+
+    async reservationLines(reference) {
+      const r = reservations.get(reference);
+      return r ? { warehouseId: r.warehouseId, lines: r.lines } : null;
     },
   };
   return repo;

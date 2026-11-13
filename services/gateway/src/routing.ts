@@ -1,6 +1,14 @@
 import type { Role } from "@qc/contracts";
 
-export type ServiceName = "identity" | "catalog" | "inventory" | "order" | "delivery" | "payment";
+export type ServiceName =
+  | "identity"
+  | "catalog"
+  | "inventory"
+  | "order"
+  | "delivery"
+  | "payment"
+  | "notification"
+  | "analytics";
 
 /** Who may call a route: anyone, any signed in user, or only these roles. */
 export type Access = "public" | "authenticated" | Role[];
@@ -61,6 +69,16 @@ const RULES: Rule[] = [
     route: { service: "payment", access: "authenticated", limit: 30 },
   },
   { prefix: "/v1/payments/", route: { service: "payment", access: "authenticated" } },
+
+  // In-app notifications. The service checks roles (Notify me is for customers, admin views for
+  // admins); the gateway only needs a signed in user.
+  { prefix: "/v1/notifications/", route: { service: "notification", access: "authenticated" } },
+
+  // Reports: admins see all warehouses, managers only their own (the service enforces the scope)
+  {
+    prefix: "/v1/analytics/",
+    route: { service: "analytics", access: ["warehouse_manager", "admin"] },
+  },
 
   // Razorpay calls this. It is public, and the payment service verifies the signature over the
   // raw body, so the body and the two signature headers are passed through untouched.

@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { Avatar, Logo } from "@/components/ui/brand";
 import { cn } from "@/components/ui/core";
 import {
+  Bell,
   Bike,
   Boxes,
   Check,
@@ -44,6 +45,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       { href: "/orders", label: "Live orders", icon: ShoppingBag },
       { href: "/customers", label: "Customers", icon: Users },
+      { href: "/notifications", label: "Notifications", icon: Bell },
     ],
   },
   {

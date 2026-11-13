@@ -8,6 +8,8 @@ const envSchema = baseEnvSchema.extend({
   SUPABASE_JWKS_URL: optionalUrl(),
   AWS_REGION: optionalString(),
   AWS_ENDPOINT_URL: optionalUrl(),
+  NOTIFICATION_SERVICE_URL: optionalUrl(),
+  CATALOG_SERVICE_URL: optionalUrl(),
 });
 
 export const env = loadServiceEnv(

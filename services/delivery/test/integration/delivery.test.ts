@@ -78,7 +78,10 @@ suite("delivery service", async () => {
   const orderCalls: { path: string; body: Record<string, unknown> }[] = [];
   const failure = { order: null as InternalCallError | null };
   const orderClient: InternalClient = {
-    get: async () => ({}) as never,
+    get: async (path) =>
+      (path.endsWith("/payment-info")
+        ? { userId: "99990000-0000-4000-8000-000000000001", number: "QC-1" }
+        : {}) as never,
     post: async (path, body) => {
       if (failure.order) throw failure.order;
       orderCalls.push({ path, body: body as Record<string, unknown> });
@@ -98,9 +101,21 @@ suite("delivery service", async () => {
     },
     post: async () => ({}) as never,
   };
+  const notifyCalls: Record<string, unknown>[] = [];
+  const notifyState = { mode: "up" as "up" | "down" | "hang" };
+  const notificationClient: InternalClient = {
+    get: async () => ({}) as never,
+    post: async (_path, body) => {
+      if (notifyState.mode === "down")
+        throw new InternalCallError("down", 0, "SERVICE_UNAVAILABLE");
+      if (notifyState.mode === "hang") return new Promise(() => undefined) as never;
+      notifyCalls.push(body as Record<string, unknown>);
+      return {} as never;
+    },
+  };
   const app = await buildApp({
     db,
-    clients: { order: orderClient, identity: identityClient },
+    clients: { order: orderClient, identity: identityClient, notification: notificationClient },
     now: () => clock,
   });
 
@@ -266,6 +281,40 @@ suite("delivery service", async () => {
       await online(R1);
       await online(R1, false);
       expect((await online(R2)).json().active).not.toBeNull();
+    });
+  });
+
+  describe("telling the customer", () => {
+    it("notifies the customer with the rider's first name when an offer is accepted", async () => {
+      notifyCalls.length = 0;
+      notifyState.mode = "up";
+      await toAssigned(R1);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(notifyCalls).toHaveLength(1);
+      expect(notifyCalls[0]).toMatchObject({
+        userId: "99990000-0000-4000-8000-000000000001",
+        type: "delivery.rider_assigned",
+        title: "Ravi will deliver your order",
+        data: { orderId: ORDER_A },
+      });
+    });
+
+    it("still assigns the rider when notifications are down or hanging", async () => {
+      for (const mode of ["down", "hang"] as const) {
+        await db
+          .deleteFrom("delivery.deliveries")
+          .where("orderId", "in", [ORDER_A, ORDER_B])
+          .execute();
+        await db.deleteFrom("delivery.riderState").where("riderId", "in", IDS).execute();
+        notifyState.mode = mode;
+        const d = await makeDelivery();
+        await online(R1);
+        const started = Date.now();
+        const res = await act(R1, d.id, { type: "accept" });
+        expect(res.statusCode).toBe(200);
+        expect(Date.now() - started).toBeLessThan(1000);
+      }
+      notifyState.mode = "up";
     });
   });
 

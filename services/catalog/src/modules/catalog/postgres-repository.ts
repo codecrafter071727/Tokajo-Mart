@@ -1,8 +1,29 @@
-import type { Banner, Category, Product, UpdateProductBody } from "@qc/contracts";
-import { sql, type Kysely, type Selectable } from "kysely";
+import {
+  MAX_EXTRA_PRODUCT_IMAGES,
+  type Banner,
+  type Category,
+  type Product,
+  type ProductImage,
+  type UpdateProductBody,
+} from "@qc/contracts";
+import { sql, type Kysely, type Selectable, type Transaction } from "kysely";
 import type { CatalogBanners, DB } from "../../db/types.generated";
-import { CatalogError, newProductId, slugify } from "./errors";
-import { discountPercentFor, type CatalogRepository, type ProductFilter } from "./repository";
+import {
+  MIN_TYPO_LENGTH,
+  planImportRows,
+  prefixTsQuery,
+  searchTokens,
+  TYPO_THRESHOLD,
+  variantLabelOf,
+  type ImportRow,
+} from "./depth";
+import { CatalogError, newGroupId, newProductId, slugify } from "./errors";
+import {
+  discountPercentFor,
+  flattenCategoryTree,
+  type CatalogRepository,
+  type ProductFilter,
+} from "./repository";
 
 type ProductRow = {
   id: string;
@@ -17,6 +38,11 @@ type ProductRow = {
   deliveryMins: number;
   optionsCount: number | null;
   description: string | null;
+  brand: string | null;
+  tags: string[];
+  groupId: string | null;
+  variantLabel: string | null;
+  groupCount: number | null;
 };
 
 const toProduct = (row: ProductRow): Product => ({
@@ -31,8 +57,13 @@ const toProduct = (row: ProductRow): Product => ({
   imageUrl: row.imageUrl,
   imageFit: row.imageFit === "cover" ? "cover" : "contain",
   deliveryMins: row.deliveryMins,
-  optionsCount: row.optionsCount,
+  // A product in a group has as many options as its group has variants on sale
+  optionsCount: row.groupId ? row.groupCount || null : row.optionsCount,
   description: row.description,
+  brand: row.brand,
+  tags: row.tags ?? [],
+  groupId: row.groupId,
+  variantLabel: row.variantLabel,
 });
 
 const toBanner = (row: Selectable<CatalogBanners>): Banner => ({
@@ -48,6 +79,28 @@ const toBanner = (row: Selectable<CatalogBanners>): Banner => ({
   startsAt: row.startsAt ? row.startsAt.toISOString() : null,
   endsAt: row.endsAt ? row.endsAt.toISOString() : null,
 });
+
+const toCategory = (r: {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  imageUrl: string | null;
+  imageFit: string;
+  sortOrder: number;
+  parentId: string | null;
+}): Category => ({ ...r, imageFit: r.imageFit === "contain" ? "contain" : "cover" });
+
+const categoryColumns = [
+  "id",
+  "name",
+  "emoji",
+  "color",
+  "imageUrl",
+  "imageFit",
+  "sortOrder",
+  "parentId",
+] as const;
 
 /** Escape LIKE wildcards so a search for "100%" or "a_b" matches those characters literally. */
 export const escapeLike = (value: string) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -69,17 +122,83 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
     "p.deliveryMins",
     "p.optionsCount",
     "p.description",
+    "p.brand",
+    "p.tags",
+    "p.groupId",
+    "p.variantLabel",
+    sql<number | null>`(select count(*)::int from catalog.products g
+      where g.group_id = p.group_id and g.deleted_at is null)`.as("groupCount"),
   ] as const;
-  const plainColumns = productColumns.map((c) => c.replace("p.", "")) as never[];
 
-  async function requireCategory(id: string) {
-    const row = await db
+  async function requireCategory(id: string, conn: Kysely<DB> = db) {
+    const row = await conn
       .selectFrom("catalog.categories")
       .select("id")
       .where("id", "=", id)
       .where("deletedAt", "is", null)
       .executeTakeFirst();
     if (!row) throw new CatalogError(400, "That category does not exist.");
+  }
+
+  async function requireGroup(id: string) {
+    const row = await db
+      .selectFrom("catalog.productGroups")
+      .select("id")
+      .where("id", "=", id)
+      .executeTakeFirst();
+    if (!row) throw new CatalogError(400, "That product group does not exist.");
+  }
+
+  async function checkParent(selfId: string | null, parentId: string | null | undefined) {
+    if (parentId === null || parentId === undefined) return;
+    if (parentId === selfId) throw new CatalogError(400, "A category cannot be its own parent.");
+    const parent = await db
+      .selectFrom("catalog.categories")
+      .select(["id", "parentId"])
+      .where("id", "=", parentId)
+      .where("deletedAt", "is", null)
+      .executeTakeFirst();
+    if (!parent) throw new CatalogError(400, "That parent category does not exist.");
+    if (parent.parentId) {
+      throw new CatalogError(400, "Sub categories go one level deep. Pick a top level category.");
+    }
+    if (selfId) {
+      const child = await db
+        .selectFrom("catalog.categories")
+        .select("id")
+        .where("parentId", "=", selfId)
+        .where("deletedAt", "is", null)
+        .executeTakeFirst();
+      if (child) {
+        throw new CatalogError(400, "This category has sub categories, so it cannot become one.");
+      }
+    }
+  }
+
+  /** One product with its group size, archived or not as asked. */
+  async function readProduct(id: string, includeArchived: boolean) {
+    let query = db
+      .selectFrom("catalog.products as p")
+      .select([...productColumns, sql<boolean>`p.deleted_at is not null`.as("archived")])
+      .where("p.id", "=", id);
+    if (!includeArchived) query = query.where("p.deletedAt", "is", null);
+    const row = await query.executeTakeFirst();
+    return row ? { ...toProduct(row as ProductRow), archived: row.archived } : null;
+  }
+
+  async function imagesOf(productId: string, mainUrl: string | null, name: string) {
+    const extras = await db
+      .selectFrom("catalog.productImages")
+      .select(["id", "url", "alt"])
+      .where("productId", "=", productId)
+      .orderBy("sortOrder")
+      .orderBy("createdAt")
+      .execute();
+    const images: ProductImage[] = [
+      ...(mainUrl ? [{ id: null, url: mainUrl, alt: name, primary: true }] : []),
+      ...extras.map((e) => ({ id: e.id, url: e.url, alt: e.alt, primary: false })),
+    ];
+    return images;
   }
 
   /** The one product search. Admins also see archived products, flagged. */
@@ -93,21 +212,59 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
       .select([...productColumns, sql<boolean>`p.deleted_at is not null`.as("archived")]);
     if (!includeArchived) query = query.where("p.deletedAt", "is", null);
 
-    if (categoryId !== undefined) query = query.where("p.categoryId", "=", categoryId);
+    if (categoryId !== undefined) {
+      // A parent category includes the products of its sub categories
+      query = query.where((eb) =>
+        eb.or([
+          eb("p.categoryId", "=", categoryId),
+          eb(
+            "p.categoryId",
+            "in",
+            eb
+              .selectFrom("catalog.categories as sub")
+              .select("sub.id")
+              .where("sub.parentId", "=", categoryId)
+              .where("sub.deletedAt", "is", null),
+          ),
+        ]),
+      );
+    }
 
     if (q !== undefined) {
-      const needle = escapeLike(q.toLowerCase());
+      const lower = q.toLowerCase();
+      const needle = escapeLike(lower);
+      const tokens = searchTokens(q);
+      const tsQuery = tokens.length > 0 ? prefixTsQuery(tokens) : null;
+      const fullText = tsQuery
+        ? sql<boolean>`p.search_vector @@ to_tsquery('simple', ${tsQuery})`
+        : sql<boolean>`false`;
+      const typo =
+        lower.length >= MIN_TYPO_LENGTH
+          ? sql<boolean>`word_similarity(${lower}, lower(p.name)) >= ${TYPO_THRESHOLD}`
+          : sql<boolean>`false`;
       // 0 name starts with it, 1 a word in the name starts with it, 2 name contains it,
-      // 3 pack size or category name contains it. Rows that match none are dropped.
+      // 3 pack size or category name contains it, 4 full text match on name, brand, tags or
+      // category, 5 a typo match on the name. Rows that match none are dropped.
       const score = sql<number>`case
         when lower(p.name) like ${needle + "%"} then 0
         when lower(p.name) like ${"% " + needle + "%"} or lower(p.name) like ${"%-" + needle + "%"} then 1
         when lower(p.name) like ${"%" + needle + "%"} then 2
         when lower(p.unit) like ${"%" + needle + "%"} or lower(c.name) like ${"%" + needle + "%"} then 3
+        when ${fullText} then 4
+        when ${typo} then 5
       end`;
+      const similarity = sql<number>`word_similarity(${lower}, lower(p.name))`;
+      const closeness = tsQuery
+        ? sql<number>`case
+            when ${score} = 4 then ts_rank(p.search_vector, to_tsquery('simple', ${tsQuery}))
+            when ${score} = 5 then ${similarity}
+            else 0
+          end`
+        : sql<number>`case when ${score} = 5 then ${similarity} else 0 end`;
       query = query
         .where(sql<boolean>`${score} is not null`)
         .orderBy(score)
+        .orderBy(closeness, "desc")
         .orderBy("p.name");
     } else {
       query = query.orderBy("c.sortOrder").orderBy("p.id");
@@ -155,16 +312,27 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
     }
   }
 
+  async function importCatalog(trx: Kysely<DB> = db) {
+    const [categories, groups, ids] = await Promise.all([
+      trx
+        .selectFrom("catalog.categories")
+        .select(["id", "name"])
+        .where("deletedAt", "is", null)
+        .execute(),
+      trx.selectFrom("catalog.productGroups").select(["id", "name"]).execute(),
+      trx.selectFrom("catalog.products").select("id").execute(),
+    ]);
+    return { categories, groups, existingIds: new Set(ids.map((r) => r.id)) };
+  }
+
   const repo: CatalogRepository = {
     async listCategories(): Promise<Category[]> {
       const rows = await db
         .selectFrom("catalog.categories")
-        .select(["id", "name", "emoji", "color", "imageUrl", "imageFit", "sortOrder"])
+        .select(categoryColumns)
         .where("deletedAt", "is", null)
-        .orderBy("sortOrder")
-        .orderBy("name")
         .execute();
-      return rows.map((r) => ({ ...r, imageFit: r.imageFit === "contain" ? "contain" : "cover" }));
+      return flattenCategoryTree(rows.map(toCategory));
     },
 
     async listProducts(filter) {
@@ -177,22 +345,51 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
     },
 
     async getAdminProduct(id) {
-      const row = await db
-        .selectFrom("catalog.products as p")
-        .select([...productColumns, sql<boolean>`p.deleted_at is not null`.as("archived")])
-        .where("p.id", "=", id)
-        .executeTakeFirst();
-      return row ? { ...toProduct(row as ProductRow), archived: row.archived } : null;
+      return readProduct(id, true);
     },
 
     async getProduct(id) {
-      const row = await db
-        .selectFrom("catalog.products as p")
-        .select(productColumns)
-        .where("p.id", "=", id)
-        .where("p.deletedAt", "is", null)
-        .executeTakeFirst();
-      return row ? toProduct(row) : null;
+      const product = await readProduct(id, false);
+      if (!product) return null;
+      const { archived: _a, ...rest } = product;
+      return rest;
+    },
+
+    async getProductDetail(id, includeArchived = false) {
+      const product = await readProduct(id, includeArchived);
+      if (!product) return null;
+      const group = product.groupId
+        ? await db
+            .selectFrom("catalog.productGroups")
+            .select(["id", "name"])
+            .where("id", "=", product.groupId)
+            .executeTakeFirst()
+        : undefined;
+      const variants = group
+        ? (
+            await db
+              .selectFrom("catalog.products")
+              .select(["id", "unit", "variantLabel", "pricePaise", "mrpPaise", "imageUrl"])
+              .where("groupId", "=", group.id)
+              .where((eb) => eb.or([eb("deletedAt", "is", null), eb("id", "=", id)]))
+              .orderBy("pricePaise")
+              .orderBy("id")
+              .execute()
+          ).map((v) => ({
+            id: v.id,
+            label: variantLabelOf(v),
+            unit: v.unit,
+            pricePaise: v.pricePaise,
+            mrpPaise: v.mrpPaise,
+            imageUrl: v.imageUrl,
+          }))
+        : [];
+      return {
+        ...product,
+        variants,
+        images: await imagesOf(product.id, product.imageUrl, product.name),
+        group: group ? { id: group.id, name: group.name } : null,
+      };
     },
 
     async updateProduct(id, patch: UpdateProductBody) {
@@ -210,30 +407,48 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
         "imageFit",
         "deliveryMins",
         "optionsCount",
+        "brand",
+        "tags",
+        "groupId",
+        "variantLabel",
       ] as const) {
         if (patch[key] !== undefined) changes[key] = patch[key];
       }
       if (Object.keys(changes).length === 0) return this.getProduct(id);
       if (patch.categoryId !== undefined) await requireCategory(patch.categoryId);
+      if (patch.groupId) await requireGroup(patch.groupId);
+      if (patch.variantLabel || patch.groupId === null) {
+        const current = await readProduct(id, false);
+        const groupId = patch.groupId !== undefined ? patch.groupId : current?.groupId;
+        const label = patch.variantLabel !== undefined ? patch.variantLabel : current?.variantLabel;
+        if (current && label && !groupId) {
+          throw new CatalogError(400, "A variant label needs a product group.");
+        }
+      }
 
       const row = await db
         .updateTable("catalog.products as p")
         .set(changes)
         .where("p.id", "=", id)
         .where("p.deletedAt", "is", null)
-        .returning(plainColumns)
+        .returning("p.id")
         .executeTakeFirst();
-      return row ? toProduct(row as unknown as ProductRow) : null;
+      return row ? this.getProduct(id) : null;
     },
 
     async createProduct(body) {
       await requireCategory(body.categoryId);
+      if (body.groupId) await requireGroup(body.groupId);
+      if (body.variantLabel && !body.groupId) {
+        throw new CatalogError(400, "A variant label needs a product group.");
+      }
       for (let attempt = 0; attempt < 5; attempt += 1) {
+        const id = newProductId();
         try {
-          const row = await db
+          await db
             .insertInto("catalog.products")
             .values({
-              id: newProductId(),
+              id,
               categoryId: body.categoryId,
               name: body.name,
               unit: body.unit,
@@ -245,10 +460,13 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
               deliveryMins: body.deliveryMins,
               optionsCount: body.optionsCount,
               description: body.description,
+              brand: body.brand ?? null,
+              tags: body.tags ?? [],
+              groupId: body.groupId ?? null,
+              variantLabel: body.variantLabel ?? null,
             })
-            .returning(plainColumns)
-            .executeTakeFirstOrThrow();
-          return toProduct(row as unknown as ProductRow);
+            .execute();
+          return (await this.getProduct(id)) as Product;
         } catch (error) {
           // A clash on the random id is astronomically unlikely; try a fresh one
           if (!isUniqueViolation(error)) throw error;
@@ -274,14 +492,222 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
         .set({ deletedAt: null })
         .where("id", "=", id)
         .where("deletedAt", "is not", null)
-        .returning(plainColumns)
+        .returning("id")
         .executeTakeFirst();
-      return row ? toProduct(row as unknown as ProductRow) : null;
+      return row ? this.getProduct(id) : null;
+    },
+
+    async listProductGroups() {
+      const rows = await db
+        .selectFrom("catalog.productGroups as g")
+        .select([
+          "g.id",
+          "g.name",
+          "g.categoryId",
+          "g.brand",
+          sql<number>`(select count(*)::int from catalog.products p
+            where p.group_id = g.id and p.deleted_at is null)`.as("variantCount"),
+        ])
+        .orderBy("g.name")
+        .execute();
+      return rows;
+    },
+
+    async createProductGroup(body) {
+      await requireCategory(body.categoryId);
+      const clash = await db
+        .selectFrom("catalog.productGroups")
+        .select("id")
+        .where(sql<boolean>`lower(name) = ${body.name.toLowerCase()}`)
+        .executeTakeFirst();
+      if (clash) throw new CatalogError(409, "A product group with this name already exists.");
+      const row = await db
+        .insertInto("catalog.productGroups")
+        .values({
+          id: newGroupId(),
+          name: body.name,
+          categoryId: body.categoryId,
+          brand: body.brand,
+        })
+        .returning(["id", "name", "categoryId", "brand"])
+        .executeTakeFirstOrThrow();
+      return { ...row, variantCount: 0 };
+    },
+
+    async addProductImage(productId, image) {
+      const product = await readProduct(productId, true);
+      if (!product) return null;
+      await db.transaction().execute(async (trx) => {
+        // Lock the product row so two uploads cannot both slip under the limit
+        await trx
+          .selectFrom("catalog.products")
+          .select("id")
+          .where("id", "=", productId)
+          .forUpdate()
+          .executeTakeFirst();
+        const count = await trx
+          .selectFrom("catalog.productImages")
+          .select([
+            (eb) => eb.fn.countAll<string>().as("n"),
+            sql<number>`coalesce(max(sort_order), -1)`.as("last"),
+          ])
+          .where("productId", "=", productId)
+          .executeTakeFirstOrThrow();
+        if (Number(count.n) >= MAX_EXTRA_PRODUCT_IMAGES) {
+          throw new CatalogError(
+            409,
+            `A product can have ${MAX_EXTRA_PRODUCT_IMAGES} extra photos.`,
+          );
+        }
+        await trx
+          .insertInto("catalog.productImages")
+          .values({ productId, url: image.url, alt: image.alt, sortOrder: Number(count.last) + 1 })
+          .execute();
+      });
+      return imagesOf(productId, product.imageUrl, product.name);
+    },
+
+    async reorderProductImages(productId, ids) {
+      const product = await readProduct(productId, true);
+      if (!product) return null;
+      await db.transaction().execute(async (trx) => {
+        const current = await trx
+          .selectFrom("catalog.productImages")
+          .select("id")
+          .where("productId", "=", productId)
+          .forUpdate()
+          .execute();
+        const known = new Set(current.map((r) => r.id));
+        if (
+          ids.length !== known.size ||
+          new Set(ids).size !== ids.length ||
+          !ids.every((id) => known.has(id))
+        ) {
+          throw new CatalogError(400, "List every extra photo of this product exactly once.");
+        }
+        for (const [index, id] of ids.entries()) {
+          await trx
+            .updateTable("catalog.productImages")
+            .set({ sortOrder: index })
+            .where("id", "=", id)
+            .execute();
+        }
+      });
+      return imagesOf(productId, product.imageUrl, product.name);
+    },
+
+    async removeProductImage(productId, imageId) {
+      const row = await db
+        .deleteFrom("catalog.productImages")
+        .where("id", "=", imageId)
+        .where("productId", "=", productId)
+        .returning("id")
+        .executeTakeFirst();
+      return row !== undefined;
+    },
+
+    async makePrimaryImage(productId, imageId) {
+      const done = await db.transaction().execute(async (trx) => {
+        const product = await trx
+          .selectFrom("catalog.products")
+          .select(["id", "imageUrl", "name"])
+          .where("id", "=", productId)
+          .forUpdate()
+          .executeTakeFirst();
+        const image = await trx
+          .selectFrom("catalog.productImages")
+          .select(["id", "url"])
+          .where("id", "=", imageId)
+          .where("productId", "=", productId)
+          .executeTakeFirst();
+        if (!product || !image) return false;
+        await trx
+          .updateTable("catalog.products")
+          .set({ imageUrl: image.url })
+          .where("id", "=", productId)
+          .execute();
+        if (product.imageUrl) {
+          // The old main photo takes the chosen photo's place, at the front of the extras
+          const first = await trx
+            .selectFrom("catalog.productImages")
+            .select(sql<number>`coalesce(min(sort_order), 0)`.as("min"))
+            .where("productId", "=", productId)
+            .executeTakeFirstOrThrow();
+          await trx
+            .updateTable("catalog.productImages")
+            .set({ url: product.imageUrl, alt: product.name, sortOrder: Number(first.min) - 1 })
+            .where("id", "=", imageId)
+            .execute();
+        } else {
+          await trx.deleteFrom("catalog.productImages").where("id", "=", imageId).execute();
+        }
+        return true;
+      });
+      if (!done) return null;
+      const product = await readProduct(productId, true);
+      return product ? imagesOf(productId, product.imageUrl, product.name) : null;
+    },
+
+    async planImport(rows: ImportRow[]) {
+      return planImportRows(rows, await importCatalog()).plan;
+    },
+
+    async applyImport(rows: ImportRow[]) {
+      return db.transaction().execute(async (trx: Transaction<DB>) => {
+        // Serialise imports so two files cannot both create the same group or id
+        await sql`select pg_advisory_xact_lock(hashtext('catalog.import'))`.execute(trx);
+        const { resolved, groupsCreated, plan } = planImportRows(rows, await importCatalog(trx));
+        if (plan.errors.length > 0) {
+          throw new CatalogError(400, "The file has problems. Nothing was imported.", plan.errors);
+        }
+        for (const group of groupsCreated) {
+          await trx.insertInto("catalog.productGroups").values(group).execute();
+        }
+        for (const row of resolved) {
+          const fields = {
+            name: row.name,
+            unit: row.unit,
+            pricePaise: row.pricePaise,
+            mrpPaise: row.mrpPaise,
+            categoryId: row.categoryId,
+            brand: row.brand,
+            tags: row.tags,
+            groupId: row.groupId,
+            variantLabel: row.variantLabel,
+            description: row.description,
+            ...(row.imageUrl !== null ? { imageUrl: row.imageUrl } : {}),
+          };
+          if (row.exists) {
+            await trx
+              .updateTable("catalog.products")
+              .set(fields)
+              .where("id", "=", row.id as string)
+              .execute();
+          } else {
+            await trx
+              .insertInto("catalog.products")
+              .values({ id: row.id ?? newProductId(), ...fields })
+              .execute();
+          }
+        }
+        return plan;
+      });
+    },
+
+    async exportProducts() {
+      const rows = await db
+        .selectFrom("catalog.products as p")
+        .select(productColumns)
+        .where("p.deletedAt", "is", null)
+        .orderBy("p.id")
+        .execute();
+      return rows.map((r) => toProduct(r as ProductRow));
     },
 
     async createCategory(body) {
       const id = slugify(body.name);
       if (id === "") throw new CatalogError(400, "The name needs letters or numbers.");
+      await checkParent(null, body.parentId);
       const sortOrder =
         body.sortOrder ??
         Number(
@@ -303,6 +729,7 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
             imageUrl: body.imageUrl,
             imageFit: body.imageFit,
             sortOrder,
+            parentId: body.parentId ?? null,
           })
           .execute();
       } catch (error) {
@@ -319,18 +746,20 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
         imageUrl: body.imageUrl,
         imageFit: body.imageFit,
         sortOrder,
+        parentId: body.parentId ?? null,
       };
     },
 
     async updateCategory(id, patch) {
+      if (patch.parentId !== undefined) await checkParent(id, patch.parentId);
       const row = await db
         .updateTable("catalog.categories")
         .set(patch)
         .where("id", "=", id)
         .where("deletedAt", "is", null)
-        .returning(["id", "name", "emoji", "color", "imageUrl", "imageFit", "sortOrder"])
+        .returning(categoryColumns)
         .executeTakeFirst();
-      return row ? { ...row, imageFit: row.imageFit === "contain" ? "contain" : "cover" } : null;
+      return row ? toCategory(row) : null;
     },
 
     async deleteCategory(id) {
@@ -343,6 +772,19 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
           .forUpdate()
           .executeTakeFirst();
         if (!category) return false;
+        const subs = await trx
+          .selectFrom("catalog.categories")
+          .select((eb) => eb.fn.countAll<string>().as("n"))
+          .where("parentId", "=", id)
+          .where("deletedAt", "is", null)
+          .executeTakeFirstOrThrow();
+        const children = Number(subs.n);
+        if (children > 0) {
+          throw new CatalogError(
+            409,
+            `This category has ${children} sub categor${children === 1 ? "y" : "ies"}. Move or remove them first.`,
+          );
+        }
         const sold = await trx
           .selectFrom("catalog.products")
           .select((eb) => eb.fn.countAll<string>().as("n"))

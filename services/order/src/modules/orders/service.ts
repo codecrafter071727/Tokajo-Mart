@@ -48,6 +48,7 @@ import {
   updateCoupon,
   type CouponRow,
 } from "./coupons";
+import { notifyCustomer } from "./notify";
 import { badRequest, conflict, forbidden, notFound, unavailable } from "./errors";
 
 type OrderRow = Selectable<OrdersOrders>;
@@ -428,6 +429,7 @@ export class OrderService {
       await this.call(() =>
         this.clients.inventory.post(`/internal/reservations/${orderId}/commit`),
       );
+      notifyCustomer(this.clients.notification, "confirmed", row);
     }
 
     const [order] = await this.hydrate([row], () => true);
@@ -616,6 +618,7 @@ export class OrderService {
       // Paid: the hold becomes a sale
       await this.call(() => this.clients.inventory.post(`/internal/reservations/${id}/commit`));
     }
+    notifyCustomer(this.clients.notification, input.to, updated);
     return updated;
   }
 
@@ -631,11 +634,18 @@ export class OrderService {
       .post(`/internal/deliveries/by-order/${row.id}/cancel`)
       .catch(() => undefined);
     if (row.paymentMethod === "online") {
-      await this.clients.payment.post(`/internal/payments/orders/${row.id}/refund`).catch(() => {
-        throw unavailable(
-          "The order was cancelled but the refund could not be started yet. Try cancelling again.",
-        );
-      });
+      const refund = await this.clients.payment
+        .post<{ refunded?: boolean }>(`/internal/payments/orders/${row.id}/refund`)
+        .catch(() => {
+          throw unavailable(
+            "The order was cancelled but the refund could not be started yet. Try cancelling again.",
+          );
+        });
+      // Only a captured payment is refunded; an unpaid one has nothing to give back
+      if (refund?.refunded) {
+        // No amount in the message: part may already have been refunded by an admin
+        notifyCustomer(this.clients.notification, "refunded", row);
+      }
     }
   }
 

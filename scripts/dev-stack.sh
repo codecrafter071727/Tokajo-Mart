@@ -48,6 +48,8 @@ start catalog 4002 catalog
 start inventory 4003 warehouse-inventory
 start order 4004 order
 start payment 4005 payment
+start notification 4007 notification
 start delivery 4006 delivery
+start analytics 4008 analytics
 start gateway 4000 gateway
 echo "logs in $RUN_DIR/. Gateway: http://localhost:4000"

@@ -8,6 +8,7 @@ import { setStatusBarStyle } from "expo-status-bar";
 import { Colors, Spacing, Radius, typography } from "../../src/theme";
 import { colors } from "../../src/theme/tokens";
 import { TAB_RESERVE } from "../../src/theme/tabs";
+import { NotificationBell } from "../../src/components/NotificationBell";
 import { SectionRail } from "../../src/components/SectionRail";
 import { useCategories, useProducts, useServiceability } from "../../src/lib/queries";
 import { addressChip } from "../../src/lib/addresses";
@@ -125,6 +126,7 @@ export default function HomeScreen() {
                 {SEARCH_PLACEHOLDERS[placeholderIdx]}
               </Text>
             </Pressable>
+            <NotificationBell small />
             <Pressable
               style={[styles.avatarBtn, styles.avatarBtnSmall]}
               onPress={() => router.push("/account")}
@@ -165,13 +167,16 @@ export default function HomeScreen() {
                   <Ionicons name="chevron-down" size={14} color={Colors.onBrand} />
                 </Pressable>
               </View>
-              <Pressable
-                style={styles.avatarBtn}
-                onPress={() => router.push("/account")}
-                accessibilityLabel="Account"
-              >
-                <Ionicons name="person" size={20} color={Colors.brandText} />
-              </Pressable>
+              <View style={styles.headerActions}>
+                <NotificationBell />
+                <Pressable
+                  style={styles.avatarBtn}
+                  onPress={() => router.push("/account")}
+                  accessibilityLabel="Account"
+                >
+                  <Ionicons name="person" size={20} color={Colors.brandText} />
+                </Pressable>
+              </View>
             </View>
 
             <Pressable
@@ -445,6 +450,7 @@ const styles = StyleSheet.create({
   etaChipText: { ...typography.bodyStrong, fontWeight: "800", color: Colors.onBrand },
   searchBarCompact: { flex: 1, height: 40 },
   avatarBtnSmall: { width: 36, height: 36, borderRadius: 18 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: Spacing[8] },
   section: {
     paddingHorizontal: Spacing[16],
     marginBottom: Spacing[20],

@@ -15,7 +15,15 @@ import path from "node:path";
 const root = path.resolve(import.meta.dirname, "..");
 const url = process.env.DATABASE_URL ?? "postgresql://localhost:5432/qc_dev";
 const args = new Set(process.argv.slice(2));
-const SCHEMAS = ["catalog", "inventory", "identity", "orders", "delivery", "payments"];
+const SCHEMAS = [
+  "catalog",
+  "inventory",
+  "identity",
+  "orders",
+  "delivery",
+  "payments",
+  "notifications",
+];
 
 const host = new URL(url).hostname;
 const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
