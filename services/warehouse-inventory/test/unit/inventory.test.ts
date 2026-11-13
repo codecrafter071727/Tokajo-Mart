@@ -51,11 +51,15 @@ describe("GET /v1/inventory/serviceability", () => {
   it("reports outside the service area, not an error", async () => {
     const res = await get("/v1/inventory/serviceability?lat=19.076&lng=72.8777");
     expect(res.statusCode).toBe(200);
-    expect(serviceabilityResponseSchema.parse(res.json())).toEqual({
+    // The original four fields stay exactly as they were; newer fields are additions
+    expect(serviceabilityResponseSchema.parse(res.json())).toMatchObject({
       serviceable: false,
       warehouseId: null,
       etaMins: null,
       reason: "OUTSIDE_SERVICE_AREA",
+      openNow: false,
+      opensAt: null,
+      matchedBy: "radius",
     });
   });
 

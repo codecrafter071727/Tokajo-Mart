@@ -293,4 +293,30 @@ export class NotificationService {
       },
     };
   }
+
+  /**
+   * Erases everything this service holds about a person whose account is being deleted: their
+   * inbox, their Notify me requests and their device tokens. Safe to repeat.
+   */
+  async purgeUser(userId: string) {
+    return this.db.transaction().execute(async (trx) => {
+      const notifications = await trx
+        .deleteFrom("notifications.notifications")
+        .where("userId", "=", userId)
+        .executeTakeFirst();
+      const subscriptions = await trx
+        .deleteFrom("notifications.subscriptions")
+        .where("userId", "=", userId)
+        .executeTakeFirst();
+      const devices = await trx
+        .deleteFrom("notifications.deviceTokens")
+        .where("userId", "=", userId)
+        .executeTakeFirst();
+      return {
+        notifications: Number(notifications.numDeletedRows),
+        subscriptions: Number(subscriptions.numDeletedRows),
+        devices: Number(devices.numDeletedRows),
+      };
+    });
+  }
 }

@@ -10,6 +10,8 @@ import { useCategories, useProducts, useServiceability } from "../../src/lib/que
 import { EmptyState, ErrorState, ProductGridSkeleton } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
+import { categoryTree } from "../../src/lib/catalog";
+import type { Category } from "../../src/lib/mockData";
 
 const SIDEBAR_W = 84;
 const GRID_PAD = Spacing[12];
@@ -36,7 +38,12 @@ export default function CategoriesScreen() {
   const categories = categoriesQuery.data ?? [];
   const [selected, setSelected] = useState<string | undefined>(params.categoryId);
   // Until the user picks one, show the first category once the list has loaded
-  const activeCategory = selected ?? categories[0]?.id;
+  const tree = useMemo(() => categoryTree(categoriesQuery.data ?? []), [categoriesQuery.data]);
+  const activeCategory = selected ?? tree[0]?.id;
+  // The top level category whose sub categories are open in the rail
+  const activeRoot = tree.find(
+    (root) => root.id === activeCategory || root.children.some((c) => c.id === activeCategory),
+  );
   const [sort, setSort] = useState<SortId>("relevance");
   const [under99, setUnder99] = useState(false);
   const [onOffer, setOnOffer] = useState(false);
@@ -115,42 +122,34 @@ export default function CategoriesScreen() {
                   </View>
                 ))
               : null}
-            {categories.map((cat) => {
-              const isActive = activeCategory === cat.id;
+            {tree.map((root) => {
+              const open = activeRoot?.id === root.id && root.children.length > 0;
+              const pick = (id: string) => {
+                setSelected(id);
+                setUnder99(false);
+                setOnOffer(false);
+              };
               return (
-                <Pressable
-                  key={cat.id}
-                  style={[styles.sidebarItem, isActive && styles.sidebarItemActive]}
-                  onPress={() => {
-                    setSelected(cat.id);
-                    setUnder99(false);
-                    setOnOffer(false);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <View
-                    style={[
-                      styles.sidebarIconBg,
-                      { backgroundColor: cat.color },
-                      isActive && styles.sidebarIconBgActive,
-                    ]}
-                  >
-                    <ProductImage
-                      imageUrl={cat.imageUrl}
-                      fit={cat.imageFit}
-                      emoji={cat.image}
-                      emojiSize={24}
-                      style={StyleSheet.absoluteFill}
-                    />
-                  </View>
-                  <Text
-                    style={[styles.sidebarLabel, isActive && styles.sidebarLabelActive]}
-                    numberOfLines={2}
-                  >
-                    {labelFor(cat.name)}
-                  </Text>
-                </Pressable>
+                <React.Fragment key={root.id}>
+                  <RailItem
+                    category={root}
+                    active={activeCategory === root.id}
+                    label={open ? `All ${labelFor(root.name)}` : labelFor(root.name)}
+                    onPress={() => pick(root.id)}
+                  />
+                  {open
+                    ? root.children.map((child) => (
+                        <RailItem
+                          key={child.id}
+                          category={child}
+                          sub
+                          active={activeCategory === child.id}
+                          label={labelFor(child.name)}
+                          onPress={() => pick(child.id)}
+                        />
+                      ))
+                    : null}
+                </React.Fragment>
               );
             })}
           </ScrollView>
@@ -285,6 +284,51 @@ function Chip({
   );
 }
 
+/** One tile in the left rail. Sub categories are smaller and sit under their parent, like Blinkit. */
+function RailItem({
+  category,
+  active,
+  label,
+  sub,
+  onPress,
+}: {
+  category: Category;
+  active: boolean;
+  label: string;
+  sub?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.sidebarItem, sub && styles.sidebarSubItem, active && styles.sidebarItemActive]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+    >
+      <View
+        style={[
+          styles.sidebarIconBg,
+          sub && styles.sidebarSubIcon,
+          { backgroundColor: category.color },
+          active && styles.sidebarIconBgActive,
+        ]}
+      >
+        <ProductImage
+          imageUrl={category.imageUrl}
+          fit={category.imageFit}
+          emoji={category.image}
+          emojiSize={sub ? 18 : 24}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+      <Text style={[styles.sidebarLabel, active && styles.sidebarLabelActive]} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -362,6 +406,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     borderLeftWidth: 3,
     borderLeftColor: "transparent",
+  },
+  sidebarSubItem: {
+    paddingVertical: Spacing[8],
+    backgroundColor: Colors.canvas,
+  },
+  sidebarSubIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.sm,
   },
   sidebarItemActive: {
     backgroundColor: Colors.greenTint,

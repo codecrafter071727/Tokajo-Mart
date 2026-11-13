@@ -68,6 +68,7 @@ export function CustomerDetail({ id }: { id: string }) {
   const c = user.data;
   const name = c.name || "No name yet";
   const blocked = c.status === "blocked";
+  const deleted = c.status === "deleted";
 
   return (
     <div className="space-y-6">
@@ -79,7 +80,11 @@ export function CustomerDetail({ id }: { id: string }) {
             {name}
           </span>
         }
-        badge={<Badge tone={blocked ? "bad" : "ok"}>{blocked ? "Blocked" : "Active"}</Badge>}
+        badge={
+          <Badge tone={deleted ? "neutral" : blocked ? "bad" : "ok"}>
+            {deleted ? "Deleted" : blocked ? "Blocked" : "Active"}
+          </Badge>
+        }
         description={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {c.phone ? (
@@ -93,16 +98,24 @@ export function CustomerDetail({ id }: { id: string }) {
           </span>
         }
         actions={
-          <Button
-            variant={blocked ? "primary" : "danger"}
-            icon={blocked ? CheckCircle2 : Ban}
-            onClick={() => setBlocking(true)}
-          >
-            {blocked ? "Unblock" : "Block"}
-          </Button>
+          deleted ? null : (
+            <Button
+              variant={blocked ? "primary" : "danger"}
+              icon={blocked ? CheckCircle2 : Ban}
+              onClick={() => setBlocking(true)}
+            >
+              {blocked ? "Unblock" : "Block"}
+            </Button>
+          )
         }
       />
       {notice ? <Callout tone="ok">{notice}</Callout> : null}
+      {deleted ? (
+        <Callout tone="info" title="This customer deleted their account">
+          {c.deletedAt ? `Deleted ${dateTime(c.deletedAt)}. ` : ""}Their name, phone, addresses and
+          notifications are gone. Past orders stay for tax records without their details.
+        </Callout>
+      ) : null}
       {blocked ? (
         <Callout tone="bad" title="This customer is blocked">
           They cannot sign in or place orders until you unblock them.

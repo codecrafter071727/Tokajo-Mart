@@ -4,6 +4,7 @@ import {
   listBannersResponseSchema,
   listCategoriesResponseSchema,
   listProductsResponseSchema,
+  productDetailSchema,
   productSchema,
   type UpdateProductBody,
   serviceabilityResponseSchema,
@@ -14,6 +15,7 @@ import {
   type ListProductsQuery,
   type ListProductsResponse,
   type Product,
+  type ProductDetail,
   type ServiceabilityQuery,
   type ServiceabilityResponse,
 } from "@qc/contracts";
@@ -193,6 +195,16 @@ export function createApiClient(options: ApiClientOptions) {
 
       getProduct: (id: string, opts?: RequestOptions): Promise<Product> =>
         get("catalog", `/v1/catalog/products/${encodeURIComponent(id)}`, productSchema, {}, opts),
+
+      /** The same product with its variants, photos and group, for the product page. */
+      getProductDetail: (id: string, opts?: RequestOptions): Promise<ProductDetail> =>
+        get(
+          "catalog",
+          `/v1/catalog/products/${encodeURIComponent(id)}`,
+          productDetailSchema,
+          {},
+          opts,
+        ),
 
       /** Admin edit. Send only the fields that change. */
       updateProduct: (

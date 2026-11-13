@@ -1,5 +1,11 @@
 import type {
+  AddProductImageBody,
   AdminProduct,
+  AdminProductDetail,
+  CatalogImportResult,
+  CreateProductGroupBody,
+  ProductGroup,
+  ProductImage,
   Banner,
   Category,
   CreateBannerBody,
@@ -80,12 +86,92 @@ export const catalogAdmin = {
     call<Category>("PATCH", `/v1/catalog/categories/${id}`, body),
   deleteCategory: (id: string) => call<unknown>("DELETE", `/v1/catalog/categories/${id}`),
 
+  productDetail: (id: string) =>
+    call<AdminProductDetail>("GET", `/v1/catalog/admin/products/${encodeURIComponent(id)}`),
+
+  // Product groups: the variants of one item (500 ml and 1 L of the same milk)
+  groups: async () =>
+    (await call<{ items: ProductGroup[] }>("GET", "/v1/catalog/admin/product-groups")).items,
+  createGroup: (body: CreateProductGroupBody) =>
+    call<ProductGroup>("POST", "/v1/catalog/admin/product-groups", body),
+
+  // Extra product photos. The main photo stays the product's own image link.
+  addImage: (id: string, body: AddProductImageBody) =>
+    call<{ items: ProductImage[] }>(
+      "POST",
+      `/v1/catalog/admin/products/${encodeURIComponent(id)}/images`,
+      body,
+    ),
+  reorderImages: (id: string, ids: string[]) =>
+    call<{ items: ProductImage[] }>(
+      "PUT",
+      `/v1/catalog/admin/products/${encodeURIComponent(id)}/images/order`,
+      { ids },
+    ),
+  makePrimary: (id: string, imageId: string) =>
+    call<{ items: ProductImage[] }>(
+      "POST",
+      `/v1/catalog/admin/products/${encodeURIComponent(id)}/images/${imageId}/primary`,
+      {},
+    ),
+  removeImage: (id: string, imageId: string) =>
+    call<{ items: ProductImage[] }>(
+      "DELETE",
+      `/v1/catalog/admin/products/${encodeURIComponent(id)}/images/${imageId}`,
+    ),
+
+  importCsv: (csv: string, dryRun: boolean) => importCsv(csv, dryRun),
+  exportCsv,
+
   banners: async () => (await call<{ items: Banner[] }>("GET", "/v1/catalog/admin/banners")).items,
   createBanner: (body: CreateBannerBody) => call<Banner>("POST", "/v1/catalog/banners", body),
   updateBanner: (id: string, body: UpdateBannerBody) =>
     call<Banner>("PATCH", `/v1/catalog/banners/${id}`, body),
   deleteBanner: (id: string) => call<unknown>("DELETE", `/v1/catalog/banners/${id}`),
 };
+
+/** Sends a CSV file as text/csv. A failed apply comes back as an error with per row details. */
+async function importCsv(csv: string, dryRun: boolean): Promise<CatalogImportResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/v1/catalog/admin/import?dryRun=${dryRun ? "true" : "false"}`, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "text/csv" },
+      body: csv,
+    });
+  } catch {
+    throw new AdminApiError("Could not reach the server. Check your connection.", 0);
+  }
+  const payload = (await res.json().catch(() => null)) as
+    (CatalogImportResult & { error?: { message?: string; details?: unknown } }) | null;
+  if (res.ok && payload) return payload;
+  // Apply refuses a file with problems: show the rows the same way the dry run does
+  const details = payload?.error?.details;
+  if (res.status === 400 && Array.isArray(details)) {
+    return {
+      dryRun,
+      ok: false,
+      rows: 0,
+      creates: 0,
+      updates: 0,
+      groupsCreated: [],
+      errors: details as CatalogImportResult["errors"],
+    };
+  }
+  throw new AdminApiError(payload?.error?.message ?? `Import failed (${res.status}).`, res.status);
+}
+
+/** Downloads every product on sale as catalog.csv. */
+async function exportCsv(): Promise<void> {
+  const res = await fetch("/api/v1/catalog/admin/export", { headers: { accept: "text/csv" } });
+  if (!res.ok) throw new AdminApiError(`Export failed (${res.status}).`, res.status);
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `catalog-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 // --- Form helpers ----------------------------------------------------------------------------
 

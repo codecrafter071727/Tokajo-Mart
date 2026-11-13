@@ -13,6 +13,8 @@ import {
   seedProducts,
 } from "../services/catalog/src/modules/catalog/seed";
 import {
+  seedHours,
+  seedPincodes,
   seedStock,
   seedWarehouses,
 } from "../services/warehouse-inventory/src/modules/inventory/seed";
@@ -63,6 +65,20 @@ for (const w of seedWarehouses) {
   lines.push(
     `insert into inventory.warehouses (id, name, lat, lng, radius_km, open) values (${q(w.id)}, ${q(w.name)}, ${w.lat}, ${w.lng}, ${w.radiusKm}, ${w.open}) on conflict (id) do nothing;`,
   );
+}
+for (const [warehouseId, pincodes] of Object.entries(seedPincodes)) {
+  for (const pincode of pincodes) {
+    lines.push(
+      `insert into inventory.service_areas (warehouse_id, pincode) values (${q(warehouseId)}, ${q(pincode)}) on conflict do nothing;`,
+    );
+  }
+}
+for (const [warehouseId, hours] of Object.entries(seedHours)) {
+  for (const h of hours) {
+    lines.push(
+      `insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values (${q(warehouseId)}, ${h.weekday}, ${q(h.opensAt)}, ${q(h.closesAt)}) on conflict do nothing;`,
+    );
+  }
 }
 for (const s of seedStock) {
   lines.push(

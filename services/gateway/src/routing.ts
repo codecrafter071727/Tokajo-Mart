@@ -60,6 +60,13 @@ const RULES: Rule[] = [
     route: { service: "order", access: "authenticated", limit: 30 },
   },
   { prefix: "/v1/orders", route: { service: "order", access: "authenticated" } },
+  // An invoice opened from a short lived signed link (a phone's browser has no token). The order
+  // service checks the signature and expiry; this is read only and rate limited.
+  {
+    prefix: "/v1/invoices/",
+    methods: READ,
+    route: { service: "order", access: "public", limit: 60 },
+  },
   { prefix: "/v1/delivery/", route: { service: "delivery", access: "authenticated" } },
 
   // Online payments. The payment service checks the caller owns the order

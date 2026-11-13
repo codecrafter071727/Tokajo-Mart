@@ -17,7 +17,7 @@ Node 22 or newer must be on your PATH.
 ## Start and stop the backend
 
 ```bash
-scripts/dev-stack.sh          # identity 4001, catalog 4002, inventory 4003, order 4004, payment 4005, delivery 4006, payment 4005, notification 4007, gateway 4000
+scripts/dev-stack.sh          # identity 4001, catalog 4002, inventory 4003, order 4004, payment 4005, delivery 4006, notification 4007, analytics 4008, gateway 4000
 scripts/dev-stack.sh stop
 ```
 
@@ -117,10 +117,10 @@ The payment service refuses to start with the fake provider in production.
 
 ## Known differences from ARCHITECTURE.md
 
-Services call each other over HTTP, not Pub/Sub. Payments are cash on delivery or Razorpay. OTP is a fixed
-demo code until an SMS provider (MSG91 with DLT registration) is configured. Not built:
-push notifications, live map and rider location, proof of delivery photo, address book,
-notification and analytics services.
+Services call each other over HTTP, not Pub/Sub. Identity issues its own tokens instead of Supabase
+Auth. Screens poll instead of using Realtime. Sign in codes are a fixed demo code until MSG91 keys
+are set, and payments need Razorpay test keys. Push notifications are not sent yet (devices can register).
+What is still to build is listed in [REMAINING.md](REMAINING.md).
 
 ## More docs
 

@@ -7,6 +7,7 @@ import { useWarehouse } from "../lib/providers";
 import { WAREHOUSES, isLate } from "../lib/helpers";
 import { useHandovers, useNow, useQueue } from "../lib/live";
 import { useStockAlerts } from "../lib/alerts";
+import { OrderAlerts } from "./order-alerts";
 import { Icon, type IconName } from "./ui";
 
 const ITEMS: { href: string; label: string; icon: IconName }[] = [
@@ -152,6 +153,8 @@ export function TopBar() {
               {WAREHOUSES.find((w) => w.id === warehouseId)?.name ?? warehouseId}
             </span>
           )}
+
+          <OrderAlerts />
 
           <span
             className="grid size-10 place-items-center rounded-full bg-surface text-sm font-extrabold text-ink-700"

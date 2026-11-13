@@ -124,6 +124,12 @@ export default function AccountScreen() {
             }
           />
           <Row
+            icon="trash-outline"
+            label="Delete account"
+            hint="Remove your account and personal data"
+            onPress={() => router.push("/delete-account")}
+          />
+          <Row
             icon={confirmLogout ? "alert-circle-outline" : "log-out-outline"}
             label={confirmLogout ? "Tap again to log out" : "Log out"}
             onPress={logout}

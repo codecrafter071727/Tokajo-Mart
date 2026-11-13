@@ -155,8 +155,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<ServiceAp
 
     const type = upstream.headers.get("content-type");
     if (type) reply.header("content-type", type);
-    const retryAfter = upstream.headers.get("retry-after");
-    if (retryAfter) reply.header("retry-after", retryAfter);
+    // Pass through the few response headers clients need: retry hints and file downloads
+    for (const name of ["retry-after", "content-disposition", "cache-control"]) {
+      const value = upstream.headers.get(name);
+      if (value) reply.header(name, value);
+    }
     return reply.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
   };
 

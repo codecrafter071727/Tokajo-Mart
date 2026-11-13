@@ -184,9 +184,17 @@ describe("service areas", () => {
     expect(served).toEqual({
       "noida-62": true,
       "noida-63": true,
-      "noida-18": false,
+      // Sector 18 is past the radius, but its pincode 201301 is one the Noida store delivers to
+      "noida-18": true,
       indiranagar: true,
     });
+  });
+
+  it("goes by pincode when there is one, and by distance when there is not", () => {
+    expect(servedLocally({ lat: 28.5708, lng: 77.3261, pincode: "110011" })).toBe(false);
+    expect(servedLocally({ lat: 0, lng: 0, pincode: "560075" })).toBe(true);
+    expect(servedLocally({ lat: 28.5708, lng: 77.3261 })).toBe(false);
+    expect(servedLocally({ lat: 28.5708, lng: 77.3261, areaId: "noida-18" })).toBe(true);
   });
 
   it("names the warehouse that covers a point", () => {

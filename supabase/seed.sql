@@ -45,6 +45,19 @@ insert into catalog.banners (id, title, subtitle, image_url, link_type, link_tar
 -- inventory
 insert into inventory.warehouses (id, name, lat, lng, radius_km, open) values ('wh-noida-62', 'Noida Sector 62', 28.6279, 77.3649, 5, true) on conflict (id) do nothing;
 insert into inventory.warehouses (id, name, lat, lng, radius_km, open) values ('wh-indiranagar', 'Bengaluru Indiranagar', 12.9784, 77.6408, 5, true) on conflict (id) do nothing;
+insert into inventory.service_areas (warehouse_id, pincode) values ('wh-noida-62', '201301') on conflict do nothing;
+insert into inventory.service_areas (warehouse_id, pincode) values ('wh-noida-62', '201307') on conflict do nothing;
+insert into inventory.service_areas (warehouse_id, pincode) values ('wh-noida-62', '201309') on conflict do nothing;
+insert into inventory.service_areas (warehouse_id, pincode) values ('wh-indiranagar', '560008') on conflict do nothing;
+insert into inventory.service_areas (warehouse_id, pincode) values ('wh-indiranagar', '560038') on conflict do nothing;
+insert into inventory.service_areas (warehouse_id, pincode) values ('wh-indiranagar', '560075') on conflict do nothing;
+insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values ('wh-indiranagar', 0, '06:00', '01:00') on conflict do nothing;
+insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values ('wh-indiranagar', 1, '06:00', '01:00') on conflict do nothing;
+insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values ('wh-indiranagar', 2, '06:00', '01:00') on conflict do nothing;
+insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values ('wh-indiranagar', 3, '06:00', '01:00') on conflict do nothing;
+insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values ('wh-indiranagar', 4, '06:00', '01:00') on conflict do nothing;
+insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values ('wh-indiranagar', 5, '06:00', '01:00') on conflict do nothing;
+insert into inventory.warehouse_hours (warehouse_id, weekday, opens_at, closes_at) values ('wh-indiranagar', 6, '06:00', '01:00') on conflict do nothing;
 insert into inventory.stock_items (warehouse_id, product_id, on_hand, max_per_order) values ('wh-noida-62', 'p1', 25, null) on conflict (warehouse_id, product_id) do nothing;
 insert into inventory.stock_items (warehouse_id, product_id, on_hand, max_per_order) values ('wh-noida-62', 'p2', 25, null) on conflict (warehouse_id, product_id) do nothing;
 insert into inventory.stock_items (warehouse_id, product_id, on_hand, max_per_order) values ('wh-noida-62', 'p3', 2, null) on conflict (warehouse_id, product_id) do nothing;

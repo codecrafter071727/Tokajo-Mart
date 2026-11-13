@@ -1,12 +1,15 @@
 import {
   createDatabaseReadinessCheck,
   createDb,
+  createInternalClient,
   createService,
   DEV_JWT_SECRET,
   type Kysely,
 } from "@qc/service-kit";
 import { env } from "./config/env";
 import type { DB } from "./db/types.generated";
+import type { DeletionClients } from "./modules/account/deletion";
+import { registerAccountRoutes } from "./modules/account/routes";
 import { registerAddressRoutes } from "./modules/addresses/routes";
 import { registerAdminRoutes } from "./modules/admin/routes";
 import { createMsg91Sender } from "./modules/auth/msg91";
@@ -23,6 +26,8 @@ export type BuildAppOptions = {
   otpMode?: "demo" | "sms";
   testNumbers?: string;
   now?: () => Date;
+  /** Other services account deletion clears data in. Injected in tests. */
+  clients?: DeletionClients;
 };
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -84,6 +89,18 @@ export async function buildApp(options: BuildAppOptions = {}) {
   registerAuthRoutes(app, auth, db);
   registerAdminRoutes(app, db);
   registerAddressRoutes(app, db);
+  const make = (baseUrl: string | undefined, fallback: string) =>
+    createInternalClient({ baseUrl: baseUrl ?? fallback, apiKey: env.INTERNAL_API_KEY });
+  registerAccountRoutes(
+    app,
+    db,
+    options.clients ?? {
+      order: make(env.ORDER_SERVICE_URL, "http://localhost:4004"),
+      payment: make(env.PAYMENT_SERVICE_URL, "http://localhost:4005"),
+      notification: make(env.NOTIFICATION_SERVICE_URL, "http://localhost:4007"),
+    },
+    options.now ?? (() => new Date()),
+  );
   registerInternalRoutes(app, db);
   return app;
 }

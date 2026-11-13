@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button, Icon, inputClass } from "../../components/ui";
 
 export default function LoginPage() {
@@ -11,6 +11,9 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Until the page is interactive a native submit would put the password in the address bar
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -66,7 +69,7 @@ export default function LoginPage() {
       </section>
 
       <section className="grid place-items-center p-6">
-        <form onSubmit={submit} className="w-full max-w-sm">
+        <form method="post" action="/login" onSubmit={submit} className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <span className="grid size-10 place-items-center rounded-xl bg-brand-600 text-lg font-extrabold text-ink-900">
               Q
@@ -119,7 +122,7 @@ export default function LoginPage() {
               </button>
             </span>
           </label>
-          <Button type="submit" size="lg" className="mt-6 w-full" disabled={busy}>
+          <Button type="submit" size="lg" className="mt-6 w-full" disabled={busy || !ready}>
             {busy ? "Signing in..." : "Sign in"}
           </Button>
         </form>

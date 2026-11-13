@@ -14,7 +14,8 @@ import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src
 import { useCartStore } from "../../src/store/cart";
 import { formatPaise, priceCart, toPriceLines } from "../../src/lib/pricing";
 import { usePlaceOrder } from "../../src/lib/orderQueries";
-import { useServiceability } from "../../src/lib/queries";
+import { selectedPincode, useServiceability } from "../../src/lib/queries";
+import { serviceState } from "../../src/lib/serviceMessages";
 import type { OrderItem } from "../../src/lib/orders";
 import { describeOrderError } from "../../src/lib/orderMapping";
 import { OrderError } from "../../src/lib/orders";
@@ -230,8 +231,9 @@ export default function CheckoutScreen() {
 
   const selectedAddress = useSelectedAddress();
   const { line1: addressLine1, line2: addressLine2 } = addressSummary(selectedAddress);
-  // The server decides, but an address we know is outside every area never reaches checkout
+  // The server decides. Closed or outside every area, the order cannot be placed
   const outsideArea = eta ? !eta.serviceable : false;
+  const service = serviceState(eta, selectedPincode(selectedAddress.areaId));
 
   const handlePlaceOrder = () => {
     if (placeOrder.isPending || items.length === 0 || outsideArea) return;
@@ -343,11 +345,15 @@ export default function CheckoutScreen() {
           </Text>
           <View style={[styles.addressTag, outsideArea && styles.addressTagBlocked]}>
             <Text style={[styles.addressTagText, outsideArea && styles.addressTagTextBlocked]}>
-              {outsideArea
-                ? "We do not deliver here yet. Choose another address."
-                : eta?.serviceable
-                  ? `Delivery in ${eta.etaMins} minutes`
-                  : "Delivery time unavailable"}
+              {service.kind === "closed"
+                ? `${service.detail}. You can order once we open.`
+                : outsideArea
+                  ? service.kind === "not_served"
+                    ? `${service.detail}. Choose another address.`
+                    : "We do not deliver here yet. Choose another address."
+                  : eta?.serviceable
+                    ? `Delivery in ${eta.etaMins} minutes`
+                    : "Delivery time unavailable"}
             </Text>
           </View>
         </View>

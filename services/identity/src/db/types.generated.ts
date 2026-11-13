@@ -63,6 +63,8 @@ export interface IdentityRiderProfiles {
 
 export interface IdentityUsers {
   createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  deletionReason: string | null;
   email: string | null;
   id: Generated<string>;
   name: Generated<string>;

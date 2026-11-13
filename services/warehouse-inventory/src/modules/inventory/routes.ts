@@ -16,7 +16,9 @@ import { z } from "zod";
 import { DEFAULT_MAX_PER_ORDER, etaMinutes, stockStatus } from "./domain";
 import { withRestockCheck, type RestockNotifier } from "./alerts";
 import { registerStaffRoutes } from "./staff-routes";
-import { coveringWarehouses, resolveBasket, type InventoryRepository } from "./repository";
+import { resolveBasket, type InventoryRepository } from "./repository";
+import { coveringCandidates, soonestOpening } from "./schedule";
+import { registerScheduleRoutes } from "./schedule-routes";
 
 const idParams = z.object({ id: z.string().min(1) });
 
@@ -26,6 +28,7 @@ export function registerInventoryRoutes(
   notifier?: RestockNotifier,
 ): void {
   registerStaffRoutes(app, repository, notifier);
+  registerScheduleRoutes(app, repository);
 
   /** Giving stock back (a cancelled or unpaid order) can bring an out of stock item back. */
   const givingBack = async <T>(reference: string, change: () => Promise<T>) => {
@@ -54,22 +57,38 @@ export function registerInventoryRoutes(
       },
     },
     async (request) => {
-      const { lat, lng } = request.query;
-      const covering = coveringWarehouses(await repository.listWarehouses(), lat, lng);
-      const serving = covering.find((entry) => entry.warehouse.open);
+      const { lat, lng, pincode } = request.query;
+      const { matchedBy, candidates } = coveringCandidates(
+        await repository.listWarehouses(),
+        await repository.getServiceSetup(),
+        { lat, lng, pincode },
+        new Date(),
+      );
+      const serving = candidates.find((c) => c.status.openNow);
       if (serving) {
         return {
           serviceable: true,
           warehouseId: serving.warehouse.id,
           etaMins: etaMinutes(serving.distanceKm),
           reason: null,
+          coveringWarehouseId: serving.warehouse.id,
+          openNow: true,
+          opensAt: null,
+          closesAt: serving.status.closesAt,
+          matchedBy,
         };
       }
+      const nearest = candidates[0];
       return {
         serviceable: false,
         warehouseId: null,
         etaMins: null,
-        reason: covering.length > 0 ? "WAREHOUSE_CLOSED" : "OUTSIDE_SERVICE_AREA",
+        reason: nearest ? "WAREHOUSE_CLOSED" : "OUTSIDE_SERVICE_AREA",
+        coveringWarehouseId: nearest?.warehouse.id ?? null,
+        openNow: false,
+        opensAt: soonestOpening(candidates),
+        closesAt: null,
+        matchedBy,
       };
     },
   );
@@ -124,7 +143,9 @@ export function registerInventoryRoutes(
       },
     },
     async (request) =>
-      resolveBasket(repository, request.body.lat, request.body.lng, request.body.items),
+      resolveBasket(repository, request.body.lat, request.body.lng, request.body.items, {
+        pincode: request.body.pincode,
+      }),
   );
 
   app.get(

@@ -1,7 +1,7 @@
 "use client";
 
 import type {
-  AdminProduct,
+  AdminProductDetail,
   AdminWarehouse,
   OrderSummary,
   ProductStockResponse,
@@ -36,6 +36,8 @@ import { errorMessage, gw, GwError } from "../../../../lib/gw";
 import { dateTime, LOW_STOCK } from "../../../../lib/ops";
 import { AdjustDialog, ReceiveDialog } from "../../../inventory/dialogs";
 import { ProductDialog } from "../../product-dialog";
+import { ImageManager } from "./image-manager";
+import { VariantsPanel } from "./variants-panel";
 
 const MOVEMENT: Record<StockMovement["type"], string> = {
   grn: "Received",
@@ -62,7 +64,7 @@ export function ProductDetail({ id }: { id: string }) {
   const q = encodeURIComponent(id);
   const product = useQuery({
     queryKey: ["admin-product", id],
-    queryFn: () => gw<AdminProduct>("GET", `/v1/catalog/admin/products/${q}`),
+    queryFn: () => gw<AdminProductDetail>("GET", `/v1/catalog/admin/products/${q}`),
   });
   const categories = useQuery({ queryKey: ["categories"], queryFn: catalogAdmin.categories });
   const warehouses = useQuery({
@@ -382,13 +384,28 @@ export function ProductDetail({ id }: { id: string }) {
                 <KeyValue
                   items={[
                     { label: "Category", value: category?.name ?? p.categoryId },
+                    { label: "Brand", value: p.brand ?? "Not set" },
+                    {
+                      label: "Tags",
+                      value: p.tags?.length ? (
+                        <span className="flex flex-wrap gap-1">
+                          {p.tags.map((t) => (
+                            <Badge key={t} tone="gray">
+                              {t}
+                            </Badge>
+                          ))}
+                        </span>
+                      ) : (
+                        "None"
+                      ),
+                    },
                     { label: "Pack size", value: p.unit },
                     { label: "Price", value: rupees(p.pricePaise) },
                     { label: "MRP", value: rupees(p.mrpPaise) },
                     { label: "Delivery promise", value: `${p.deliveryMins} min` },
                     {
-                      label: "Variants",
-                      value: p.optionsCount && p.optionsCount > 1 ? p.optionsCount : "None",
+                      label: "Variant",
+                      value: p.group ? `${p.variantLabel ?? p.unit} of ${p.group.name}` : "None",
                     },
                   ]}
                 />
@@ -402,6 +419,8 @@ export function ProductDetail({ id }: { id: string }) {
               <p className="text-[13px] text-muted">Loading</p>
             )}
           </Panel>
+          {p ? <VariantsPanel product={p} onEdit={() => setDialog({ kind: "edit" })} /> : null}
+          {p ? <ImageManager product={p} /> : null}
         </div>
       </div>
 

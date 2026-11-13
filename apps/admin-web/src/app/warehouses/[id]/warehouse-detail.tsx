@@ -32,6 +32,7 @@ import { errorMessage, gw } from "../../../lib/gw";
 import { DELIVERY_STATUS, LOW_STOCK, minutesLabel } from "../../../lib/ops";
 import { LIVE } from "../../riders/riders";
 import { OpenCloseDialog, WarehouseDialog } from "../warehouses";
+import { SchedulePanel } from "./schedule-panel";
 
 const REFRESH = 10_000;
 
@@ -190,6 +191,8 @@ export function WarehouseDetail({ id }: { id: string }) {
           href={`/inventory?filter=${out ? "out" : "low"}`}
         />
       </div>
+
+      <SchedulePanel warehouseId={id} radiusKm={warehouse?.radiusKm} />
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">

@@ -19,12 +19,14 @@ import {
   th,
   thNum,
 } from "../../components/kit";
+import { ChevronDown, ChevronUp } from "../../components/ui/icons";
 import { catalogAdmin } from "../../lib/catalog-admin";
 import { CategoryDialog } from "./category-dialog";
+import { categoryTree, moveWithinSiblings } from "./category-tree";
 
 export function CategoriesPanel() {
   const client = useQueryClient();
-  const [editing, setEditing] = useState<Category | "new" | null>(null);
+  const [editing, setEditing] = useState<Category | { parentId: string } | "new" | null>(null);
   const [deleting, setDeleting] = useState<Category | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -44,6 +46,14 @@ export function CategoriesPanel() {
     },
   });
 
+  const move = useMutation({
+    mutationFn: async ({ id, direction }: { id: string; direction: -1 | 1 }) => {
+      const updates = moveWithinSiblings(categories.data ?? [], id, direction);
+      for (const u of updates) await catalogAdmin.updateCategory(u.id, { sortOrder: u.sortOrder });
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ["categories"] }),
+  });
+
   if (categories.isError) {
     return (
       <div className="space-y-3">
@@ -54,7 +64,24 @@ export function CategoriesPanel() {
   }
 
   const list = categories.data ?? [];
+  const tree = categoryTree(list);
   const nextSort = list.reduce((max, c) => Math.max(max, c.sortOrder), 0) + 10;
+  const rows = tree.flatMap((root) => [
+    {
+      category: root as Category,
+      depth: 0,
+      first: root.id === tree[0]?.id,
+      last: root.id === tree.at(-1)?.id,
+      childCount: root.children.length,
+    },
+    ...root.children.map((child, i) => ({
+      category: child,
+      depth: 1,
+      first: i === 0,
+      last: i === root.children.length - 1,
+      childCount: 0,
+    })),
+  ]);
 
   return (
     <>
@@ -64,7 +91,8 @@ export function CategoriesPanel() {
         </Button>
       </PageActions>
       <p className="mb-4 text-sm text-muted">
-        Categories show on the customer home screen in this order. Lower numbers come first.
+        Categories show in the app in this order. Use the arrows to move one up or down. Sub
+        categories show as a rail inside their parent, like Blinkit.
       </p>
 
       <TableShell>
@@ -83,10 +111,15 @@ export function CategoriesPanel() {
             {categories.isPending ? (
               <LoadingRows colSpan={4} />
             ) : (
-              list.map((c) => (
-                <tr key={c.id}>
+              rows.map(({ category: c, depth, first, last, childCount }) => (
+                <tr key={c.id} className={depth ? "bg-surface-2/40" : undefined}>
                   <td className={td}>
-                    <div className="flex items-center gap-3">
+                    <div className={`flex items-center gap-3 ${depth ? "pl-8" : ""}`}>
+                      {depth ? (
+                        <span aria-hidden className="-ml-5 text-faint">
+                          └
+                        </span>
+                      ) : null}
                       <Thumb
                         imageUrl={c.imageUrl}
                         emoji={c.emoji}
@@ -95,7 +128,10 @@ export function CategoriesPanel() {
                       />
                       <div>
                         <div className="font-medium">{c.name}</div>
-                        <div className="text-xs text-muted">{c.id}</div>
+                        <div className="text-xs text-muted">
+                          {c.id}
+                          {childCount ? ` · ${childCount} sub categories` : ""}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -108,8 +144,39 @@ export function CategoriesPanel() {
                       {c.color}
                     </span>
                   </td>
-                  <td className={tdNum}>{c.sortOrder}</td>
+                  <td className={tdNum}>
+                    <span className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Move ${c.name} up`}
+                        disabled={first || move.isPending}
+                        onClick={() => move.mutate({ id: c.id, direction: -1 })}
+                        className="rounded p-1 text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-30"
+                      >
+                        <ChevronUp className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Move ${c.name} down`}
+                        disabled={last || move.isPending}
+                        onClick={() => move.mutate({ id: c.id, direction: 1 })}
+                        className="rounded p-1 text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-30"
+                      >
+                        <ChevronDown className="size-4" />
+                      </button>
+                      <span className="w-10 text-right">{c.sortOrder}</span>
+                    </span>
+                  </td>
                   <td className={tdActions}>
+                    {depth === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditing({ parentId: c.id })}
+                        className={rowAction}
+                      >
+                        Add sub
+                      </button>
+                    ) : null}
                     <button type="button" onClick={() => setEditing(c)} className={rowAction}>
                       Edit
                     </button>
@@ -131,9 +198,16 @@ export function CategoriesPanel() {
         </table>
       </TableShell>
 
+      {move.isError ? (
+        <div className="mt-3">
+          <Alert>Could not change the order. Try again.</Alert>
+        </div>
+      ) : null}
       {editing ? (
         <CategoryDialog
-          category={editing === "new" ? null : editing}
+          category={editing === "new" || !("id" in editing) ? null : editing}
+          categories={list}
+          defaultParentId={editing !== "new" && !("id" in editing) ? editing.parentId : ""}
           nextSortOrder={nextSort}
           onClose={() => setEditing(null)}
           onSaved={setToast}

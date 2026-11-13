@@ -42,6 +42,13 @@ export interface InventoryReservations {
   warehouseId: string;
 }
 
+export interface InventoryServiceAreas {
+  active: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  pincode: string;
+  warehouseId: string;
+}
+
 export interface InventoryStockItems {
   createdAt: Generated<Timestamp>;
   maxPerOrder: number | null;
@@ -65,6 +72,23 @@ export interface InventoryStockMovements {
   warehouseId: string;
 }
 
+export interface InventoryWarehouseClosures {
+  createdAt: Generated<Timestamp>;
+  endsOn: Timestamp;
+  id: Generated<string>;
+  reason: string;
+  startsOn: Timestamp;
+  warehouseId: string;
+}
+
+export interface InventoryWarehouseHours {
+  closesAt: string;
+  opensAt: string;
+  updatedAt: Generated<Timestamp>;
+  warehouseId: string;
+  weekday: number;
+}
+
 export interface InventoryWarehouses {
   createdAt: Generated<Timestamp>;
   id: string;
@@ -80,7 +104,10 @@ export interface DB {
   "inventory.batches": InventoryBatches;
   "inventory.reservationLines": InventoryReservationLines;
   "inventory.reservations": InventoryReservations;
+  "inventory.serviceAreas": InventoryServiceAreas;
   "inventory.stockItems": InventoryStockItems;
   "inventory.stockMovements": InventoryStockMovements;
+  "inventory.warehouseClosures": InventoryWarehouseClosures;
+  "inventory.warehouseHours": InventoryWarehouseHours;
   "inventory.warehouses": InventoryWarehouses;
 }

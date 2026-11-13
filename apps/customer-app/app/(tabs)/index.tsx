@@ -10,7 +10,13 @@ import { colors } from "../../src/theme/tokens";
 import { TAB_RESERVE } from "../../src/theme/tabs";
 import { NotificationBell } from "../../src/components/NotificationBell";
 import { SectionRail } from "../../src/components/SectionRail";
-import { useCategories, useProducts, useServiceability } from "../../src/lib/queries";
+import {
+  selectedPincode,
+  useCategories,
+  useProducts,
+  useServiceability,
+} from "../../src/lib/queries";
+import { serviceState } from "../../src/lib/serviceMessages";
 import { addressChip } from "../../src/lib/addresses";
 import { useSelectedAddress } from "../../src/store/addresses";
 import { ErrorState, RailSkeleton } from "../../src/components/StateViews";
@@ -69,6 +75,7 @@ export default function HomeScreen() {
   const selectedAddress = useSelectedAddress();
   const serviceability = useServiceability();
   const eta = serviceability.data;
+  const service = serviceState(eta, selectedPincode(selectedAddress.areaId));
   const categoriesQuery = useCategories();
   const productsQuery = useProducts({ limit: 100 });
   const categories = categoriesQuery.data ?? [];
@@ -113,7 +120,11 @@ export default function HomeScreen() {
             >
               <Ionicons name="flash" size={13} color={Colors.onBrand} />
               <Text style={styles.etaChipText}>
-                {eta?.serviceable ? `${eta.etaMins} min` : "--"}
+                {eta?.serviceable
+                  ? `${eta.etaMins} min`
+                  : service.kind === "closed"
+                    ? "Closed"
+                    : "--"}
               </Text>
             </View>
             <Pressable
@@ -151,7 +162,9 @@ export default function HomeScreen() {
                 ) : eta?.serviceable ? (
                   <Text style={styles.etaValue}>{eta.etaMins} minutes</Text>
                 ) : (
-                  <Text style={styles.etaValue}>Not available</Text>
+                  <Text style={styles.etaValue}>
+                    {service.kind === "closed" ? "Closed now" : "Not available"}
+                  </Text>
                 )}
                 <Pressable
                   style={styles.addressRow}
@@ -161,7 +174,9 @@ export default function HomeScreen() {
                 >
                   <Text style={styles.addressText} numberOfLines={1}>
                     {eta && !eta.serviceable
-                      ? "We do not deliver to this area yet"
+                      ? service.kind === "closed" || service.kind === "not_served"
+                        ? service.detail
+                        : "We do not deliver to this area yet"
                       : addressChip(selectedAddress)}
                   </Text>
                   <Ionicons name="chevron-down" size={14} color={Colors.onBrand} />

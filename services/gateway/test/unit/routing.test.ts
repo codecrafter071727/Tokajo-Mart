@@ -91,6 +91,15 @@ describe("routing", () => {
     expect(resolveRoute("GET", "/webhooks/razorpay")).toBeNull();
   });
 
+  it("serves invoice links publicly for reading only, through the order service", () => {
+    expect(resolveRoute("GET", "/v1/invoices/abc.123.sig")).toMatchObject({
+      service: "order",
+      access: "public",
+    });
+    expect(resolveRoute("POST", "/v1/invoices/abc")).toBeNull();
+    expect(resolveRoute("GET", "/v1/orders/abc/invoice.pdf")?.access).toBe("authenticated");
+  });
+
   it("checks roles", () => {
     expect(isAllowed("public", undefined)).toBe(true);
     expect(isAllowed("authenticated", undefined)).toBe(false);

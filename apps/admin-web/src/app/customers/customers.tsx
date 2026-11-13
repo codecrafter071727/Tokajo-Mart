@@ -19,6 +19,7 @@ const STATUS = [
   { id: "", label: "All" },
   { id: "active", label: "Active" },
   { id: "blocked", label: "Blocked" },
+  { id: "deleted", label: "Deleted" },
 ];
 
 export function Customers() {
@@ -137,25 +138,35 @@ export function Customers() {
                   </Td>
                   <Td className="tnum">{c.phone ?? ""}</Td>
                   <Td>
-                    <Badge tone={c.status === "blocked" ? "bad" : "ok"}>
-                      {c.status === "blocked" ? "Blocked" : "Active"}
+                    <Badge
+                      tone={
+                        c.status === "deleted" ? "neutral" : c.status === "blocked" ? "bad" : "ok"
+                      }
+                    >
+                      {c.status === "deleted"
+                        ? "Deleted"
+                        : c.status === "blocked"
+                          ? "Blocked"
+                          : "Active"}
                     </Badge>
                   </Td>
                   <Td muted className="hidden md:table-cell">
                     <span title={fullDate(c.createdAt)}>{timeAgo(c.createdAt)}</span>
                   </Td>
                   <Td align="right">
-                    <Button
-                      size="sm"
-                      variant={c.status === "blocked" ? "secondary" : "ghost"}
-                      className={c.status === "blocked" ? "" : "text-bad!"}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setBlocking(c);
-                      }}
-                    >
-                      {c.status === "blocked" ? "Unblock" : "Block"}
-                    </Button>
+                    {c.status === "deleted" ? null : (
+                      <Button
+                        size="sm"
+                        variant={c.status === "blocked" ? "secondary" : "ghost"}
+                        className={c.status === "blocked" ? "" : "text-bad!"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setBlocking(c);
+                        }}
+                      >
+                        {c.status === "blocked" ? "Unblock" : "Block"}
+                      </Button>
+                    )}
                   </Td>
                 </tr>
               ))}

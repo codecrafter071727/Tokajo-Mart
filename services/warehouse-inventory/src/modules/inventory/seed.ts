@@ -41,3 +41,22 @@ export const seedStock: StockRecord[] = seedWarehouses.flatMap((warehouse) =>
     };
   }),
 );
+
+/** Pincodes each seeded warehouse delivers to. Requests with a pincode are matched by these. */
+export const seedPincodes: Record<string, string[]> = {
+  "wh-noida-62": ["201301", "201307", "201309"],
+  "wh-indiranagar": ["560008", "560038", "560075"],
+};
+
+/**
+ * Opening hours, India time. Indiranagar keeps typical dark store hours (6 AM to 1 AM). Noida is
+ * left without hours, which means open all day: local demos and the end to end test place real
+ * orders there at any hour, including in CI at night.
+ */
+export const seedHours: Record<string, { weekday: number; opensAt: string; closesAt: string }[]> = {
+  "wh-indiranagar": [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+    weekday,
+    opensAt: "06:00",
+    closesAt: "01:00",
+  })),
+};

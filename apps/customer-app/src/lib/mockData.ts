@@ -15,6 +15,31 @@ export interface Product {
   /** Photo URL; falls back to the emoji in `image` when absent */
   imageUrl?: string;
   imageFit?: "cover" | "contain";
+  brand?: string;
+  tags?: string[];
+  /** Products in one group are sizes of the same item (500 ml and 1 L of a milk) */
+  groupId?: string;
+  /** What sets this size apart, for example "1 L". Falls back to the unit. */
+  variantLabel?: string;
+}
+
+/** A size of the same item, for the product page and the quick size picker. */
+export interface ProductVariant {
+  id: string;
+  label: string;
+  unit: string;
+  price: number;
+  mrp: number;
+  imageUrl?: string;
+}
+
+/** Everything the product page shows. */
+export interface ProductDetail extends Product {
+  /** Every size in the group, this one included, cheapest first. Empty when not in a group. */
+  variants: ProductVariant[];
+  /** Photos in display order, the main one first */
+  images: { url: string; alt: string }[];
+  groupName?: string;
 }
 
 export interface Category {
@@ -24,6 +49,8 @@ export interface Category {
   color: string;
   imageUrl?: string;
   imageFit?: "cover" | "contain";
+  /** Set on a sub category */
+  parentId?: string;
 }
 
 export interface Banner {

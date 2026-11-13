@@ -367,6 +367,31 @@ export class PaymentService {
   // Admin
   // -------------------------------------------------------------------------------------------
 
+  /** For the order service's invoice: the Razorpay payment id of one order, if it was paid. */
+  async forOrder(orderId: string) {
+    const row = await this.db
+      .selectFrom("payments.payments")
+      .select(["status", "method", "razorpayPaymentId"])
+      .where("orderId", "=", orderId)
+      .executeTakeFirst();
+    if (!row) throw new PaymentError(404, "No payment for this order.");
+    return {
+      status: row.status as PaymentStatus,
+      method: row.method,
+      razorpayPaymentId: row.razorpayPaymentId,
+    };
+  }
+
+  /** A customer deleted their account: keep the payment for accounts, drop their name and phone. */
+  async scrubCustomer(userId: string) {
+    const result = await this.db
+      .updateTable("payments.payments")
+      .set({ customerName: null, customerPhone: null })
+      .where("userId", "=", userId)
+      .executeTakeFirst();
+    return { payments: Number(result.numUpdatedRows) };
+  }
+
   /** For the order service's admin views: payment status of several orders. */
   async batch(orderIds: string[]): Promise<PaymentBatchItem[]> {
     if (orderIds.length === 0) return [];

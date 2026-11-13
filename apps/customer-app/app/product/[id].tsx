@@ -18,10 +18,12 @@ import { isNotFound, useProduct, useProducts, useStock } from "../../src/lib/que
 import { ErrorState } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { Ionicons } from "@expo/vector-icons";
-import { ProductImage } from "../../src/components/ProductImage";
 import { ScreenHeader } from "../../src/components/ScreenHeader";
+import { ImageGallery } from "../../src/components/product/ImageGallery";
+import { VariantChips } from "../../src/components/product/VariantChips";
 
 const { width: SCREEN_W } = Dimensions.get("window");
+const GALLERY_SIZE = Math.min(SCREEN_W * 0.82, 360);
 
 export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -111,21 +113,45 @@ export default function ProductDetailScreen() {
             <Text style={styles.deliveryPillText}>{product.deliveryMins ?? 10} MINS</Text>
           </View>
 
-          <View style={styles.imageArea}>
-            <ProductImage
-              imageUrl={product.imageUrl}
-              fit={product.imageFit}
-              emoji={product.image}
-              emojiSize={120}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
+          <ImageGallery
+            key={product.id}
+            images={product.images}
+            emoji={product.image}
+            fit={product.imageFit}
+            size={GALLERY_SIZE}
+          />
         </View>
 
         {/* Product info */}
         <View style={styles.infoCard}>
+          {product.brand ? (
+            <Pressable
+              onPress={() => router.push({ pathname: "/search", params: { q: product.brand } })}
+              accessibilityRole="link"
+              accessibilityLabel={`More from ${product.brand}`}
+              hitSlop={6}
+            >
+              <Text style={styles.brand}>
+                {product.brand} <Ionicons name="chevron-forward" size={11} />
+              </Text>
+            </Pressable>
+          ) : null}
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.unit}>{product.unit}</Text>
+          <VariantChips
+            variants={product.variants}
+            selectedId={product.id}
+            onSelect={(variantId) => router.setParams({ id: variantId })}
+          />
+          {product.tags?.length ? (
+            <View style={styles.tagRow}>
+              {product.tags.slice(0, 6).map((tag) => (
+                <View key={tag} style={styles.tagPill}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <View style={styles.priceBlock}>
             <View style={styles.priceRow}>
@@ -176,6 +202,7 @@ export default function ProductDetailScreen() {
               {product.description ? (
                 <Text style={styles.accordionText}>{product.description}</Text>
               ) : null}
+              {product.brand ? <DetailRow label="Brand" value={product.brand} /> : null}
               <DetailRow label="Pack size" value={product.unit} />
               <DetailRow
                 label="Delivery"
@@ -427,6 +454,20 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     gap: Spacing[4],
   },
+  brand: {
+    fontSize: FontSize.caption,
+    fontWeight: "700",
+    color: Colors.brandText,
+    marginBottom: 2,
+  },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: Spacing[12] },
+  tagPill: {
+    backgroundColor: Colors.canvas,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing[8],
+    paddingVertical: 3,
+  },
+  tagText: { fontSize: 11, fontWeight: "600", color: Colors.textSecondary },
   productName: {
     fontSize: FontSize.h1,
     fontWeight: FontWeight.h1,

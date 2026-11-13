@@ -15,6 +15,7 @@ import { Skeleton } from "../../src/components/Skeleton";
 import { formatPaise } from "../../src/lib/pricing";
 import { PaymentPanel } from "../../src/components/payments/PaymentPanel";
 import { DoorPhotoCard } from "../../src/components/tracking/DoorPhotoCard";
+import { InvoiceButton } from "../../src/components/InvoiceButton";
 import { LiveTrackingCard } from "../../src/components/tracking/LiveTrackingCard";
 import { ON_THE_WAY, useTracking } from "../../src/lib/tracking";
 
@@ -241,6 +242,9 @@ export default function OrderTrackingScreen() {
         ) : null}
 
         {order.server && delivered ? <DoorPhotoCard orderId={order.id} /> : null}
+        {order.server && delivered ? (
+          <InvoiceButton orderId={order.id} orderNumber={order.server.number} />
+        ) : null}
 
         {hasRider && rider ? (
           <View style={styles.card}>

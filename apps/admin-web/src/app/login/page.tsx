@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { ThemeToggle } from "../../components/shell/ThemeToggle";
 import { Logo } from "../../components/ui/brand";
 import { Activity, Boxes, Eye, EyeOff, Loader2, ShieldCheck } from "../../components/ui/icons";
@@ -20,6 +20,9 @@ function LoginForm() {
   const params = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Until the page is interactive a native submit would put the password in the address bar
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [show, setShow] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -49,7 +52,7 @@ function LoginForm() {
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-4">
+    <form method="post" action="/login" onSubmit={(e) => void submit(e)} className="space-y-4">
       {error ? (
         <p
           role="alert"
@@ -92,7 +95,7 @@ function LoginForm() {
       </label>
       <button
         type="submit"
-        disabled={busy}
+        disabled={busy || !ready}
         className="h-10 w-full rounded-lg bg-accent text-sm font-medium text-on-accent shadow-card transition-colors hover:bg-accent-hover disabled:opacity-50"
       >
         {busy ? (

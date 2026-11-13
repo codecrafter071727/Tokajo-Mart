@@ -49,6 +49,7 @@ import {
   type CouponRow,
 } from "./coupons";
 import { notifyCustomer } from "./notify";
+import { readInvoiceToken, renderInvoice, signInvoiceToken } from "./invoice";
 import { badRequest, conflict, forbidden, notFound, unavailable } from "./errors";
 
 type OrderRow = Selectable<OrdersOrders>;
@@ -1091,6 +1092,110 @@ export class OrderService {
     const row = await this.rowById(id);
     const [order] = await this.hydrate([row], () => true);
     return order as Order;
+  }
+
+  // -------------------------------------------------------------------------------------
+  // Account deletion (called by the identity service)
+  // -------------------------------------------------------------------------------------
+
+  /** Orders still in progress. While any exist the customer cannot delete their account. */
+  async activeOrdersFor(userId: string): Promise<{ count: number; numbers: string[] }> {
+    const rows = await this.db
+      .selectFrom("orders.orders")
+      .select("number")
+      .where("userId", "=", userId)
+      .where("status", "not in", ["delivered", "cancelled", "expired"])
+      .orderBy("placedAt", "desc")
+      .execute();
+    return { count: rows.length, numbers: rows.map((r) => r.number) };
+  }
+
+  /**
+   * Past orders stay for tax records, but the deleted customer's name, phone and delivery notes
+   * are removed from them. Safe to repeat.
+   */
+  async scrubCustomer(userId: string): Promise<{ orders: number }> {
+    const result = await this.db
+      .updateTable("orders.orders")
+      .set({ customerName: "Deleted user", customerPhone: "", instructions: null })
+      .where("userId", "=", userId)
+      .executeTakeFirst();
+    return { orders: Number(result.numUpdatedRows) };
+  }
+
+  // -------------------------------------------------------------------------------------
+  // Invoices
+  // -------------------------------------------------------------------------------------
+
+  /** The customer who placed it, admins, and the manager of its warehouse. Delivered orders only. */
+  private async invoiceRow(identity: Identity, id: string): Promise<OrderRow> {
+    if (identity.role === "warehouse_staff" || identity.role === "rider") throw notFound();
+    const row = await this.visibleRow(identity, id);
+    if (row.status !== "delivered") {
+      throw conflict("The invoice is ready once the order has been delivered.");
+    }
+    return row;
+  }
+
+  private async invoicePdf(row: OrderRow): Promise<{ pdf: Uint8Array; filename: string }> {
+    const [itemsByOrder, store, payment] = await Promise.all([
+      this.itemsOf([row.id]),
+      this.clients.inventory
+        .get<WarehouseInfo>(`/internal/warehouses/${row.warehouseId}`)
+        .then((w) => w.name)
+        .catch(() => "Tokajo Mart"),
+      row.paymentMethod === "online"
+        ? this.clients.payment
+            .get<{ razorpayPaymentId: string | null }>(`/internal/payments/orders/${row.id}`)
+            .then((p) => p.razorpayPaymentId)
+            .catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    const pdf = await renderInvoice({
+      orderNumber: row.number,
+      placedAt: row.placedAt,
+      deliveredAt: row.deliveredAt ?? row.updatedAt,
+      customerName: row.customerName,
+      customerPhone: row.customerPhone,
+      addressLines: [row.addressLine1, row.addressLine2].filter(Boolean),
+      storeName: store,
+      items: (itemsByOrder.get(row.id) ?? []).map((i) => ({
+        name: i.name,
+        unit: i.unit,
+        quantity: i.quantity,
+        unitPricePaise: i.unitPricePaise,
+        mrpPaise: i.mrpPaise,
+      })),
+      itemTotalPaise: row.itemTotalPaise,
+      discountPaise: row.discountPaise,
+      couponCode: row.couponCode,
+      deliveryFeePaise: row.deliveryFeePaise,
+      handlingFeePaise: row.handlingFeePaise,
+      tipPaise: row.tipPaise,
+      totalPaise: row.totalPaise,
+      paymentMethod: row.paymentMethod === "online" ? "online" : "cod",
+      razorpayPaymentId: payment,
+    });
+    return { pdf, filename: `tokajo-invoice-${row.number}.pdf` };
+  }
+
+  async invoiceFor(identity: Identity, id: string) {
+    return this.invoicePdf(await this.invoiceRow(identity, id));
+  }
+
+  /** A link that opens the invoice for 10 minutes without a token, for a phone's browser. */
+  async invoiceLink(identity: Identity, id: string, secret: string) {
+    const row = await this.invoiceRow(identity, id);
+    const { token, expiresAt } = signInvoiceToken(secret, row.id, this.now());
+    return { url: `/v1/invoices/${token}`, expiresAt: expiresAt.toISOString() };
+  }
+
+  async invoiceByToken(token: string, secret: string) {
+    const orderId = readInvoiceToken(secret, token, this.now());
+    if (!orderId) throw notFound("This invoice link has expired. Open it again from the app.");
+    const row = await this.rowById(orderId);
+    if (row.status !== "delivered") throw notFound();
+    return this.invoicePdf(row);
   }
 }
 

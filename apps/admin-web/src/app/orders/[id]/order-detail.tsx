@@ -48,6 +48,7 @@ import { rupees } from "../../../lib/api";
 import { dateTime, minutesBetween, timeAgo, timeOnly } from "../../../lib/format";
 import { GwError, errorMessage } from "../../../lib/gw";
 import { ORDER_STATUS } from "../../../lib/order-status";
+import { downloadInvoice } from "../../../lib/invoice";
 import { DeliveryExtras } from "./delivery-extras";
 
 const FLOW: { status: OrderStatus; label: string }[] = [
@@ -76,6 +77,10 @@ export function OrderDetail({ id }: { id: string }) {
   const { nameOf } = useWarehouse();
   const [dialog, setDialog] = useState<"cancel" | "refund" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [invoice, setInvoice] = useState<{ busy: boolean; error: string | null }>({
+    busy: false,
+    error: null,
+  });
 
   if (order.isPending) return <DetailPageSkeleton label="Loading the order" />;
   if (order.isError) {
@@ -127,6 +132,25 @@ export function OrderDetail({ id }: { id: string }) {
         description={`Placed ${dateTime(o.placedAt)} (${timeAgo(o.placedAt)}) · ${nameOf(o.warehouseId)} · ${itemCount} ${itemCount === 1 ? "item" : "items"} · ${rupees(o.totalPaise)}`}
         actions={
           <>
+            {o.status === "delivered" ? (
+              <Button
+                icon={Receipt}
+                pending={invoice.busy}
+                onClick={() => {
+                  setInvoice({ busy: true, error: null });
+                  downloadInvoice(o.id, o.number)
+                    .then(() => setInvoice({ busy: false, error: null }))
+                    .catch((e: unknown) =>
+                      setInvoice({
+                        busy: false,
+                        error: e instanceof Error ? e.message : "Could not download the invoice.",
+                      }),
+                    );
+                }}
+              >
+                Invoice
+              </Button>
+            ) : null}
             {refundable > 0 ? (
               <Button icon={RotateCcw} onClick={() => setDialog("refund")}>
                 Refund
@@ -142,6 +166,7 @@ export function OrderDetail({ id }: { id: string }) {
       />
 
       {notice ? <Callout tone="ok">{notice}</Callout> : null}
+      {invoice.error ? <Callout tone="bad">{invoice.error}</Callout> : null}
       {o.status === "cancelled" && o.cancelReason ? (
         <Callout tone="bad" title={`Cancelled ${o.cancelledAt ? dateTime(o.cancelledAt) : ""}`}>
           {o.cancelReason}

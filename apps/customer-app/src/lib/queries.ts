@@ -2,15 +2,16 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ApiClientError } from "@qc/api-client";
 import { api } from "./api";
 import type { AvailabilityItem, ServiceabilityResponse } from "@qc/contracts";
-import { toCategory, toProduct } from "./catalog";
+import { asDetail, toCategory, toProduct, toProductDetail } from "./catalog";
 import { useAddressStore } from "../store/addresses";
 import { selectedOf } from "./addresses";
-import { coveringWarehouse } from "./serviceAreas";
+import { coveringWarehouse, findArea } from "./serviceAreas";
 import {
   categories as fixtureCategories,
   products as fixtureProducts,
   type Category,
   type Product,
+  type ProductDetail,
 } from "./mockData";
 
 export type ProductFilter = { categoryId?: string; q?: string; limit?: number };
@@ -19,7 +20,8 @@ export const queryKeys = {
   categories: ["catalog", "categories"] as const,
   products: (filter: ProductFilter) => ["catalog", "products", filter] as const,
   product: (id: string) => ["catalog", "product", id] as const,
-  serviceability: (lat: number, lng: number) => ["inventory", "serviceability", lat, lng] as const,
+  serviceability: (lat: number, lng: number, pincode: string | null) =>
+    ["inventory", "serviceability", lat, lng, pincode] as const,
   availability: (warehouseId: string, ids: string[]) =>
     ["inventory", "availability", warehouseId, ids.join(",")] as const,
 };
@@ -76,14 +78,14 @@ export function useProduct(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.product(id ?? ""),
     enabled: Boolean(id),
-    queryFn: async ({ signal }): Promise<Product> => {
+    queryFn: async ({ signal }): Promise<ProductDetail> => {
       if (!id) throw new Error("missing id");
       if (!api) {
         const found = fixtureProducts.find((p) => p.id === id);
         if (!found) throw new ApiClientError("Product not found.", "NOT_FOUND", { status: 404 });
-        return found;
+        return asDetail(found);
       }
-      return toProduct(await api.catalog.getProduct(id, { signal }));
+      return toProductDetail(await api.catalog.getProductDetail(id, { signal }));
     },
   });
 }
@@ -117,14 +119,20 @@ function fixtureAvailabilityFor(ids: string[]): AvailabilityItem[] {
   }));
 }
 
+/** The pincode of an address, from the area it was placed in (a pinned location has none). */
+export const selectedPincode = (areaId: string): string | null => findArea(areaId)?.pincode ?? null;
+
 /** Can we deliver to the selected address, and how fast. */
 export function useServiceability() {
-  const { lat, lng } = useAddressStore((st) => selectedOf(st));
+  const { lat, lng, areaId } = useAddressStore((st) => selectedOf(st));
+  const pincode = selectedPincode(areaId);
   return useQuery({
-    queryKey: queryKeys.serviceability(lat, lng),
+    queryKey: queryKeys.serviceability(lat, lng, pincode),
     queryFn: async ({ signal }): Promise<ServiceabilityResponse> => {
       if (!api) return fixtureServiceability(lat, lng);
-      return api.inventory.serviceability({ lat, lng }, { signal });
+      return api.inventory.serviceability(pincode ? { lat, lng, pincode } : { lat, lng }, {
+        signal,
+      });
     },
     staleTime: 2 * 60_000,
   });
