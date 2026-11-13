@@ -1,6 +1,6 @@
 "use client";
 
-import { dialogFooter } from "../../components/ui";
+import { dialogFooter } from "../../components/kit";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Banner, Category } from "@qc/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -222,7 +222,11 @@ export function BannerDialog({
         </div>
 
         <label className="flex items-center gap-2 text-sm font-semibold">
-          <input type="checkbox" {...form.register("active")} className="size-4 accent-brand-600" />
+          <input
+            type="checkbox"
+            {...form.register("active")}
+            className="size-4 accent-[var(--color-accent)]"
+          />
           Active (customers see it while it is inside its dates)
         </label>
 
@@ -280,12 +284,12 @@ function ProductPicker({
         className={fieldClass}
       />
       {value !== "" ? (
-        <p className="mt-1 text-xs font-semibold text-ink-700">
+        <p className="mt-1 text-xs font-semibold text-ink-2">
           Chosen: {current.data ? `${current.data.name} (${current.data.unit})` : value}
         </p>
       ) : null}
       {results.data && debounced.length >= 2 ? (
-        <ul className="mt-1 max-h-32 overflow-auto rounded-lg border border-line bg-white">
+        <ul className="mt-1 max-h-32 overflow-auto rounded-lg border border-line bg-surface">
           {results.data
             .filter((p) => !p.archived)
             .slice(0, 8)
@@ -297,14 +301,14 @@ function ProductPicker({
                     onPick(p.id);
                     setText("");
                   }}
-                  className="w-full px-3 py-1.5 text-left text-sm font-medium hover:bg-brand-50"
+                  className="w-full px-3 py-1.5 text-left text-sm font-medium hover:bg-accent-soft"
                 >
-                  {p.name} <span className="text-ink-500">{p.unit}</span>
+                  {p.name} <span className="text-muted">{p.unit}</span>
                 </button>
               </li>
             ))}
           {results.data.length === 0 ? (
-            <li className="px-3 py-1.5 text-xs text-ink-500">No products match.</li>
+            <li className="px-3 py-1.5 text-xs text-muted">No products match.</li>
           ) : null}
         </ul>
       ) : null}

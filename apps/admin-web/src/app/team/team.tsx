@@ -20,7 +20,7 @@ import {
   tdActions,
   dialogFooter,
   PersonCell,
-} from "../../components/ui";
+} from "../../components/kit";
 import { errorMessage, gw } from "../../lib/gw";
 import { useMe, useUserList, useWarehouses } from "../../lib/users";
 
@@ -94,17 +94,14 @@ export function Team() {
                 const self = p.id === me.data?.id;
                 const isAdmin = p.role === "admin";
                 return (
-                  <tr
-                    key={p.id}
-                    className="border-b border-line last:border-0 hover:bg-brand-50/40"
-                  >
+                  <tr key={p.id} className="border-b border-line last:border-0 hover:bg-surface-2">
                     <td className={td}>
                       <PersonCell
                         name={p.name}
                         detail={p.email}
                         badge={
                           self ? (
-                            <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] font-semibold text-ink-500">
+                            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-muted">
                               You
                             </span>
                           ) : null
@@ -122,7 +119,7 @@ export function Team() {
                     </td>
                     <td className={tdActions}>
                       {self ? (
-                        <span className="text-xs text-ink-500">
+                        <span className="text-xs text-muted">
                           You cannot change your own account
                         </span>
                       ) : (

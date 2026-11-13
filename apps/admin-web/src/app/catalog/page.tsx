@@ -1,5 +1,7 @@
-import { PageHeader } from "../../components/ui";
+import { PageHeader } from "../../components/kit";
 import { CatalogTabs } from "./catalog-tabs";
+
+export const metadata = { title: "Catalog" };
 
 export default function CatalogPage() {
   return (

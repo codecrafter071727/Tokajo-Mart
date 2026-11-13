@@ -1,5 +1,7 @@
-import { PageHeader } from "../../components/ui";
+import { PageHeader } from "../../components/kit";
 import { BannersPanel } from "./banners-panel";
+
+export const metadata = { title: "Banners" };
 
 export default function BannersPage() {
   return (

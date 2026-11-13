@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ACTIONS_SLOT } from "./ui";
+import { ACTIONS_SLOT } from "./kit";
 
 /**
  * Puts buttons into the page header from inside a client component, so the primary action sits

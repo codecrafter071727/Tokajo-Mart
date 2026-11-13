@@ -1,5 +1,7 @@
-import { PageHeader } from "../../components/ui";
+import { PageHeader } from "../../components/kit";
 import { Inventory } from "./inventory";
+
+export const metadata = { title: "Inventory" };
 
 export default function InventoryPage() {
   return (

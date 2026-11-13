@@ -23,8 +23,8 @@ export function CatalogTabs() {
             onClick={() => setTab(t.id)}
             className={`-mb-px border-b-2 px-1 pb-2.5 pt-1 text-sm font-semibold transition-colors ${
               tab === t.id
-                ? "border-brand-600 text-ink-900"
-                : "border-transparent text-ink-500 hover:text-ink-900"
+                ? "border-accent text-ink"
+                : "border-transparent text-muted hover:text-ink"
             }`}
           >
             {t.label}

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConfirmModal, ErrorBanner, Toast } from "../../components/catalog-ui";
 import { Icon } from "../../components/icons";
 import { PageActions } from "../../components/page-actions";
-import { Alert, Badge, Button, EmptyState, rowAction, rowActionDanger } from "../../components/ui";
+import { Alert, Badge, Button, EmptyState, rowAction, rowActionDanger } from "../../components/kit";
 import { catalogAdmin } from "../../lib/catalog-admin";
 import { BannerDialog } from "./banner-dialog";
 import { BannerPreview } from "./banner-preview";
@@ -119,7 +119,7 @@ export function BannersPanel() {
           New banner
         </Button>
       </PageActions>
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-muted">
         Customers see live banners from the top of this list down. Use the arrows to reorder.
       </p>
       <div className="mb-3 empty:hidden">
@@ -129,7 +129,7 @@ export function BannersPanel() {
       {banners.isPending ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-surface" />
+            <div key={i} className="h-32 animate-pulse rounded-xl bg-surface-2" />
           ))}
         </div>
       ) : list.length === 0 ? (
@@ -151,27 +151,25 @@ export function BannersPanel() {
             return (
               <li
                 key={b.id}
-                className="flex flex-wrap items-center gap-4 rounded-xl border border-line bg-white p-3 pr-4 shadow-card"
+                className="flex flex-wrap items-center gap-4 rounded-xl border border-line bg-surface p-3 pr-4 shadow-card"
               >
-                <div className="flex flex-col items-center gap-0.5 rounded-lg bg-surface p-1">
+                <div className="flex flex-col items-center gap-0.5 rounded-lg bg-surface-2 p-1">
                   <button
                     type="button"
                     aria-label={`Move ${b.title} up`}
                     disabled={index === 0 || move.isPending}
                     onClick={() => move.mutate({ index, by: -1 })}
-                    className="grid size-7 place-items-center rounded-md text-ink-700 hover:bg-white disabled:opacity-30"
+                    className="grid size-7 place-items-center rounded-md text-ink-2 hover:bg-surface disabled:opacity-30"
                   >
                     <Icon name="chevronUp" size={16} />
                   </button>
-                  <span className="text-xs font-semibold tabular-nums text-ink-500">
-                    {index + 1}
-                  </span>
+                  <span className="text-xs font-semibold tabular-nums text-muted">{index + 1}</span>
                   <button
                     type="button"
                     aria-label={`Move ${b.title} down`}
                     disabled={index === list.length - 1 || move.isPending}
                     onClick={() => move.mutate({ index, by: 1 })}
-                    className="grid size-7 place-items-center rounded-md text-ink-700 hover:bg-white disabled:opacity-30"
+                    className="grid size-7 place-items-center rounded-md text-ink-2 hover:bg-surface disabled:opacity-30"
                   >
                     <Icon name="chevronDown" size={16} />
                   </button>
@@ -186,12 +184,12 @@ export function BannersPanel() {
                 </div>
                 <div className="min-w-40 flex-1 space-y-1 text-sm">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold text-ink-900">{b.title}</p>
+                    <p className="font-semibold text-ink">{b.title}</p>
                     <Badge tone={state.tone}>{state.label}</Badge>
                   </div>
-                  <p className="text-ink-500">{describeLink(b)}</p>
+                  <p className="text-muted">{describeLink(b)}</p>
                   {b.startsAt || b.endsAt ? (
-                    <p className="text-xs text-ink-500">
+                    <p className="text-xs text-muted">
                       {when(b.startsAt) ?? "Now"} to {when(b.endsAt) ?? "no end"}
                     </p>
                   ) : null}

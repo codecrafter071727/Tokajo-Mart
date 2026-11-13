@@ -22,7 +22,7 @@ import {
   td,
   tdActions,
   dialogFooter,
-} from "../../components/ui";
+} from "../../components/kit";
 import { errorMessage, gw } from "../../lib/gw";
 
 const slug = (name: string) =>
@@ -84,9 +84,9 @@ export function Warehouses() {
               <EmptyRow colSpan={6}>No warehouses yet.</EmptyRow>
             ) : (
               list.data?.items.map((w) => (
-                <tr key={w.id} className="border-b border-line last:border-0 hover:bg-brand-50/40">
+                <tr key={w.id} className="border-b border-line last:border-0 hover:bg-surface-2">
                   <td className={`${td} font-medium`}>{w.name}</td>
-                  <td className={`${td} text-ink-500`}>{w.id}</td>
+                  <td className={`${td} text-muted`}>{w.id}</td>
                   <td className={`${td} tabular-nums`}>
                     {w.lat.toFixed(4)}, {w.lng.toFixed(4)}
                   </td>

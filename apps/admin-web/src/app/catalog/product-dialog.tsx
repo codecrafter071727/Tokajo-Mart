@@ -1,6 +1,6 @@
 "use client";
 
-import { dialogFooter } from "../../components/ui";
+import { dialogFooter } from "../../components/kit";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AdminProduct, Category } from "@qc/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -188,7 +188,7 @@ export function ProductDialog({
               </label>
             </div>
           </div>
-          <div className="w-28 shrink-0 text-center text-xs font-semibold text-ink-500">
+          <div className="w-28 shrink-0 text-center text-xs font-semibold text-muted">
             Preview
             <div className="mt-1">
               <Thumb

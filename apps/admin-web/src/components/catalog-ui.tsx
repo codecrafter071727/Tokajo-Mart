@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Modal as BaseModal } from "./dialogs";
-import { Alert, buttonClass, inputCls, dialogFooter } from "./ui";
+import { Alert, buttonClass, inputCls, dialogFooter } from "./kit";
 import { AdminApiError } from "../lib/catalog-admin";
 
 export const fieldClass = inputCls;
@@ -31,7 +31,7 @@ export function Modal({
 
 export function FieldError({ message }: { message?: string }) {
   return message ? (
-    <p role="alert" className="mt-1 text-xs font-semibold text-red-700">
+    <p role="alert" className="mt-1 text-xs font-semibold text-bad">
       {message}
     </p>
   ) : null;
@@ -49,7 +49,7 @@ export function Toast({ message }: { message: string | null }) {
   return (
     <p
       role="status"
-      className="fixed bottom-6 right-6 z-50 rounded-lg bg-ink-900 px-4 py-3 text-sm font-medium text-white shadow-dialog"
+      className="fixed bottom-6 right-6 z-50 slide-in rounded-lg bg-ink px-4 py-3 text-sm font-medium text-canvas shadow-pop"
     >
       {message}
     </p>
@@ -78,7 +78,7 @@ export function ConfirmModal({
 }) {
   return (
     <Modal title={title} onClose={onClose}>
-      <div className="text-sm text-ink-700">{body}</div>
+      <div className="text-sm text-ink-2">{body}</div>
       <ErrorBanner error={error} />
       <div className={dialogFooter}>
         <button type="button" onClick={onClose} className={secondaryButton}>
@@ -115,11 +115,11 @@ export function Thumb({
     <img
       src={imageUrl}
       alt=""
-      className={`${size} shrink-0 rounded-lg border border-line bg-white ${fit === "cover" ? "object-cover" : "object-contain"}`}
+      className={`${size} shrink-0 rounded-lg border border-line bg-surface ${fit === "cover" ? "object-cover" : "object-contain"}`}
     />
   ) : (
     <span
-      className={`${size} grid shrink-0 place-items-center rounded-lg border border-line bg-surface text-xl`}
+      className={`${size} grid shrink-0 place-items-center rounded-lg border border-line bg-surface-2 text-xl`}
       style={color ? { backgroundColor: color } : undefined}
     >
       {emoji}

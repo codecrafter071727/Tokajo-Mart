@@ -1,5 +1,7 @@
-import { PageHeader } from "../../components/ui";
+import { PageHeader } from "../../components/kit";
 import { Riders } from "./riders";
+
+export const metadata = { title: "Riders" };
 
 export default function RidersPage() {
   return (

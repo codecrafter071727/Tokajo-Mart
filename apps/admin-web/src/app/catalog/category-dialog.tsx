@@ -1,6 +1,6 @@
 "use client";
 
-import { dialogFooter } from "../../components/ui";
+import { dialogFooter } from "../../components/kit";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Category } from "@qc/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -139,7 +139,7 @@ export function CategoryDialog({
               </select>
             </label>
           </div>
-          <div className="w-24 shrink-0 text-center text-xs font-semibold text-ink-500">
+          <div className="w-24 shrink-0 text-center text-xs font-semibold text-muted">
             Preview
             <div className="mt-1">
               <Thumb

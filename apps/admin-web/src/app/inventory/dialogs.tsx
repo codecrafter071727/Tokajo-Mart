@@ -10,7 +10,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Modal } from "../../components/dialogs";
 import { Icon } from "../../components/icons";
-import { Alert, Button, Field, inputCls, dialogFooter } from "../../components/ui";
+import { Alert, Button, Field, inputCls, dialogFooter } from "../../components/kit";
 import { errorMessage, gw } from "../../lib/gw";
 import type { ProductName } from "../../lib/products";
 
@@ -132,7 +132,7 @@ export function ReceiveDialog({
                 title="Remove"
                 disabled={lines.length === 1}
                 onClick={() => setLines((current) => current.filter((_, i) => i !== index))}
-                className="grid size-10 shrink-0 place-items-center rounded-lg text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-30 disabled:hover:bg-transparent"
+                className="grid size-10 shrink-0 place-items-center rounded-lg text-muted hover:bg-bad-soft hover:text-bad disabled:opacity-30 disabled:hover:bg-transparent"
               >
                 <Icon name="close" size={16} />
               </button>
@@ -215,7 +215,7 @@ export function AdjustDialog({
         }}
         className="space-y-4"
       >
-        <p className="text-sm text-ink-700">
+        <p className="text-sm text-ink-2">
           {row.onHand} on hand, {row.reserved} held for orders, {row.available} free.
         </p>
         <Field label="What happened">

@@ -1,5 +1,7 @@
-import { PageHeader } from "../../components/ui";
+import { PageHeader } from "../../components/kit";
 import { Team } from "./team";
+
+export const metadata = { title: "Team" };
 
 export default function TeamPage() {
   return (

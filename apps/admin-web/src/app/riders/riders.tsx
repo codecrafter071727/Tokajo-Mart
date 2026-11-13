@@ -20,7 +20,7 @@ import {
   tdActions,
   dialogFooter,
   PersonCell,
-} from "../../components/ui";
+} from "../../components/kit";
 import { errorMessage, gw } from "../../lib/gw";
 import { useUserList, useWarehouses } from "../../lib/users";
 
@@ -61,23 +61,23 @@ export function Riders() {
       </PageActions>
       <div className="mb-4 grid grid-cols-3 gap-3 sm:max-w-xl">
         {[
-          { label: "Working now", value: working, tone: "text-brand-700" },
+          { label: "Working now", value: working, tone: "text-accent" },
           {
             label: "Active riders",
             value: riders.filter((r) => r.status === "active").length,
-            tone: "text-ink-900",
+            tone: "text-ink",
           },
           {
             label: "Blocked",
             value: riders.filter((r) => r.status === "blocked").length,
-            tone: "text-ink-500",
+            tone: "text-muted",
           },
         ].map((stat) => (
           <div
             key={stat.label}
-            className="rounded-xl border border-line bg-white px-4 py-3 shadow-card"
+            className="rounded-xl border border-line bg-surface px-4 py-3 shadow-card"
           >
-            <p className="text-xs font-medium text-ink-500">{stat.label}</p>
+            <p className="text-xs font-medium text-muted">{stat.label}</p>
             <p className={`mt-0.5 text-xl font-bold tabular-nums ${stat.tone}`}>{stat.value}</p>
           </div>
         ))}
@@ -112,10 +112,7 @@ export function Riders() {
                 const status = liveById.get(r.id)?.status ?? "offline";
                 const blocked = r.status === "blocked";
                 return (
-                  <tr
-                    key={r.id}
-                    className="border-b border-line last:border-0 hover:bg-brand-50/40"
-                  >
+                  <tr key={r.id} className="border-b border-line last:border-0 hover:bg-surface-2">
                     <td className={td}>
                       <PersonCell
                         name={r.name}
@@ -134,7 +131,7 @@ export function Riders() {
                       ) : (
                         <Badge tone={LIVE[status].tone}>{LIVE[status].label}</Badge>
                       )}
-                      <div className="mt-1 text-xs tabular-nums text-ink-500">
+                      <div className="mt-1 text-xs tabular-nums text-muted">
                         {liveById.get(r.id)?.deliveriesToday ?? 0} delivered today
                       </div>
                     </td>

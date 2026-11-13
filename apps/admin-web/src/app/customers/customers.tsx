@@ -17,7 +17,7 @@ import {
   selectCls,
   SearchInput,
   PersonCell,
-} from "../../components/ui";
+} from "../../components/kit";
 import { joinedDate } from "../../lib/dates";
 import { errorMessage } from "../../lib/gw";
 import { useDebounced, useUserList } from "../../lib/users";
@@ -78,7 +78,7 @@ export function Customers() {
               </EmptyRow>
             ) : (
               customers.map((c) => (
-                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-brand-50/40">
+                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface-2">
                   <td className={td}>
                     <PersonCell name={c.name || "No name"} />
                   </td>
@@ -88,7 +88,7 @@ export function Customers() {
                       {c.status === "blocked" ? "Blocked" : "Active"}
                     </Badge>
                   </td>
-                  <td className={`${td} text-ink-500`}>{joinedDate(c.createdAt)}</td>
+                  <td className={`${td} text-muted`}>{joinedDate(c.createdAt)}</td>
                   <td className={tdActions}>
                     <Button small variant="dangerGhost" onClick={() => setBlocking(c)}>
                       {c.status === "blocked" ? "Unblock" : "Block"}

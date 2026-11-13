@@ -18,7 +18,7 @@ import {
   tdNum,
   th,
   thNum,
-} from "../../components/ui";
+} from "../../components/kit";
 import { catalogAdmin } from "../../lib/catalog-admin";
 import { CategoryDialog } from "./category-dialog";
 
@@ -63,7 +63,7 @@ export function CategoriesPanel() {
           New category
         </Button>
       </PageActions>
-      <p className="mb-4 text-sm text-ink-500">
+      <p className="mb-4 text-sm text-muted">
         Categories show on the customer home screen in this order. Lower numbers come first.
       </p>
 
@@ -95,12 +95,12 @@ export function CategoriesPanel() {
                       />
                       <div>
                         <div className="font-medium">{c.name}</div>
-                        <div className="text-xs text-ink-500">{c.id}</div>
+                        <div className="text-xs text-muted">{c.id}</div>
                       </div>
                     </div>
                   </td>
                   <td className={td}>
-                    <span className="inline-flex items-center gap-2 text-ink-500">
+                    <span className="inline-flex items-center gap-2 text-muted">
                       <span
                         className="size-4 rounded border border-line"
                         style={{ backgroundColor: c.color }}

@@ -23,7 +23,7 @@ import {
   thNum,
   Toggle,
   Toolbar,
-} from "../../components/ui";
+} from "../../components/kit";
 import { rupees } from "../../lib/api";
 import { catalogAdmin } from "../../lib/catalog-admin";
 import { ProductDialog } from "./product-dialog";
@@ -127,7 +127,7 @@ export function CatalogTable() {
           ))}
         </select>
         <Toggle label="Show archived" checked={showArchived} onChange={setShowArchived} />
-        <span className="ml-auto text-sm text-ink-500 tabular-nums">
+        <span className="ml-auto text-sm text-muted tabular-nums">
           {products.isPending ? "Loading" : `${rows.length} shown`}
         </span>
       </Toolbar>
@@ -157,23 +157,23 @@ export function CatalogTable() {
                     <div className="flex items-center gap-3">
                       <Thumb imageUrl={p.imageUrl} emoji={p.emoji} fit={p.imageFit} />
                       <div>
-                        <div className="font-medium text-ink-900">{p.name}</div>
-                        <div className="text-xs text-ink-500">{p.unit}</div>
+                        <div className="font-medium text-ink">{p.name}</div>
+                        <div className="text-xs text-muted">{p.unit}</div>
                       </div>
                     </div>
                   </td>
-                  <td className={`${td} whitespace-nowrap text-ink-700`}>
+                  <td className={`${td} whitespace-nowrap text-ink-2`}>
                     {names.get(p.categoryId) ?? p.categoryId}
                   </td>
                   <td className={tdNum}>
                     <div className="font-semibold">{rupees(p.pricePaise)}</div>
                     {p.mrpPaise > p.pricePaise ? (
-                      <div className="text-xs text-ink-500 line-through xl:hidden">
+                      <div className="text-xs text-muted line-through xl:hidden">
                         {rupees(p.mrpPaise)}
                       </div>
                     ) : null}
                   </td>
-                  <td className={`${tdNum} hidden text-ink-500 xl:table-cell`}>
+                  <td className={`${tdNum} hidden text-muted xl:table-cell`}>
                     {p.mrpPaise > p.pricePaise ? (
                       <span className="line-through">{rupees(p.mrpPaise)}</span>
                     ) : (
@@ -182,9 +182,9 @@ export function CatalogTable() {
                   </td>
                   <td className={`${tdNum} hidden xl:table-cell`}>
                     {p.discountPercent > 0 ? (
-                      <span className="font-semibold text-brand-700">{`${p.discountPercent}%`}</span>
+                      <span className="font-semibold text-accent">{`${p.discountPercent}%`}</span>
                     ) : (
-                      <span className="text-ink-300">0%</span>
+                      <span className="text-faint">0%</span>
                     )}
                   </td>
                   <td className={td}>

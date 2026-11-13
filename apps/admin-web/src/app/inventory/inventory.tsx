@@ -2,7 +2,7 @@
 
 import type { AdminWarehouse, StockRow } from "@qc/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Thumb } from "../../components/catalog-ui";
 import { PageActions } from "../../components/page-actions";
 import {
@@ -22,7 +22,8 @@ import {
   thNum,
   Toggle,
   Toolbar,
-} from "../../components/ui";
+} from "../../components/kit";
+import { useWarehouse } from "../../components/shell/warehouse-context";
 import { errorMessage, gw } from "../../lib/gw";
 import { useProductNames } from "../../lib/products";
 import { AdjustDialog, EditStockDialog, ReceiveDialog } from "./dialogs";
@@ -35,7 +36,10 @@ export function Inventory() {
     queryKey: ["warehouses"],
     queryFn: () => gw<{ items: AdminWarehouse[] }>("GET", "/v1/inventory/warehouses"),
   });
-  const [chosen, setChosen] = useState("");
+  // Starts on the warehouse chosen in the sidebar switcher, and can be changed here
+  const context = useWarehouse();
+  const [chosen, setChosen] = useState(context.warehouseId);
+  useEffect(() => setChosen(context.warehouseId), [context.warehouseId]);
   const warehouseId = chosen || warehouses.data?.items[0]?.id || "";
 
   const names = useProductNames();
@@ -58,7 +62,12 @@ export function Inventory() {
     },
   });
 
+  // Alerts link here with ?q= to point at one product
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
   const [lowOnly, setLowOnly] = useState(false);
   const [dialog, setDialog] = useState<
     | { kind: "receive" }
@@ -135,7 +144,7 @@ export function Inventory() {
           label={
             <>
               Low stock only{" "}
-              <span className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900 tabular-nums">
+              <span className="rounded-full bg-warn-soft px-1.5 text-xs font-semibold text-warn tabular-nums">
                 {lowCount}
               </span>
             </>
@@ -143,7 +152,7 @@ export function Inventory() {
           checked={lowOnly}
           onChange={setLowOnly}
         />
-        <span className="ml-auto text-sm text-ink-500 tabular-nums">
+        <span className="ml-auto text-sm text-muted tabular-nums">
           {stock.data ? `${rows.length} of ${stock.data.length} products` : ""}
         </span>
       </Toolbar>
@@ -210,7 +219,7 @@ export function Inventory() {
                           <div className="truncate font-medium">
                             {product?.name ?? row.productId}
                           </div>
-                          <div className="text-xs text-ink-500">
+                          <div className="text-xs text-muted">
                             {product ? `${product.unit} · ` : ""}
                             {row.productId}
                             {row.rackLocation ? ` · Rack ${row.rackLocation}` : ""}
@@ -219,10 +228,10 @@ export function Inventory() {
                       </div>
                     </td>
                     <td className={tdNum}>{row.onHand}</td>
-                    <td className={`${tdNum} text-ink-500`}>{row.reserved}</td>
+                    <td className={`${tdNum} text-muted`}>{row.reserved}</td>
                     <td
                       className={`${tdNum} font-semibold ${
-                        row.available === 0 ? "text-red-700" : low ? "text-amber-700" : ""
+                        row.available === 0 ? "text-bad" : low ? "text-warn" : ""
                       }`}
                     >
                       {row.available}
@@ -237,7 +246,7 @@ export function Inventory() {
                       )}
                     </td>
                     <td
-                      className={`${tdNum} hidden xl:table-cell ${row.maxPerOrder ? "" : "text-ink-300"}`}
+                      className={`${tdNum} hidden xl:table-cell ${row.maxPerOrder ? "" : "text-faint"}`}
                     >
                       {row.maxPerOrder ?? "None"}
                     </td>

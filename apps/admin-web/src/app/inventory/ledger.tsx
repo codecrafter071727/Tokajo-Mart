@@ -3,7 +3,7 @@
 import type { StockMovement, StockRow } from "@qc/contracts";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Modal } from "../../components/dialogs";
-import { Alert, Badge, Button, EmptyState } from "../../components/ui";
+import { Alert, Badge, Button, EmptyState } from "../../components/kit";
 import { errorMessage, gw, qs } from "../../lib/gw";
 
 const TYPE: Record<
@@ -46,7 +46,7 @@ export function LedgerDrawer({
       {query.isPending ? (
         <div className="space-y-3" aria-busy="true">
           {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-lg bg-surface" />
+            <div key={i} className="h-12 animate-pulse rounded-lg bg-surface-2" />
           ))}
         </div>
       ) : null}
@@ -61,7 +61,7 @@ export function LedgerDrawer({
             <div className="min-w-0">
               <Badge tone={TYPE[m.type].tone}>{TYPE[m.type].label}</Badge>
               <p className="mt-1 text-sm">{m.reason ?? m.reference ?? ""}</p>
-              <p className="text-xs text-ink-500">
+              <p className="text-xs text-muted">
                 {new Date(m.createdAt).toLocaleString("en-IN", {
                   day: "numeric",
                   month: "short",
@@ -71,7 +71,7 @@ export function LedgerDrawer({
               </p>
             </div>
             <span
-              className={`text-lg font-extrabold tabular-nums ${m.quantityDelta > 0 ? "text-brand-700" : "text-red-700"}`}
+              className={`text-lg font-extrabold tabular-nums ${m.quantityDelta > 0 ? "text-accent" : "text-bad"}`}
             >
               {m.quantityDelta > 0 ? `+${m.quantityDelta}` : m.quantityDelta}
             </span>
