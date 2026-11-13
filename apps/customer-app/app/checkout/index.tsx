@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -23,12 +23,28 @@ import { ProductImage } from "../../src/components/ProductImage";
 import { addressSummary, addressTag, type SavedAddress } from "../../src/lib/addresses";
 import { useAddressStore, useSelectedAddress } from "../../src/store/addresses";
 import { KIND_ICON } from "../../src/lib/addressIcons";
+import { useOnlinePaymentsAvailable } from "../../src/lib/paymentQueries";
 
-const PAYMENT_METHODS = [
-  { id: "upi", label: "UPI / GPay / PhonePe", icon: "phone-portrait-outline" as const },
-  { id: "card", label: "Credit / Debit Card", icon: "card-outline" as const },
-  { id: "cod", label: "Cash on Delivery", icon: "cash-outline" as const },
-  { id: "wallet", label: "Tokajo Wallet", icon: "wallet-outline" as const },
+type PaymentChoice = "online" | "cod";
+
+const PAYMENT_METHODS: {
+  id: PaymentChoice;
+  label: string;
+  detail: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+}[] = [
+  {
+    id: "online",
+    label: "Pay online",
+    detail: "UPI, cards and netbanking, secured by Razorpay",
+    icon: "flash-outline",
+  },
+  {
+    id: "cod",
+    label: "Cash on delivery",
+    detail: "Pay the rider by cash or UPI",
+    icon: "cash-outline",
+  },
 ];
 
 // ─── Address Bottom Sheet ─────────────────────────────────────────────────────
@@ -181,7 +197,16 @@ const sheetStyles = StyleSheet.create({
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedPayment, setSelectedPayment] = useState("cod");
+  const onlineAvailable = useOnlinePaymentsAvailable();
+  const onlineOn = onlineAvailable.data === true;
+  const [selectedPayment, setSelectedPayment] = useState<PaymentChoice>("cod");
+  const chosenByUser = useRef(false);
+  // Online is the default once we know it is switched on, unless the customer already picked
+  useEffect(() => {
+    if (onlineOn && !chosenByUser.current) setSelectedPayment("online");
+    if (onlineAvailable.data === false) setSelectedPayment("cod");
+  }, [onlineOn, onlineAvailable.data]);
+  const payOnline = selectedPayment === "online" && onlineOn;
   const [placeError, setPlaceError] = useState<string | null>(null);
   // One key per checkout screen: a double tap or a retry returns the same order, never a second one
   const idempotencyKey = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -229,13 +254,17 @@ export default function CheckoutScreen() {
           lng: selectedAddress.lng,
           instructions: selectedAddress.instructions || null,
         },
-        payment: "cod",
+        payment: payOnline ? "online" : "cod",
         promisedMins: eta?.etaMins ?? 10,
       },
       {
         onSuccess: (order) => {
           clearCart();
-          router.replace({ pathname: "/orders/[id]", params: { id: order.id } });
+          // An online order goes straight into the payment sheet on its tracking screen
+          router.replace({
+            pathname: "/orders/[id]",
+            params: payOnline ? { id: order.id, pay: "1" } : { id: order.id },
+          });
         },
         onError: (error) =>
           setPlaceError(
@@ -332,36 +361,42 @@ export default function CheckoutScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Payment method</Text>
           {PAYMENT_METHODS.map((method) => {
-            const available = method.id === "cod";
+            const available = method.id === "cod" || onlineOn;
+            const selected = selectedPayment === method.id;
             return (
               <Pressable
                 key={method.id}
                 style={[
                   styles.paymentMethod,
-                  selectedPayment === method.id && styles.paymentMethodActive,
+                  selected && styles.paymentMethodActive,
                   !available && styles.paymentMethodDisabled,
                 ]}
                 disabled={!available}
-                accessibilityState={{
-                  disabled: !available,
-                  selected: selectedPayment === method.id,
+                accessibilityRole="radio"
+                accessibilityState={{ disabled: !available, selected }}
+                onPress={() => {
+                  chosenByUser.current = true;
+                  setSelectedPayment(method.id);
                 }}
-                onPress={() => setSelectedPayment(method.id)}
               >
                 <View style={styles.paymentRadio}>
-                  {selectedPayment === method.id && <View style={styles.paymentRadioFill} />}
+                  {selected && <View style={styles.paymentRadioFill} />}
                 </View>
                 <Ionicons
                   name={method.icon}
                   size={22}
                   color={available ? Colors.brandText : Colors.textTertiary}
                 />
-                <Text style={styles.paymentLabel}>{method.label}</Text>
-                {!available ? (
-                  <Text style={styles.soon} numberOfLines={1}>
-                    Soon
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paymentLabel}>{method.label}</Text>
+                  <Text style={styles.paymentDetail} numberOfLines={2}>
+                    {method.id === "online" && !available
+                      ? onlineAvailable.isPending
+                        ? "Checking availability"
+                        : "Not available right now. Choose cash on delivery."
+                      : method.detail}
                   </Text>
-                ) : null}
+                </View>
               </Pressable>
             );
           })}
@@ -423,18 +458,20 @@ export default function CheckoutScreen() {
           onPress={handlePlaceOrder}
           disabled={placeOrder.isPending || items.length === 0 || outsideArea}
           accessibilityRole="button"
-          accessibilityLabel={`Place order, ${formatPaise(bill.totalPaise)}, pay on delivery`}
+          accessibilityLabel={`Place order, ${formatPaise(bill.totalPaise)}, ${payOnline ? "pay online" : "pay on delivery"}`}
           accessibilityState={{ busy: placeOrder.isPending }}
         >
           <View>
             <Text style={styles.bottomTotal}>{formatPaise(bill.totalPaise)}</Text>
-            <Text style={styles.bottomSub}>PAY ON DELIVERY</Text>
+            <Text style={styles.bottomSub}>{payOnline ? "PAY ONLINE" : "PAY ON DELIVERY"}</Text>
           </View>
           {placeOrder.isPending ? (
             <ActivityIndicator color={Colors.onBrand} />
           ) : (
             <View style={styles.placeRight}>
-              <Text style={styles.placeOrderText}>Place order</Text>
+              <Text style={styles.placeOrderText}>
+                {payOnline ? "Proceed to pay" : "Place order"}
+              </Text>
               <Ionicons name="caret-forward" size={14} color={Colors.onBrand} />
             </View>
           )}
@@ -450,10 +487,10 @@ const styles = StyleSheet.create({
   paymentMethodDisabled: {
     opacity: 0.55,
   },
-  soon: {
+  paymentDetail: {
     fontSize: FontSize.caption,
-    fontWeight: "700",
     color: Colors.textTertiary,
+    marginTop: 1,
   },
   placeError: {
     flexDirection: "row",

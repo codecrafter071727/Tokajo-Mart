@@ -25,9 +25,10 @@ export type Order = PriceBreakdown & {
   id: string;
   placedAt: string;
   items: OrderItem[];
-  payment: "cod";
+  /** Cash on delivery, or paid online through Razorpay before the store starts */
+  payment: "cod" | "online";
   address: DeliveryAddress;
-  /** The customer tells this to the rider at the door */
+  /** The customer tells this to the rider at the door. Empty until an online order is paid. */
   deliveryCode: string;
   /** The delivery time promised at checkout, in minutes (from the serviceability check) */
   promisedMins: number;
@@ -53,7 +54,7 @@ export type PlaceOrderInput = {
   items: OrderItem[];
   tipPaise: number;
   address: DeliveryAddress;
-  payment: "cod";
+  payment: "cod" | "online";
   /** The ETA shown at checkout, kept on the order so tracking never contradicts it */
   promisedMins: number;
   /** Where to deliver, sent to the order service so it can pick the serving warehouse */

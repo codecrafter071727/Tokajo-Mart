@@ -140,6 +140,17 @@ suite("payment service", async () => {
     await db.destroy();
   });
 
+  describe("config", () => {
+    it("tells a signed in app whether online payment is on, and nothing else", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/payments/config", headers: alice });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ onlineEnabled: true });
+      expect((await app.inject({ method: "GET", url: "/v1/payments/config" })).statusCode).toBe(
+        401,
+      );
+    });
+  });
+
   describe("checkout", () => {
     it("creates one Razorpay order for the order's own total and reuses it", async () => {
       const order = newOrder();

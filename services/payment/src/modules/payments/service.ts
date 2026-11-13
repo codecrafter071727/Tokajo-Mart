@@ -88,6 +88,11 @@ export class PaymentService {
       .executeTakeFirst();
   }
 
+  /** Whether the app should offer online payment. Never exposes keys. */
+  config(): { onlineEnabled: boolean } {
+    return { onlineEnabled: Boolean(this.cfg.razorpay && this.cfg.keyId && this.cfg.keySecret) };
+  }
+
   /** Creates (or reuses) the Razorpay order for one of the customer's unpaid orders. */
   async checkout(identity: Identity, orderId: string): Promise<CheckoutResponse> {
     if (identity.role !== "customer") throw new PaymentError(403, "Only customers can pay.");

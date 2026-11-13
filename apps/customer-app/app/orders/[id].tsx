@@ -13,6 +13,7 @@ import { RouteProgress } from "../../src/components/RouteProgress";
 import { ProductImage } from "../../src/components/ProductImage";
 import { Skeleton } from "../../src/components/Skeleton";
 import { formatPaise } from "../../src/lib/pricing";
+import { PaymentPanel } from "../../src/components/payments/PaymentPanel";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -34,10 +35,30 @@ const RANK: Record<OrderStatus, number> = {
 /** Demo rider until the delivery service assigns a real one. Matches the rider app's demo login. */
 const DEMO_RIDER = { name: "Ravi Kumar", rating: 4.8, phone: null as string | null };
 
-function headline(status: OrderStatus, eta: number, riderName?: string) {
+function headline(
+  status: OrderStatus,
+  eta: number,
+  riderName: string | undefined,
+  serverStatus: string | undefined,
+  online: boolean,
+) {
+  if (serverStatus === "pending_payment") {
+    return { title: "Complete your payment", sub: "We start packing as soon as you pay" };
+  }
+  if (serverStatus === "expired" || serverStatus === "payment_failed") {
+    return {
+      title: "Payment time ran out",
+      sub: "Nothing was charged. Please place the order again.",
+    };
+  }
   switch (status) {
     case "cancelled":
-      return { title: "Order cancelled", sub: "You have not been charged for this order" };
+      return {
+        title: "Order cancelled",
+        sub: online
+          ? "Any amount paid online is refunded in full"
+          : "You have not been charged for this order",
+      };
     case "delivered":
       return { title: "Order delivered", sub: "Thanks for shopping with us. Enjoy!" };
     case "on_the_way":
@@ -58,7 +79,7 @@ function headline(status: OrderStatus, eta: number, riderName?: string) {
 export default function OrderTrackingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, pay } = useLocalSearchParams<{ id: string; pay?: string }>();
   const orderQuery = useOrder(id);
   const cancel = useCancelOrder();
   const now = useNow(1000);
@@ -113,9 +134,14 @@ export default function OrderTrackingScreen() {
   const eta = etaMinutes(order, now);
   const rider = order.server ? order.server.rider : DEMO_RIDER;
   const hasRider = (status === "on_the_way" || delivered) && rider;
-  const canCancel = order.server ? order.server.status === "confirmed" : status === "confirmed";
+  const serverStatus = order.server?.status;
+  const online = order.payment === "online";
+  const awaitingPayment = serverStatus === "pending_payment";
+  const canCancel = order.server
+    ? serverStatus === "confirmed" || serverStatus === "pending_payment"
+    : status === "confirmed";
   const rank = RANK[status];
-  const head = headline(status, eta, rider?.name);
+  const head = headline(status, eta, rider?.name, serverStatus, online);
   const itemCount = order.items.reduce((n, i) => n + i.quantity, 0);
 
   const heroColors: [string, string] = cancelled
@@ -145,7 +171,7 @@ export default function OrderTrackingScreen() {
         </Text>
         <Text style={styles.heroSub}>{head.sub}</Text>
 
-        {!cancelled ? (
+        {!cancelled && !awaitingPayment ? (
           <View style={styles.steps} accessibilityLabel={`Step ${rank + 1} of ${STEPS.length}`}>
             {STEPS.map((step, i) => {
               const done = i <= rank;
@@ -165,7 +191,9 @@ export default function OrderTrackingScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing[32] }]}
         showsVerticalScrollIndicator={false}
       >
-        {inFlight ? (
+        <PaymentPanel order={order} now={now} autoStart={pay === "1"} />
+
+        {inFlight && order.deliveryCode ? (
           <View style={styles.codeCard}>
             <View style={{ flex: 1 }}>
               <Text style={styles.codeLabel}>Delivery code</Text>
@@ -185,7 +213,7 @@ export default function OrderTrackingScreen() {
           </View>
         ) : null}
 
-        {!cancelled ? (
+        {!cancelled && !awaitingPayment ? (
           <RouteProgress
             progress={riderProgress(order, now)}
             title={
@@ -260,7 +288,15 @@ export default function OrderTrackingScreen() {
           <View style={styles.divider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>
-              {cancelled ? "Order total" : delivered ? "Paid on delivery" : "To pay on delivery"}
+              {cancelled
+                ? "Order total"
+                : online
+                  ? awaitingPayment
+                    ? "To pay online"
+                    : "Paid online"
+                  : delivered
+                    ? "Paid on delivery"
+                    : "To pay on delivery"}
             </Text>
             <Text style={styles.totalValue}>{formatPaise(order.totalPaise)}</Text>
           </View>
@@ -306,7 +342,11 @@ export default function OrderTrackingScreen() {
                     : "Cancel order"}
               </Text>
             </Pressable>
-            <Text style={styles.cancelHint}>You can cancel until the store starts packing.</Text>
+            <Text style={styles.cancelHint}>
+              {online && !awaitingPayment
+                ? "You can cancel until the store starts packing. Your payment is refunded in full."
+                : "You can cancel until the store starts packing."}
+            </Text>
             {cancel.isError ? (
               <Text style={styles.cancelError} accessibilityRole="alert">
                 {cancel.error instanceof Error ? cancel.error.message : "Could not cancel."}

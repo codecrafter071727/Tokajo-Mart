@@ -9,6 +9,21 @@ import { z } from "zod";
 import type { PaymentService } from "./service";
 
 export function registerPaymentRoutes(app: ServiceApp, payments: PaymentService): void {
+  app.get(
+    "/v1/payments/config",
+    {
+      schema: {
+        tags: ["payments"],
+        summary: "Whether online payment is offered at checkout",
+        response: { 200: z.object({ onlineEnabled: z.boolean() }) },
+      },
+    },
+    async (request) => {
+      requireIdentity(request);
+      return payments.config();
+    },
+  );
+
   app.post(
     "/v1/payments/orders/:orderId/checkout",
     {

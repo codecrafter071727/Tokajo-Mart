@@ -18,7 +18,7 @@ export function fromServer(order: ServerOrder): Order {
     id: order.id,
     placedAt: order.placedAt,
     items,
-    payment: "cod",
+    payment: order.paymentMethod,
     address: order.address,
     deliveryCode: order.deliveryCode ?? "",
     promisedMins: order.promisedMins,

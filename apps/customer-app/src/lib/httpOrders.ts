@@ -20,7 +20,7 @@ export function createHttpOrderRepository(): OrderRepository {
             lng: input.location?.lng,
             instructions: input.location?.instructions ?? null,
           },
-          payment: "cod",
+          payment: input.payment,
         },
       });
       return fromServer(order);

@@ -41,6 +41,29 @@ const STATUS_CONFIG: Record<
   cancelled: { label: "Cancelled", color: Colors.danger, bg: "#FFF0F1", icon: "close-circle" },
 };
 
+/** Online payment states the coarse status above does not tell apart. */
+const PAYMENT_CONFIG: Record<string, { label: string; color: string; bg: string; icon: IconName }> =
+  {
+    pending_payment: {
+      label: "Payment pending",
+      color: "#8A5A00",
+      bg: Colors.yellowTint,
+      icon: "time-outline",
+    },
+    expired: {
+      label: "Not paid",
+      color: Colors.textSecondary,
+      bg: Colors.canvas,
+      icon: "time-outline",
+    },
+    payment_failed: {
+      label: "Not paid",
+      color: Colors.textSecondary,
+      bg: Colors.canvas,
+      icon: "time-outline",
+    },
+  };
+
 const FILTERS = ["All", "Active", "Delivered", "Cancelled"] as const;
 type Filter = (typeof FILTERS)[number];
 
@@ -66,7 +89,8 @@ function OrderCard({ order, now }: { order: Order; now: Date }) {
   const addItem = useCartStore((s) => s.addItem);
   const incrementItem = useCartStore((s) => s.incrementItem);
   const status = statusAt(order, now);
-  const cfg = STATUS_CONFIG[status];
+  const cfg = PAYMENT_CONFIG[order.server?.status ?? ""] ?? STATUS_CONFIG[status];
+  const awaitingPayment = order.server?.status === "pending_payment";
   const itemCount = order.items.reduce((n, i) => n + i.quantity, 0);
   const active = status !== "delivered" && status !== "cancelled";
 
@@ -132,14 +156,22 @@ function OrderCard({ order, now }: { order: Order; now: Date }) {
           {itemCount} item{itemCount !== 1 ? "s" : ""}
           {"  ·  "}
           <Text style={styles.totalValue}>{formatPaise(order.totalPaise)}</Text>
+          {order.payment === "online" && !awaitingPayment && status !== "cancelled" ? (
+            <Text style={styles.paidTag}>{"  ·  "}Paid online</Text>
+          ) : null}
         </Text>
         <View style={styles.actionRow}>
           {active && (
             <Pressable
               style={styles.trackBtn}
-              onPress={() => router.push({ pathname: "/orders/[id]", params: { id: order.id } })}
+              onPress={() =>
+                router.push({
+                  pathname: "/orders/[id]",
+                  params: awaitingPayment ? { id: order.id, pay: "1" } : { id: order.id },
+                })
+              }
             >
-              <Text style={styles.trackBtnText}>Track order</Text>
+              <Text style={styles.trackBtnText}>{awaitingPayment ? "Pay now" : "Track order"}</Text>
             </Pressable>
           )}
           {status === "delivered" && (
@@ -214,6 +246,7 @@ export default function OrdersListScreen() {
 }
 
 const styles = StyleSheet.create({
+  paidTag: { color: Colors.brandText, fontWeight: "700" },
   thumbRow: { flexDirection: "row", gap: Spacing[8] },
   thumb: {
     width: 48,
