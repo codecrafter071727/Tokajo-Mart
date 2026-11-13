@@ -8,6 +8,8 @@ import {
   listOrdersResponseSchema,
   orderParamsSchema,
   orderSchema,
+  orderStatusSchema,
+  paymentMethodSchema,
   pickItemBodySchema,
   pickItemParamsSchema,
   placeOrderBodySchema,
@@ -213,6 +215,47 @@ export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void
       },
     },
     async (request) => orders.internalGet(request.params.id),
+  );
+
+  // Internal: the payment service reads what it needs and reports a captured payment
+  app.get(
+    "/internal/orders/:id/payment-info",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Who owns an order, what it costs and whether it is waiting for payment",
+        params: orderParamsSchema,
+        response: {
+          200: z.object({
+            id: z.uuid(),
+            number: z.string(),
+            userId: z.uuid(),
+            status: orderStatusSchema,
+            paymentMethod: paymentMethodSchema,
+            totalPaise: z.number().int(),
+            customerName: z.string(),
+            customerPhone: z.string(),
+          }),
+        },
+      },
+    },
+    async (request) => orders.paymentInfo(request.params.id),
+  );
+
+  app.post(
+    "/internal/orders/:id/payment-captured",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "The payment for an online order was captured (idempotent)",
+        params: orderParamsSchema,
+        response: { 200: orderSchema },
+      },
+    },
+    async (request) => {
+      await orders.paymentCaptured(request.params.id);
+      return orders.internalGet(request.params.id);
+    },
   );
 }
 

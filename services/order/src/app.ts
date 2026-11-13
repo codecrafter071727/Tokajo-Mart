@@ -37,6 +37,16 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (!options.db) await db.destroy();
   });
 
-  registerOrderRoutes(app, new OrderService(db, options.clients ?? createClients(), options.now));
+  const orders = new OrderService(db, options.clients ?? createClients(), options.now);
+  registerOrderRoutes(app, orders);
+
+  // Online orders that were never paid give their stock back. Tests call the sweep directly.
+  if (env.NODE_ENV !== "test") {
+    const sweep = setInterval(() => {
+      orders.expireUnpaid().catch((error) => app.log.error({ err: error }, "expiry sweep failed"));
+    }, 60_000);
+    sweep.unref();
+    app.addHook("onClose", async () => clearInterval(sweep));
+  }
   return app;
 }

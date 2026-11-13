@@ -1,8 +1,10 @@
 // One real order, end to end, through the gateway: customer signs in and orders, the warehouse
 // packs it, a rider delivers it. Run against the stack from scripts/dev-stack.sh.
 //   node scripts/e2e.mjs            (GATEWAY_URL defaults to http://localhost:4000)
+// The online payment part needs the payment service running with PAYMENTS_FAKE_PROVIDER=1 and
+// the same RAZORPAY_WEBHOOK_SECRET in this script's environment. Otherwise it is skipped.
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 
 const BASE = process.env.GATEWAY_URL ?? "http://localhost:4000";
 
@@ -239,5 +241,79 @@ await ok(
   403,
 );
 await ok("internal routes are not reachable", call("GET", "/internal/riders"), 404);
+
+// 10. Online payment: the order waits for payment, a signed Razorpay webhook confirms it, and a
+// cancel refunds it. Simulating the webhook needs the webhook secret, so it only runs with one.
+const online = await ok(
+  "customer places an online order",
+  call("POST", "/v1/orders", {
+    token: customer.accessToken,
+    headers: { "idempotency-key": randomUUID() },
+    body: { items: [{ productId: catalog.items[0].id, quantity: 1 }], address, payment: "online" },
+  }),
+  201,
+);
+assert.equal(online.status, "pending_payment");
+assert.equal(online.deliveryCode, null, "no delivery code before payment");
+const checkout = await call("POST", `/v1/payments/orders/${online.id}/checkout`, {
+  token: customer.accessToken,
+  body: {},
+});
+const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+if (checkout.status === 503) {
+  console.log("--  online payment skipped: the payment service has no Razorpay keys");
+} else if (!webhookSecret) {
+  assert.equal(checkout.status, 200, JSON.stringify(checkout.json));
+  console.log("ok  checkout created a Razorpay order");
+  console.log(
+    "--  payment confirmation skipped: set RAZORPAY_WEBHOOK_SECRET to simulate the webhook",
+  );
+} else {
+  assert.equal(checkout.status, 200, JSON.stringify(checkout.json));
+  assert.equal(checkout.json.amountPaise, online.totalPaise);
+  console.log("ok  checkout created a Razorpay order");
+  const raw = JSON.stringify({
+    event: "payment.captured",
+    payload: {
+      payment: {
+        entity: {
+          id: `pay_e2e${Date.now()}`,
+          order_id: checkout.json.razorpayOrderId,
+          amount: online.totalPaise,
+          method: "upi",
+          status: "captured",
+        },
+      },
+    },
+  });
+  const hook = await fetch(`${BASE}/webhooks/razorpay`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-razorpay-signature": createHmac("sha256", webhookSecret).update(raw).digest("hex"),
+      "x-razorpay-event-id": `evt_e2e_${randomUUID()}`,
+    },
+    body: raw,
+  });
+  assert.equal(hook.status, 200, `webhook: ${hook.status} ${await hook.text()}`);
+  console.log("ok  signed webhook accepted");
+  const paid = await ok(
+    "the paid order is confirmed",
+    call("GET", `/v1/orders/${online.id}`, { token: customer.accessToken }),
+  );
+  assert.equal(paid.status, "confirmed");
+  assert.match(paid.deliveryCode, /^\d{4}$/);
+  if (process.env.PAYMENTS_FAKE_PROVIDER === "1") {
+    await ok(
+      "customer cancels the paid order",
+      call("POST", `/v1/orders/${online.id}/cancel`, { token: customer.accessToken, body: {} }),
+    );
+    const refunded = await ok(
+      "the payment is refunded",
+      call("GET", `/v1/payments/orders/${online.id}`, { token: customer.accessToken }),
+    );
+    assert.equal(refunded.status, "refunded");
+  }
+}
 
 console.log("\nEnd to end passed.");

@@ -1,6 +1,6 @@
 import type { Role } from "@qc/contracts";
 
-export type ServiceName = "identity" | "catalog" | "inventory" | "order" | "delivery";
+export type ServiceName = "identity" | "catalog" | "inventory" | "order" | "delivery" | "payment";
 
 /** Who may call a route: anyone, any signed in user, or only these roles. */
 export type Access = "public" | "authenticated" | Role[];
@@ -10,6 +10,10 @@ export type Route = {
   access: Access;
   /** Stricter rate limit (requests per minute per client) for abuse prone routes */
   limit?: number;
+  /** Extra request headers this route needs passed through (beyond the usual safe list) */
+  extraHeaders?: readonly string[];
+  /** Never attach a caller identity, even when a token is sent (third party webhooks) */
+  anonymous?: boolean;
 };
 
 const STAFF: Role[] = ["warehouse_staff", "warehouse_manager", "admin"];
@@ -49,6 +53,27 @@ const RULES: Rule[] = [
   },
   { prefix: "/v1/orders", route: { service: "order", access: "authenticated" } },
   { prefix: "/v1/delivery/", route: { service: "delivery", access: "authenticated" } },
+
+  // Online payments. The payment service checks the caller owns the order
+  {
+    prefix: "/v1/payments/",
+    methods: ["POST"],
+    route: { service: "payment", access: "authenticated", limit: 30 },
+  },
+  { prefix: "/v1/payments/", route: { service: "payment", access: "authenticated" } },
+
+  // Razorpay calls this. It is public, and the payment service verifies the signature over the
+  // raw body, so the body and the two signature headers are passed through untouched.
+  {
+    prefix: "/webhooks/razorpay",
+    methods: ["POST"],
+    route: {
+      service: "payment",
+      access: "public",
+      anonymous: true,
+      extraHeaders: ["x-razorpay-signature", "x-razorpay-event-id"],
+    },
+  },
 ];
 
 /** Finds the service and access rule for a request, or null when the gateway does not serve it. */

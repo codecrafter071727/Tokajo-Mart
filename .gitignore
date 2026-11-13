@@ -43,3 +43,6 @@ Thumbs.db
 .pnpm-store/
 expo-env.d.ts
 .dev-stack/
+
+# Reference project kept locally only (its own git repo and secrets)
+booking-hub/

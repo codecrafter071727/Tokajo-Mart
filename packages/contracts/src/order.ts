@@ -55,6 +55,9 @@ export const addressInputSchema = z.object({
 });
 export type AddressInput = z.input<typeof addressInputSchema>;
 
+export const paymentMethodSchema = z.enum(["cod", "online"]);
+export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
+
 export const placeOrderBodySchema = z.object({
   items: z
     .array(z.object({ productId: z.string().min(1), quantity: z.number().int().min(1).max(100) }))
@@ -63,7 +66,8 @@ export const placeOrderBodySchema = z.object({
   /** Whole paise, set by the customer. The server never accepts a total from the client. */
   tipPaise: z.number().int().min(0).max(50_000).default(0),
   address: addressInputSchema,
-  payment: z.literal("cod"),
+  /** Cash on delivery, or online through Razorpay (the order waits in pending_payment until paid) */
+  payment: paymentMethodSchema,
 });
 export type PlaceOrderBody = z.input<typeof placeOrderBodySchema>;
 
@@ -86,7 +90,7 @@ export const orderSchema = z.object({
   handlingFeePaise: z.number().int(),
   tipPaise: z.number().int(),
   totalPaise: z.number().int(),
-  paymentMethod: z.literal("cod"),
+  paymentMethod: paymentMethodSchema,
   promisedMins: z.number().int(),
   address: z.object({ tag: z.string(), line1: z.string(), line2: z.string() }),
   /** The customer reads this to the rider at the door. Only shown to the customer who owns the order. */

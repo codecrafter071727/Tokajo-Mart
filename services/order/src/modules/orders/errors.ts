@@ -2,6 +2,8 @@
 export class OrderError extends Error {
   readonly statusCode: number;
   readonly details?: unknown;
+  /** Written for the customer, so even a 503 shows its message */
+  readonly expose = true;
   constructor(statusCode: number, message: string, details?: unknown) {
     super(message);
     this.name = "OrderError";

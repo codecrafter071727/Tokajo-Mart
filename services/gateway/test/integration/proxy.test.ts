@@ -36,7 +36,14 @@ beforeAll(async () => {
   await upstream.listen({ port: 0, host: "127.0.0.1" });
   url = `http://127.0.0.1:${(upstream.server.address() as AddressInfo).port}`;
   app = await buildApp({
-    targets: { identity: url, catalog: url, inventory: url, order: url, delivery: url },
+    targets: {
+      identity: url,
+      catalog: url,
+      inventory: url,
+      order: url,
+      delivery: url,
+      payment: url,
+    },
   });
 });
 afterAll(async () => {
@@ -174,5 +181,59 @@ describe("gateway", () => {
     for (let i = 0; i < 25; i += 1)
       last = (await call("POST", "/v1/identity/auth/login", { body: {} })).statusCode;
     expect(last).toBe(429);
+  });
+});
+
+describe("payments through the gateway", () => {
+  it("needs a signed in user for payment routes", async () => {
+    expect((await call("POST", "/v1/payments/verify", { body: {} })).statusCode).toBe(401);
+    const res = await call("GET", "/v1/payments/orders/abc", { token: await token("customer") });
+    expect(res.json().identity).toMatchObject({ role: "customer" });
+  });
+
+  it("passes a Razorpay webhook through raw, with its signature headers and no identity", async () => {
+    const raw = '{"event":"payment.captured","payload":{ "a" : 1 }}';
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhooks/razorpay",
+      payload: raw,
+      headers: {
+        "content-type": "application/json",
+        "x-razorpay-signature": "sig123",
+        "x-razorpay-event-id": "evt_1",
+        "x-something-else": "dropped",
+        authorization: `Bearer ${await token("admin")}`,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const echoed = res.json();
+    expect(echoed.url).toBe("/webhooks/razorpay");
+    // Byte for byte, spaces included, so the signature still matches
+    expect(echoed.body).toBe(raw);
+    expect(echoed.headers["x-razorpay-signature"]).toBe("sig123");
+    expect(echoed.headers["x-razorpay-event-id"]).toBe("evt_1");
+    expect(echoed.headers["x-something-else"]).toBeUndefined();
+    expect(echoed.identity).toBeNull();
+  });
+
+  it("does not let the signature headers through on other routes", async () => {
+    const res = await call("GET", "/v1/catalog/products", {
+      headers: { "x-razorpay-signature": "sig" },
+    });
+    expect(res.json().headers["x-razorpay-signature"]).toBeUndefined();
+  });
+
+  it("only accepts POST on the webhook and nothing else under /webhooks", async () => {
+    expect((await app.inject({ method: "GET", url: "/webhooks/razorpay" })).statusCode).toBe(404);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/webhooks/other",
+          payload: "{}",
+          headers: { "content-type": "application/json" },
+        })
+      ).statusCode,
+    ).toBe(404);
   });
 });

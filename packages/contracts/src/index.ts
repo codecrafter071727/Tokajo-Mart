@@ -96,4 +96,5 @@ export {
 export * from "./pricing";
 export * from "./identity";
 export * from "./order";
+export * from "./payment";
 export * from "./delivery";

@@ -71,10 +71,11 @@ export function toOrder(
     handlingFeePaise: row.handlingFeePaise,
     tipPaise: row.tipPaise,
     totalPaise: row.totalPaise,
-    paymentMethod: "cod",
+    paymentMethod: row.paymentMethod === "online" ? "online" : "cod",
     promisedMins: row.promisedMins,
     address: { tag: row.addressTag, line1: row.addressLine1, line2: row.addressLine2 },
-    deliveryCode: showCode ? row.deliveryCode : null,
+    // An unpaid online order has no code yet: it only matters once the order is confirmed
+    deliveryCode: showCode && !UNPAID.includes(row.status as OrderStatus) ? row.deliveryCode : null,
     rider,
     placedAt: row.placedAt.toISOString(),
     confirmedAt: iso(row.confirmedAt),
@@ -85,6 +86,12 @@ export function toOrder(
     cancelReason: row.cancelReason,
   };
 }
+
+/** Statuses of an online order that has not been paid (yet). */
+const UNPAID: OrderStatus[] = ["pending_payment", "payment_failed", "expired"];
+
+/** How long an online order waits for payment before its stock goes back on the shelf. */
+export const PAYMENT_WINDOW_MINS = 15;
 
 /** The timestamp column each status stamps when an order enters it. */
 const STAMP: Partial<Record<OrderStatus, string>> = {
@@ -280,6 +287,7 @@ export class OrderService {
       body.tipPaise ?? 0,
     );
 
+    const online = body.payment === "online";
     const orderId = randomUUID();
     // Hold the stock first. If this fails nothing has been written and the customer sees why.
     await this.call(() =>
@@ -287,7 +295,8 @@ export class OrderService {
         warehouseId,
         reference: orderId,
         items: lines,
-        ttlSeconds: 600,
+        // An online order holds stock while the customer pays, a little past the payment window
+        ttlSeconds: online ? PAYMENT_WINDOW_MINS * 60 + 120 : 600,
       }),
     );
 
@@ -309,8 +318,8 @@ export class OrderService {
             number,
             userId: identity.userId,
             warehouseId,
-            status: "confirmed",
-            paymentMethod: "cod",
+            status: online ? "pending_payment" : "confirmed",
+            paymentMethod: online ? "online" : "cod",
             itemTotalPaise: price.itemTotalPaise,
             mrpTotalPaise: price.mrpTotalPaise,
             savingsPaise: price.savingsPaise,
@@ -331,7 +340,7 @@ export class OrderService {
             reservationId: null,
             idempotencyKey,
             placedAt: now,
-            confirmedAt: now,
+            confirmedAt: online ? null : now,
           })
           .returningAll()
           .executeTakeFirstOrThrow();
@@ -357,10 +366,12 @@ export class OrderService {
           .values({
             orderId,
             fromStatus: null,
-            toStatus: "confirmed",
+            toStatus: online ? "pending_payment" : "confirmed",
             actorId: identity.userId,
             actorRole: "customer",
-            note: "Order placed (cash on delivery)",
+            note: online
+              ? "Order placed, waiting for online payment"
+              : "Order placed (cash on delivery)",
           })
           .execute();
         return inserted;
@@ -381,8 +392,13 @@ export class OrderService {
       throw error;
     }
 
-    // Cash on delivery needs no payment step, so the hold becomes a sale straight away
-    await this.call(() => this.clients.inventory.post(`/internal/reservations/${orderId}/commit`));
+    // Cash on delivery needs no payment step, so the hold becomes a sale straight away. An online
+    // order keeps the hold until the payment is captured (or the window runs out).
+    if (!online) {
+      await this.call(() =>
+        this.clients.inventory.post(`/internal/reservations/${orderId}/commit`),
+      );
+    }
 
     const [order] = await this.hydrate([row], () => true);
     return { order: order as Order, created: true };
@@ -425,7 +441,12 @@ export class OrderService {
   async transition(id: string, input: TransitionInput): Promise<OrderRow> {
     const current = await this.rowById(id);
     const from = current.status as OrderStatus;
-    if (from === input.to) return current; // repeating a step is harmless
+    if (from === input.to) {
+      // Repeating a step is harmless. Repeating a cancel retries its side effects (all idempotent),
+      // so an admin can finish a refund or restock that failed the first time.
+      if (from === "cancelled") await this.afterCancel(current);
+      return current;
+    }
     if (!ORDER_TRANSITIONS[from].includes(input.to)) {
       throw conflict(
         `An order that is ${from.replaceAll("_", " ")} cannot become ${input.to.replaceAll("_", " ")}.`,
@@ -466,16 +487,95 @@ export class OrderService {
       throw conflict("This order was just changed by someone else. Refresh and try again.");
     }
 
-    if (input.to === "cancelled") {
-      // Sold stock goes back on the shelf. A failure is logged by the caller's retry, not hidden.
-      await this.clients.inventory.post(`/internal/reservations/${id}/restock`).catch(() => {
-        throw unavailable("The order was cancelled but its stock could not be returned yet.");
-      });
-      await this.clients.delivery
-        .post(`/internal/deliveries/by-order/${id}/cancel`)
+    if (input.to === "cancelled") await this.afterCancel(updated);
+    if (input.to === "expired") {
+      // Never paid: the held stock simply goes back
+      await this.clients.inventory
+        .post(`/internal/reservations/${id}/release`)
         .catch(() => undefined);
     }
+    if (input.to === "confirmed" && from === "pending_payment") {
+      // Paid: the hold becomes a sale
+      await this.call(() => this.clients.inventory.post(`/internal/reservations/${id}/commit`));
+    }
     return updated;
+  }
+
+  /**
+   * Stock back on the shelf (restock handles both a held and a sold reservation), the delivery
+   * stopped, and for an online order a full refund. Every step is idempotent.
+   */
+  private async afterCancel(row: OrderRow): Promise<void> {
+    await this.clients.inventory.post(`/internal/reservations/${row.id}/restock`).catch(() => {
+      throw unavailable("The order was cancelled but its stock could not be returned yet.");
+    });
+    await this.clients.delivery
+      .post(`/internal/deliveries/by-order/${row.id}/cancel`)
+      .catch(() => undefined);
+    if (row.paymentMethod === "online") {
+      await this.clients.payment.post(`/internal/payments/orders/${row.id}/refund`).catch(() => {
+        throw unavailable(
+          "The order was cancelled but the refund could not be started yet. Try cancelling again.",
+        );
+      });
+    }
+  }
+
+  /** Called by the payment service once Razorpay has the money. Safe to call twice. */
+  async paymentCaptured(id: string): Promise<OrderRow> {
+    const row = await this.rowById(id);
+    if (row.paymentMethod !== "online") throw conflict("This order is not paid online.");
+    if (row.status !== "pending_payment" && row.status !== "payment_failed") return row;
+    if (row.status === "payment_failed") {
+      await this.transition(id, { to: "pending_payment", actorId: null, actorRole: "system" });
+    }
+    return this.transition(id, {
+      to: "confirmed",
+      actorId: null,
+      actorRole: "system",
+      note: "Paid online",
+    });
+  }
+
+  /** Online orders nobody paid for within the window expire and give their stock back. */
+  async expireUnpaid(): Promise<number> {
+    const cutoff = new Date(this.now().getTime() - PAYMENT_WINDOW_MINS * 60_000);
+    const due = await this.db
+      .selectFrom("orders.orders")
+      .select("id")
+      .where("status", "=", "pending_payment")
+      .where("placedAt", "<", cutoff)
+      .execute();
+    let expired = 0;
+    for (const { id } of due) {
+      try {
+        await this.transition(id, {
+          to: "expired",
+          actorId: null,
+          actorRole: "system",
+          note: "Not paid in time",
+        });
+        expired += 1;
+      } catch {
+        // paid or cancelled in the meantime
+      }
+    }
+    return expired;
+  }
+
+  /** What the payment service needs to take a payment for an order. */
+  async paymentInfo(id: string) {
+    const row = await this.rowById(id);
+    return {
+      id: row.id,
+      number: row.number,
+      userId: row.userId,
+      status: row.status as OrderStatus,
+      paymentMethod: row.paymentMethod as "cod" | "online",
+      totalPaise: row.totalPaise,
+      customerName: row.customerName,
+      customerPhone: row.customerPhone,
+    };
   }
 
   async cancel(identity: Identity, id: string, reason?: string): Promise<Order> {
@@ -762,7 +862,8 @@ export class OrderService {
         distanceKm: km,
         etaMins: row.promisedMins,
         tipPaise: row.tipPaise,
-        codPaise: row.totalPaise,
+        // Cash to collect at the door, none when the customer already paid online
+        codPaise: row.paymentMethod === "online" ? null : row.totalPaise,
         deliveryCode: row.deliveryCode,
       });
     } catch {

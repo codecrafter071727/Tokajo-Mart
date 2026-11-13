@@ -69,6 +69,17 @@ describe("routing", () => {
     expect(resolveRoute("GET", "/v1/delivery/mine")?.service).toBe("delivery");
   });
 
+  it("routes payments to the payment service and keeps the webhook public and anonymous", () => {
+    expect(resolveRoute("POST", "/v1/payments/verify")).toMatchObject({
+      service: "payment",
+      access: "authenticated",
+    });
+    const hook = resolveRoute("POST", "/webhooks/razorpay");
+    expect(hook).toMatchObject({ service: "payment", access: "public", anonymous: true });
+    expect(hook?.extraHeaders).toEqual(["x-razorpay-signature", "x-razorpay-event-id"]);
+    expect(resolveRoute("GET", "/webhooks/razorpay")).toBeNull();
+  });
+
   it("checks roles", () => {
     expect(isAllowed("public", undefined)).toBe(true);
     expect(isAllowed("authenticated", undefined)).toBe(false);

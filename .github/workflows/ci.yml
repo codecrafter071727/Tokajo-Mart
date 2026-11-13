@@ -112,3 +112,7 @@ jobs:
           scripts/dev-stack.sh stop
         env:
           LOCAL_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          # A pretend Razorpay and a throwaway webhook secret, so the online payment path runs in
+          # CI without real keys. The payment service refuses the fake provider in production.
+          PAYMENTS_FAKE_PROVIDER: "1"
+          RAZORPAY_WEBHOOK_SECRET: ci-only-not-a-real-secret

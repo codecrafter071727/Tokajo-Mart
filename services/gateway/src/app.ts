@@ -8,6 +8,7 @@ import {
   type ServiceApp,
   type TokenVerifier,
 } from "@qc/service-kit";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "./config/env";
 import { isAllowed, resolveRoute, type ServiceName } from "./routing";
 
@@ -17,6 +18,7 @@ const LOCAL_TARGETS: Record<ServiceName, string> = {
   inventory: "http://localhost:4003",
   order: "http://localhost:4004",
   delivery: "http://localhost:4006",
+  payment: "http://localhost:4005",
 };
 
 function configuredTargets(): Record<ServiceName, string> {
@@ -26,6 +28,7 @@ function configuredTargets(): Record<ServiceName, string> {
     inventory: env.WAREHOUSE_INVENTORY_SERVICE_URL ?? LOCAL_TARGETS.inventory,
     order: env.ORDER_SERVICE_URL ?? LOCAL_TARGETS.order,
     delivery: env.DELIVERY_SERVICE_URL ?? LOCAL_TARGETS.delivery,
+    payment: env.PAYMENT_SERVICE_URL ?? LOCAL_TARGETS.payment,
   };
 }
 
@@ -84,76 +87,81 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<ServiceAp
     message: string,
   ) => reply.status(status).send({ error: { code, message, requestId } });
 
+  const proxy = async (request: FastifyRequest, reply: FastifyReply) => {
+    const route = resolveRoute(request.method, request.url);
+    if (!route) return fail(reply, request.id, 404, "NOT_FOUND", "No such route.");
+
+    // Who is calling. A bad token is only an error on a route that needs one
+    let identity: Identity | null = null;
+    const bearer = route.anonymous
+      ? undefined
+      : /^Bearer (.+)$/i.exec(request.headers.authorization ?? "")?.[1];
+    if (bearer) {
+      try {
+        const claims = await verify(bearer);
+        identity = {
+          userId: claims.sub,
+          role: claims.app_role,
+          warehouseId: claims.warehouse_id ?? null,
+        };
+      } catch {
+        if (route.access !== "public") {
+          return fail(reply, request.id, 401, "UNAUTHORIZED", "Sign in again to continue.");
+        }
+      }
+    }
+    if (route.access !== "public" && !identity) {
+      return fail(reply, request.id, 401, "UNAUTHORIZED", "Sign in to continue.");
+    }
+    if (!isAllowed(route.access, identity?.role)) {
+      return fail(reply, request.id, 403, "FORBIDDEN", "You are not allowed to do this.");
+    }
+
+    if (route.limit) {
+      const who = identity?.userId ?? request.ip;
+      if (overLimit(`${route.service}:${request.method}:${who}`, route.limit)) {
+        reply.header("retry-after", "60");
+        return fail(reply, request.id, 429, "RATE_LIMITED", "Too many requests. Slow down.");
+      }
+    }
+
+    const headers: Record<string, string> = { "x-request-id": request.id };
+    for (const name of [...FORWARDED, ...(route.extraHeaders ?? [])]) {
+      const value = request.headers[name];
+      if (typeof value === "string") headers[name] = value;
+    }
+    if (identity) Object.assign(headers, signIdentityHeaders(identity, internalKey));
+
+    const hasBody = !["GET", "HEAD"].includes(request.method);
+    let upstream: Response;
+    try {
+      upstream = await fetch(`${targets[route.service]}${request.url}`, {
+        method: request.method,
+        headers,
+        body: hasBody && Buffer.isBuffer(request.body) ? new Uint8Array(request.body) : undefined,
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "TimeoutError";
+      request.log.error({ err: error, service: route.service }, "upstream call failed");
+      return timedOut
+        ? fail(reply, request.id, 504, "GATEWAY_TIMEOUT", "The service took too long.")
+        : fail(reply, request.id, 502, "BAD_GATEWAY", "The service is not reachable.");
+    }
+
+    const type = upstream.headers.get("content-type");
+    if (type) reply.header("content-type", type);
+    const retryAfter = upstream.headers.get("retry-after");
+    if (retryAfter) reply.header("retry-after", retryAfter);
+    return reply.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
+  };
+
   app.route({
     method: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
     url: "/v1/*",
-    handler: async (request, reply) => {
-      const route = resolveRoute(request.method, request.url);
-      if (!route) return fail(reply, request.id, 404, "NOT_FOUND", "No such route.");
-
-      // Who is calling. A bad token is only an error on a route that needs one
-      let identity: Identity | null = null;
-      const bearer = /^Bearer (.+)$/i.exec(request.headers.authorization ?? "")?.[1];
-      if (bearer) {
-        try {
-          const claims = await verify(bearer);
-          identity = {
-            userId: claims.sub,
-            role: claims.app_role,
-            warehouseId: claims.warehouse_id ?? null,
-          };
-        } catch {
-          if (route.access !== "public") {
-            return fail(reply, request.id, 401, "UNAUTHORIZED", "Sign in again to continue.");
-          }
-        }
-      }
-      if (route.access !== "public" && !identity) {
-        return fail(reply, request.id, 401, "UNAUTHORIZED", "Sign in to continue.");
-      }
-      if (!isAllowed(route.access, identity?.role)) {
-        return fail(reply, request.id, 403, "FORBIDDEN", "You are not allowed to do this.");
-      }
-
-      if (route.limit) {
-        const who = identity?.userId ?? request.ip;
-        if (overLimit(`${route.service}:${request.method}:${who}`, route.limit)) {
-          reply.header("retry-after", "60");
-          return fail(reply, request.id, 429, "RATE_LIMITED", "Too many requests. Slow down.");
-        }
-      }
-
-      const headers: Record<string, string> = { "x-request-id": request.id };
-      for (const name of FORWARDED) {
-        const value = request.headers[name];
-        if (typeof value === "string") headers[name] = value;
-      }
-      if (identity) Object.assign(headers, signIdentityHeaders(identity, internalKey));
-
-      const hasBody = !["GET", "HEAD"].includes(request.method);
-      let upstream: Response;
-      try {
-        upstream = await fetch(`${targets[route.service]}${request.url}`, {
-          method: request.method,
-          headers,
-          body: hasBody && Buffer.isBuffer(request.body) ? new Uint8Array(request.body) : undefined,
-          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-        });
-      } catch (error) {
-        const timedOut = error instanceof Error && error.name === "TimeoutError";
-        request.log.error({ err: error, service: route.service }, "upstream call failed");
-        return timedOut
-          ? fail(reply, request.id, 504, "GATEWAY_TIMEOUT", "The service took too long.")
-          : fail(reply, request.id, 502, "BAD_GATEWAY", "The service is not reachable.");
-      }
-
-      const type = upstream.headers.get("content-type");
-      if (type) reply.header("content-type", type);
-      const retryAfter = upstream.headers.get("retry-after");
-      if (retryAfter) reply.header("retry-after", retryAfter);
-      return reply.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
-    },
+    handler: proxy,
   });
+  app.route({ method: ["POST"], url: "/webhooks/*", handler: proxy });
 
   return app;
 }

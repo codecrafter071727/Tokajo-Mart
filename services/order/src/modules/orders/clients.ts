@@ -6,6 +6,7 @@ export type Clients = {
   inventory: InternalClient;
   delivery: InternalClient;
   identity: InternalClient;
+  payment: InternalClient;
 };
 
 export function createClients(): Clients {
@@ -16,6 +17,7 @@ export function createClients(): Clients {
     catalog: make(env.CATALOG_SERVICE_URL, "http://localhost:4002"),
     inventory: make(env.WAREHOUSE_INVENTORY_SERVICE_URL, "http://localhost:4003"),
     delivery: make(env.DELIVERY_SERVICE_URL, "http://localhost:4006"),
+    payment: make(env.PAYMENT_SERVICE_URL, "http://localhost:4005"),
   };
 }
 

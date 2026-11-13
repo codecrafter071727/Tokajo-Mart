@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Starts the whole backend on this machine against a LOCAL Postgres, never a hosted one.
 #   scripts/dev-stack.sh            start every service (gateway on :4000)
+# Online payments use RAZORPAY_* from the root .env. PAYMENTS_FAKE_PROVIDER=1 uses a pretend
+# Razorpay instead (for CI and the end to end script), never the network.
 #   scripts/dev-stack.sh stop       stop them
 # Needs Node 22+ on PATH and a migrated, seeded database:
 #   DATABASE_URL=postgresql://localhost:5432/qc_dev node scripts/db-migrate.mjs --reset --seed
@@ -45,6 +47,7 @@ start identity 4001 identity
 start catalog 4002 catalog
 start inventory 4003 warehouse-inventory
 start order 4004 order
+start payment 4005 payment
 start delivery 4006 delivery
 start gateway 4000 gateway
 echo "logs in $RUN_DIR/. Gateway: http://localhost:4000"

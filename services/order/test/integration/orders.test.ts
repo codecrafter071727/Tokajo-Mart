@@ -9,6 +9,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../../src/app";
 import type { DB } from "../../src/db/types.generated";
 import type { Clients } from "../../src/modules/orders/clients";
+import { OrderService } from "../../src/modules/orders/service";
 
 // Runs only with a migrated test database (see scripts/db-migrate.mjs)
 const url = process.env.TEST_DATABASE_URL;
@@ -77,6 +78,7 @@ function fakeServices() {
       }
       return { id: "r", status: "ok" };
     }),
+    payment: make("payment", () => ({ ok: true })),
     delivery: make("delivery", () => {
       if (state.deliveryDown) throw new InternalCallError("down", 0, "SERVICE_UNAVAILABLE");
       return { ok: true };
@@ -646,6 +648,96 @@ suite("order service", async () => {
       expect((await get(`/v1/orders/${order.id}`, alice)).json().status).toBe("packed");
       fake.state.deliveryDown = false;
       expect((await post(`/v1/orders/${order.id}/packed`, staff)).statusCode).toBe(200);
+    });
+  });
+
+  describe("online payment", () => {
+    const placeOnline = () =>
+      place(alice, [{ productId: "p1", quantity: 2 }], { payment: "online" });
+    const captured = (id: string) =>
+      app.inject({ method: "POST", url: `/internal/orders/${id}/payment-captured` });
+    const calls = (path: string) => fake.calls.filter((c) => c.path === path).length;
+
+    it("waits for payment with the stock held, not sold, and no delivery code yet", async () => {
+      const res = await placeOnline();
+      expect(res.statusCode).toBe(201);
+      const order = res.json();
+      expect(order).toMatchObject({
+        status: "pending_payment",
+        paymentMethod: "online",
+        deliveryCode: null,
+        confirmedAt: null,
+      });
+      expect(calls(`/internal/reservations/${order.id}/commit`)).toBe(0);
+      const hold = fake.calls.find((c) => c.path === "/internal/reservations")?.body as {
+        ttlSeconds: number;
+      };
+      expect(hold.ttlSeconds).toBeGreaterThanOrEqual(15 * 60);
+      // The warehouse never sees an unpaid order
+      expect((await get("/v1/orders/queue", staff)).json().items).toEqual([]);
+    });
+
+    it("tells the payment service who owns it and what it costs", async () => {
+      const order = (await placeOnline()).json();
+      const info = (
+        await app.inject({ method: "GET", url: `/internal/orders/${order.id}/payment-info` })
+      ).json();
+      expect(info).toMatchObject({
+        id: order.id,
+        userId: ALICE,
+        status: "pending_payment",
+        paymentMethod: "online",
+        totalPaise: order.totalPaise,
+      });
+    });
+
+    it("confirms on capture, sells the stock once, and shows the code", async () => {
+      const order = (await placeOnline()).json();
+      expect((await captured(order.id)).json().status).toBe("confirmed");
+      expect((await captured(order.id)).json().status).toBe("confirmed");
+      expect(calls(`/internal/reservations/${order.id}/commit`)).toBe(1);
+      const seen = (await get(`/v1/orders/${order.id}`, alice)).json();
+      expect(seen.deliveryCode).toMatch(/^\d{4}$/);
+      expect((await get("/v1/orders/queue", staff)).json().items).toHaveLength(1);
+    });
+
+    it("refuses a capture for a cash order", async () => {
+      const order = (await place()).json();
+      expect((await captured(order.id)).statusCode).toBe(409);
+    });
+
+    it("expires unpaid orders after the window and gives the stock back", async () => {
+      const order = (await placeOnline()).json();
+      const early = new OrderService(db, fake.clients, () => new Date(Date.now() + 5 * 60_000));
+      expect(await early.expireUnpaid()).toBe(0);
+      const late = new OrderService(db, fake.clients, () => new Date(Date.now() + 16 * 60_000));
+      expect(await late.expireUnpaid()).toBeGreaterThanOrEqual(1);
+      expect((await get(`/v1/orders/${order.id}`, alice)).json().status).toBe("expired");
+      expect(calls(`/internal/reservations/${order.id}/release`)).toBe(1);
+      // A payment that arrives after expiry does not revive the order
+      expect((await captured(order.id)).json().status).toBe("expired");
+    });
+
+    it("refunds a paid order when it is cancelled, and retries on a repeated admin cancel", async () => {
+      const order = (await placeOnline()).json();
+      await captured(order.id);
+      expect((await post(`/v1/orders/${order.id}/cancel`, alice)).json().status).toBe("cancelled");
+      expect(calls(`/internal/payments/orders/${order.id}/refund`)).toBe(1);
+      expect(calls(`/internal/reservations/${order.id}/restock`)).toBe(1);
+      expect((await post(`/v1/orders/${order.id}/cancel`, admin)).statusCode).toBe(200);
+      expect(calls(`/internal/payments/orders/${order.id}/refund`)).toBe(2);
+    });
+
+    it("never asks the rider to collect cash for a paid order", async () => {
+      const order = (await placeOnline()).json();
+      await captured(order.id);
+      await post(`/v1/orders/${order.id}/start-packing`, staff);
+      await post(`/v1/orders/${order.id}/items/p1/picked`, staff, { picked: true });
+      await post(`/v1/orders/${order.id}/packed`, staff);
+      const created = fake.calls.find((c) => c.path === "/internal/deliveries")?.body as {
+        codPaise: number | null;
+      };
+      expect(created.codPaise).toBeNull();
     });
   });
 

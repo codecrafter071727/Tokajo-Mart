@@ -56,7 +56,11 @@ export function registerErrorHandler(app: FastifyInstance): void {
     return reply.status(statusCode).send({
       error: {
         code: statusToCode(statusCode),
-        message: statusCode >= 500 ? "An unexpected error occurred." : error.message,
+        // A 5xx hides its message unless the error says it was written for the caller
+        message:
+          statusCode >= 500 && (error as { expose?: boolean }).expose !== true
+            ? "An unexpected error occurred."
+            : error.message,
         ...(details !== undefined ? { details } : {}),
         requestId: request.id,
       },
