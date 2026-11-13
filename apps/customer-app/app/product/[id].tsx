@@ -1,24 +1,27 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, FlatList } from "react-native";
+import {
+  Dimensions,
+  FlatList,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
 import { AddButton } from "../../src/components/AddButton";
 import { ProductCard } from "../../src/components/ProductCard";
-import { isNotFound, useProduct, useProducts } from "../../src/lib/queries";
+import { isNotFound, useProduct, useProducts, useStock } from "../../src/lib/queries";
 import { ErrorState } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { Ionicons } from "@expo/vector-icons";
 import { ProductImage } from "../../src/components/ProductImage";
+import { ScreenHeader } from "../../src/components/ScreenHeader";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-
-const HIGHLIGHTS = [
-  "100% natural, no artificial colours",
-  "Sourced from farms daily",
-  "Rich in vitamins and minerals",
-  "Packed in hygienic conditions",
-];
 
 export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -28,6 +31,7 @@ export default function ProductDetailScreen() {
 
   const productQuery = useProduct(id);
   const product = productQuery.data;
+  const stock = useStock(id ?? "");
   const similarQuery = useProducts(
     { categoryId: product?.categoryId, limit: 8 },
     { enabled: product !== undefined },
@@ -38,15 +42,7 @@ export default function ProductDetailScreen() {
     const missing = productQuery.isError && isNotFound(productQuery.error);
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Pressable
-            style={styles.backBtn}
-            onPress={() => router.back()}
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </Pressable>
-        </View>
+        <ScreenHeader title="" />
         {productQuery.isPending ? (
           <View style={styles.loadingBox}>
             <Skeleton
@@ -80,18 +76,23 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {product.name}
-        </Text>
-        <Pressable style={styles.shareBtn}>
-          <Ionicons name="share-outline" size={22} color={Colors.textPrimary} />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title={product.name}
+        right={
+          <Pressable
+            onPress={() =>
+              void Share.share({
+                message: `${product.name} (${product.unit}) for ₹${product.price} on Tokajo Mart`,
+              }).catch(() => undefined)
+            }
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Share"
+          >
+            <Ionicons name="share-social-outline" size={22} color={Colors.textPrimary} />
+          </Pressable>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -137,42 +138,53 @@ export default function ProductDetailScreen() {
               )}
             </View>
             <Text style={styles.taxNote}>Inclusive of all taxes</Text>
+            {stock?.status === "out" ? (
+              <View style={[styles.stockNote, styles.stockOut]}>
+                <Ionicons name="alert-circle" size={14} color={Colors.danger} />
+                <Text style={[styles.stockNoteText, { color: Colors.danger }]}>
+                  Out of stock right now. Tap Notify me and we will tell you when it is back.
+                </Text>
+              </View>
+            ) : stock?.status === "low" && stock.remaining !== null ? (
+              <View style={[styles.stockNote, styles.stockLow]}>
+                <Ionicons name="flame" size={14} color={Colors.warning} />
+                <Text style={[styles.stockNoteText, { color: Colors.warning }]}>
+                  Only {stock.remaining} left, order soon
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
-        {/* Product details accordion */}
+        {/* Product details */}
         <View style={styles.card}>
-          <Pressable style={styles.accordionHeader} onPress={() => setDetailsExpanded((v) => !v)}>
-            <Text style={styles.accordionTitle}>View product details</Text>
-            <Text style={styles.accordionChevron}>{detailsExpanded ? "˄" : "˅"}</Text>
+          <Pressable
+            style={styles.accordionHeader}
+            onPress={() => setDetailsExpanded((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: detailsExpanded }}
+          >
+            <Text style={styles.accordionTitle}>Product details</Text>
+            <Ionicons
+              name={detailsExpanded ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={Colors.brandText}
+            />
           </Pressable>
-          {detailsExpanded && (
+          {detailsExpanded ? (
             <View style={styles.accordionBody}>
-              <Text style={styles.accordionText}>
-                <Text style={{ fontWeight: "700" }}>Brand: </Text>Fresho{"\n"}
-                <Text style={{ fontWeight: "700" }}>Type: </Text>
-                {product.name}
-                {"\n"}
-                <Text style={{ fontWeight: "700" }}>Weight/Volume: </Text>
-                {product.unit}
-                {"\n"}
-                <Text style={{ fontWeight: "700" }}>Country of origin: </Text>
-                India{"\n"}
-                <Text style={{ fontWeight: "700" }}>Shelf life: </Text>3–5 days
-              </Text>
+              {product.description ? (
+                <Text style={styles.accordionText}>{product.description}</Text>
+              ) : null}
+              <DetailRow label="Pack size" value={product.unit} />
+              <DetailRow
+                label="Delivery"
+                value={`In about ${product.deliveryMins ?? 10} minutes`}
+              />
+              <DetailRow label="Country of origin" value="India" />
+              <DetailRow label="Return policy" value="Report damaged or wrong items at delivery" />
             </View>
-          )}
-        </View>
-
-        {/* Highlights */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Product highlights</Text>
-          {HIGHLIGHTS.map((h, i) => (
-            <View key={i} style={styles.highlightRow}>
-              <Ionicons name="checkmark-circle" size={16} color={Colors.brandText} />
-              <Text style={styles.highlightText}>{h}</Text>
-            </View>
-          ))}
+          ) : null}
         </View>
 
         {/* Why shop from Tokajo Mart */}
@@ -243,13 +255,37 @@ export default function ProductDetailScreen() {
             <Text style={styles.bottomTaxNote}>Inclusive of all taxes</Text>
           )}
         </View>
-        <AddButton productId={product.id} productData={product} size="md" />
+        <AddButton productId={product.id} productData={product} size="lg" />
       </View>
     </View>
   );
 }
 
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  detailRow: { gap: 2, marginTop: Spacing[8] },
+  stockNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: Spacing[10],
+    paddingHorizontal: Spacing[10],
+    paddingVertical: Spacing[8],
+    borderRadius: Radius.sm,
+  },
+  stockOut: { backgroundColor: "#FDF1F1" },
+  stockLow: { backgroundColor: "#FFF4E5" },
+  stockNoteText: { flex: 1, fontSize: FontSize.caption, fontWeight: "700" },
+  detailLabel: { fontSize: FontSize.caption, fontWeight: "700", color: Colors.textTertiary },
+  detailValue: { fontSize: FontSize.body, color: Colors.textPrimary },
   loadingBox: {
     alignItems: "center",
     gap: Spacing[12],

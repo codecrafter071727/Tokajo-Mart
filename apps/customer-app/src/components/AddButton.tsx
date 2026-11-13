@@ -19,7 +19,8 @@ interface AddButtonProps {
     imageUrl?: string;
     imageFit?: "cover" | "contain";
   };
-  size?: "sm" | "md";
+  /** sm for cards, md for lists, lg for the product page call to action */
+  size?: "sm" | "md" | "lg";
   optionsCount?: number;
 }
 
@@ -65,10 +66,11 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
     }
   }, [quantity, addItem, productData, scale]);
 
-  const btnH = size === "sm" ? 32 : 42;
-  const btnW = size === "sm" ? 64 : 104;
+  const btnH = size === "sm" ? 32 : size === "md" ? 42 : 48;
+  const btnW = size === "sm" ? 64 : size === "md" ? 104 : 150;
   const hasOptions = (optionsCount ?? 0) > 1 && quantity === 0;
   const iconSize = size === "sm" ? 16 : 20;
+  const big = size !== "sm";
 
   // Out of stock and not in the cart: no ADD, offer to be told when it is back
   if (outOfStock && quantity === 0) {
@@ -83,8 +85,8 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
         accessibilityRole="button"
         accessibilityLabel={notified ? "You will be notified" : "Notify me when back in stock"}
       >
-        <Text style={[styles.notifyText, size === "md" && styles.notifyTextMd]}>
-          {notified ? "Noted" : "Notify me"}
+        <Text style={[styles.notifyText, big && styles.notifyTextMd]}>
+          {notified ? "Noted" : size === "sm" ? "Notify" : "Notify me"}
         </Text>
       </Pressable>
     );
@@ -93,14 +95,25 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
   if (quantity === 0) {
     return (
       <AnimatedPressable
-        style={[styles.addBtn, { height: btnH, width: btnW }, animatedStyle]}
+        style={[
+          styles.addBtn,
+          size === "lg" && styles.addBtnLg,
+          { height: btnH, width: btnW },
+          animatedStyle,
+        ]}
         onPress={handlePress}
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel="Add to cart"
       >
-        <Text style={[styles.addText, size === "md" && styles.addTextMd]}>ADD</Text>
-        {hasOptions ? null : <Ionicons name="add" size={iconSize} color={Colors.brandText} />}
+        {size === "lg" ? (
+          <Text style={styles.addTextLg}>Add to cart</Text>
+        ) : (
+          <>
+            <Text style={[styles.addText, size === "md" && styles.addTextMd]}>ADD</Text>
+            {hasOptions ? null : <Ionicons name="add" size={iconSize} color={Colors.brandText} />}
+          </>
+        )}
       </AnimatedPressable>
     );
   }
@@ -120,7 +133,7 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
         <Ionicons name="remove" size={iconSize} color={Colors.surface} />
       </Pressable>
       <Text
-        style={[styles.stepCount, size === "md" && styles.stepCountMd]}
+        style={[styles.stepCount, big && styles.stepCountMd]}
         accessibilityLiveRegion="polite"
         accessibilityLabel={`${quantity} in cart`}
       >
@@ -177,6 +190,16 @@ const styles = StyleSheet.create({
   },
   addTextMd: {
     fontSize: 15,
+  },
+  addBtnLg: {
+    backgroundColor: Colors.brandGreen,
+    borderColor: Colors.brandGreen,
+    borderRadius: Radius.md,
+  },
+  addTextLg: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: Colors.surface,
   },
   notifyBtn: {
     alignItems: "center",

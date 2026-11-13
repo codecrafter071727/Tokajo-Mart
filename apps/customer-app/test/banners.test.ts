@@ -1,6 +1,6 @@
 import type { Banner } from "@qc/contracts";
 import { describe, expect, it } from "vitest";
-import { isLight, toHomeBanner } from "../src/lib/bannerMapping";
+import { isLight, shade, toHomeBanner } from "../src/lib/bannerMapping";
 
 const base: Banner = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -29,13 +29,21 @@ describe("banner colours", () => {
   });
 });
 
+describe("shade", () => {
+  it("darkens and lightens a colour, and leaves a malformed one alone", () => {
+    expect(shade("#ffffff", -0.5)).toBe("#808080");
+    expect(shade("#000000", 0.5)).toBe("#808080");
+    expect(shade("green", -0.2)).toBe("green");
+  });
+});
+
 describe("server banners", () => {
-  it("keeps the text, one flat colour and the picture", () => {
+  it("keeps the text, a soft gradient of its colour and the picture", () => {
     const banner = toHomeBanner(base);
     expect(banner).toMatchObject({
       title: "Fresh veggies",
       subtitle: "Picked this morning",
-      colors: ["#E8F5E9", "#E8F5E9"],
+      colors: ["#E8F5E9", "#d5e1d6"],
       darkText: true,
       photos: ["https://example.com/veg.jpg"],
     });

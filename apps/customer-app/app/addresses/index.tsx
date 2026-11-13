@@ -8,6 +8,7 @@ import { addressSummary, addressTag } from "../../src/lib/addresses";
 import { KIND_ICON } from "../../src/lib/addressIcons";
 import { servedLocally } from "../../src/lib/serviceAreas";
 import { useAddressStore } from "../../src/store/addresses";
+import { ScreenHeader } from "../../src/components/ScreenHeader";
 
 function confirmDelete(name: string, onConfirm: () => void) {
   if (Platform.OS === "web") {
@@ -30,17 +31,7 @@ export default function AddressesScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={styles.backBtn}
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Saved addresses</Text>
-      </View>
+      <ScreenHeader title="Saved addresses" />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]}
@@ -73,7 +64,7 @@ export default function AddressesScreen() {
               <View style={styles.actions}>
                 <Pressable
                   onPress={() => router.push({ pathname: "/addresses/edit", params: { id: a.id } })}
-                  hitSlop={6}
+                  hitSlop={12}
                   accessibilityLabel={`Edit ${addressTag(a)}`}
                 >
                   <Text style={styles.action}>Edit</Text>
@@ -81,7 +72,7 @@ export default function AddressesScreen() {
                 {addresses.length > 1 ? (
                   <Pressable
                     onPress={() => confirmDelete(addressTag(a), () => remove(a.id))}
-                    hitSlop={6}
+                    hitSlop={12}
                     accessibilityLabel={`Delete ${addressTag(a)}`}
                   >
                     <Text style={[styles.action, styles.delete]}>Delete</Text>
@@ -152,7 +143,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   actions: { flexDirection: "row", gap: Spacing[20], paddingLeft: 30 },
-  action: { fontSize: FontSize.caption, fontWeight: "700", color: Colors.brandText },
+  action: {
+    fontSize: FontSize.caption,
+    fontWeight: "800",
+    color: Colors.brandText,
+    paddingVertical: 4,
+  },
   delete: { color: Colors.danger },
   footer: {
     position: "absolute",
@@ -171,7 +167,7 @@ const styles = StyleSheet.create({
     gap: Spacing[8],
     height: 50,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.brandPressed,
+    backgroundColor: Colors.brandGreen,
   },
   addText: { fontSize: FontSize.body, fontWeight: "700", color: Colors.surface },
 });

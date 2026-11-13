@@ -6,6 +6,7 @@ import { useRouter } from "expo-router";
 import { Colors, Radius, Spacing, typography } from "../theme";
 import { colors } from "../theme/tokens";
 import { useBanners, type HomeBanner } from "../lib/banners";
+import { useProducts } from "../lib/queries";
 import { ProductImage } from "./ProductImage";
 
 const GAP = Spacing[12];
@@ -13,7 +14,19 @@ const PAD = Spacing[16];
 
 /** The promotions strip on the home screen. Renders nothing when there is nothing to show. */
 export function HomeBanners({ etaMins }: { etaMins: number | null }) {
-  const banners = useBanners();
+  const raw = useBanners();
+  // Same query the home rails use, so this costs no extra request
+  const products = useProducts({ limit: 100 }).data ?? [];
+  // A banner without its own picture borrows photos of what it links to
+  const banners = raw.map((b): HomeBanner => {
+    if (b.photos.length > 0 || !b.link) return b;
+    const linked =
+      b.link.type === "product"
+        ? products.filter((p) => p.id === b.link?.target)
+        : products.filter((p) => p.categoryId === b.link?.target);
+    const photos = linked.flatMap((p) => (p.imageUrl ? [p.imageUrl] : [])).slice(0, 3);
+    return photos.length > 0 ? { ...b, photos } : b;
+  });
   const router = useRouter();
   const { width: screenW } = useWindowDimensions();
   const [index, setIndex] = useState(0);
@@ -135,7 +148,15 @@ export function HomeBanners({ etaMins }: { etaMins: number | null }) {
                     {item.photos.slice(0, 3).map((uri, i) => (
                       <View
                         key={uri || i}
-                        style={[styles.photo, { top: i * 30, right: (i % 2) * 38 }]}
+                        style={[
+                          styles.photo,
+                          {
+                            top: [2, 34, 18][i],
+                            right: [36, 0, 66][i],
+                            zIndex: [2, 3, 1][i],
+                            transform: [{ rotate: ["-6deg", "5deg", "-10deg"][i] as string }],
+                          },
+                        ]}
                       >
                         <ProductImage
                           imageUrl={uri || undefined}
@@ -209,16 +230,21 @@ const styles = StyleSheet.create({
     marginTop: Spacing[12],
   },
   ctaText: { ...typography.caption, fontWeight: "800", color: Colors.accentText },
-  photos: { width: 110, height: 100 },
+  photos: { width: 132, height: 104, marginLeft: Spacing[8] },
   photo: {
     position: "absolute",
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 66,
+    height: 66,
+    borderRadius: 16,
     overflow: "hidden",
     borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.9)",
+    borderColor: Colors.surface,
     backgroundColor: Colors.surface,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
   },
   single: {
     width: 104,

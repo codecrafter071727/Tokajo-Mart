@@ -16,6 +16,7 @@ import { ErrorState, RailSkeleton } from "../../src/components/StateViews";
 import { Skeleton } from "../../src/components/Skeleton";
 import { ProductImage } from "../../src/components/ProductImage";
 import { HomeBanners } from "../../src/components/HomeBanners";
+import { useOrders } from "../../src/lib/orderQueries";
 
 const CAT_GAP = Spacing[12];
 const SECTION_PAD = Spacing[16];
@@ -42,7 +43,6 @@ export default function HomeScreen() {
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   // The header shrinks to the search bar once the page is scrolled (hysteresis avoids flicker)
   const [compact, setCompact] = useState(false);
-  const isReturningUser = true;
 
   useFocusEffect(
     useCallback(() => {
@@ -71,11 +71,24 @@ export default function HomeScreen() {
   const categoriesQuery = useCategories();
   const productsQuery = useProducts({ limit: 100 });
   const categories = categoriesQuery.data ?? [];
-  const all = productsQuery.data ?? [];
+  const all = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
 
   const inCategory = (categoryId: string) => all.filter((p) => p.categoryId === categoryId);
-  // Personalisation stub until order history exists: a fixed handful of items
-  const buyAgain = [4, 0, 8, 12, 1].flatMap((i) => (all[i] ? [all[i]] : []));
+  // Buy again comes from what this customer actually ordered, newest first
+  const ordersQuery = useOrders();
+  const buyAgain = useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const order of ordersQuery.data ?? []) {
+      for (const item of order.items) {
+        if (!seen.has(item.productId)) {
+          seen.add(item.productId);
+          ids.push(item.productId);
+        }
+      }
+    }
+    return ids.flatMap((id) => all.filter((p) => p.id === id)).slice(0, 12);
+  }, [ordersQuery.data, all]);
   const featured = all.slice(0, 8);
   const dairy = inCategory("dairy");
   const snacks = inCategory("snacks");
@@ -189,15 +202,6 @@ export default function HomeScreen() {
           setCompact((was) => (was ? y > 20 : y > 90));
         }}
       >
-        {isReturningUser ? (
-          <SectionRail
-            title="Buy again"
-            products={buyAgain}
-            loading={productsQuery.isPending}
-            onSeeAll={() => router.push("/(tabs)/categories")}
-          />
-        ) : null}
-
         <HomeBanners etaMins={eta?.serviceable ? eta.etaMins : null} />
 
         <View style={styles.section}>
@@ -268,6 +272,14 @@ export default function HomeScreen() {
           />
         ) : (
           <>
+            {buyAgain.length > 0 ? (
+              <SectionRail
+                title="Buy again"
+                products={buyAgain}
+                onSeeAll={() => router.push("/orders/list")}
+              />
+            ) : null}
+
             <SectionRail
               title={timeRail.title}
               products={timeProducts}
@@ -321,8 +333,11 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.footer}>
-          <Ionicons name="flash" size={20} color={Colors.border} />
-          <Text style={styles.footerBrand}>Delivered in minutes</Text>
+          <Text style={styles.footerBrand}>India's last{"\n"}minute app</Text>
+          <View style={styles.footerLine}>
+            <Ionicons name="heart" size={14} color={Colors.danger} />
+            <Text style={styles.footerSub}>Tokajo Mart</Text>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -477,13 +492,17 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   footer: {
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: Spacing[24],
+    paddingHorizontal: Spacing[20],
+    paddingTop: Spacing[24],
+    paddingBottom: Spacing[12],
   },
   footerBrand: {
-    ...typography.title,
-    fontWeight: "800",
-    color: Colors.border,
+    fontSize: 40,
+    lineHeight: 44,
+    fontWeight: "900",
+    letterSpacing: -1,
+    color: "#C4CDCB",
   },
+  footerLine: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: Spacing[12] },
+  footerSub: { ...typography.bodyStrong, color: Colors.textTertiary },
 });

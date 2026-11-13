@@ -15,7 +15,13 @@ const SIDEBAR_W = 84;
 const GRID_PAD = Spacing[12];
 const GRID_GAP = Spacing[12];
 const ROW_GAP = Spacing[16];
-const FILTER_CHIPS = ["Filters", "Sort", "Under ₹99"];
+const SORTS = [
+  { id: "relevance", label: "Sort" },
+  { id: "price_asc", label: "Price: low to high" },
+  { id: "price_desc", label: "Price: high to low" },
+  { id: "discount", label: "Biggest discount" },
+] as const;
+type SortId = (typeof SORTS)[number]["id"];
 
 function labelFor(name: string) {
   return name.replace(/\n/g, " ");
@@ -31,7 +37,9 @@ export default function CategoriesScreen() {
   const [selected, setSelected] = useState<string | undefined>(params.categoryId);
   // Until the user picks one, show the first category once the list has loaded
   const activeCategory = selected ?? categories[0]?.id;
-  const [activeChip, setActiveChip] = useState("Filters");
+  const [sort, setSort] = useState<SortId>("relevance");
+  const [under99, setUnder99] = useState(false);
+  const [onOffer, setOnOffer] = useState(false);
   const [gridW, setGridW] = useState(0);
 
   useEffect(() => {
@@ -42,7 +50,20 @@ export default function CategoriesScreen() {
     { categoryId: activeCategory, limit: 100 },
     { enabled: activeCategory !== undefined },
   );
-  const products = productsQuery.data ?? [];
+  const products = useMemo(() => {
+    let list = productsQuery.data ?? [];
+    if (under99) list = list.filter((p) => p.price < 99);
+    if (onOffer) list = list.filter((p) => (p.discount ?? 0) >= 5);
+    if (sort === "price_asc") list = [...list].sort((a, b) => a.price - b.price);
+    if (sort === "price_desc") list = [...list].sort((a, b) => b.price - a.price);
+    if (sort === "discount") list = [...list].sort((a, b) => (b.discount ?? 0) - (a.discount ?? 0));
+    return list;
+  }, [productsQuery.data, under99, onOffer, sort]);
+  const sortLabel = SORTS.find((x) => x.id === sort)?.label ?? "Sort";
+  const cycleSort = () => {
+    const i = SORTS.findIndex((x) => x.id === sort);
+    setSort(SORTS[(i + 1) % SORTS.length]!.id);
+  };
   const activeCat = categories.find((c) => c.id === activeCategory);
 
   // With the sidebar the grid pane is ~300px on phones; 3 columns would make ~90px cards
@@ -102,7 +123,8 @@ export default function CategoriesScreen() {
                   style={[styles.sidebarItem, isActive && styles.sidebarItemActive]}
                   onPress={() => {
                     setSelected(cat.id);
-                    setActiveChip("Filters");
+                    setUnder99(false);
+                    setOnOffer(false);
                   }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
@@ -141,32 +163,30 @@ export default function CategoriesScreen() {
             style={styles.chipBar}
             contentContainerStyle={styles.chipList}
           >
-            {FILTER_CHIPS.map((chip) => {
-              const selected = activeChip === chip;
-              return (
-                <Pressable
-                  key={chip}
-                  style={[styles.chip, selected && styles.chipActive]}
-                  onPress={() => setActiveChip(chip)}
-                >
-                  {chip === "Filters" ? (
-                    <Ionicons
-                      name="options-outline"
-                      size={14}
-                      color={selected ? Colors.brandGreen : Colors.textSecondary}
-                    />
-                  ) : null}
-                  <Text style={[styles.chipText, selected && styles.chipTextActive]}>{chip}</Text>
-                  {chip === "Sort" ? (
-                    <Ionicons
-                      name="chevron-down"
-                      size={12}
-                      color={selected ? Colors.brandGreen : Colors.textSecondary}
-                    />
-                  ) : null}
-                </Pressable>
-              );
-            })}
+            <Chip
+              label={sortLabel}
+              icon="swap-vertical"
+              selected={sort !== "relevance"}
+              onPress={cycleSort}
+            />
+            <Chip label="Under ₹99" selected={under99} onPress={() => setUnder99((v) => !v)} />
+            <Chip
+              label="On offer"
+              icon="pricetag-outline"
+              selected={onOffer}
+              onPress={() => setOnOffer((v) => !v)}
+            />
+            {sort !== "relevance" || under99 || onOffer ? (
+              <Chip
+                label="Clear"
+                icon="close"
+                onPress={() => {
+                  setSort("relevance");
+                  setUnder99(false);
+                  setOnOffer(false);
+                }}
+              />
+            ) : null}
           </ScrollView>
 
           {categoriesQuery.isError ? (
@@ -175,9 +195,7 @@ export default function CategoriesScreen() {
               title="Could not load categories"
               onRetry={() => void categoriesQuery.refetch()}
             />
-          ) : cardW === 0 ? (
-            <View style={styles.gridPlaceholder} />
-          ) : productsQuery.isPending ? (
+          ) : cardW === 0 || productsQuery.isPending ? (
             <View style={styles.skeletonWrap}>
               <ProductGridSkeleton columns={numColumns} rows={3} />
             </View>
@@ -210,11 +228,19 @@ export default function CategoriesScreen() {
               }}
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
-                <EmptyState
-                  icon="bag-outline"
-                  title="Nothing here yet"
-                  message="New items are added every day. Try another category."
-                />
+                under99 || onOffer ? (
+                  <EmptyState
+                    icon="funnel-outline"
+                    title="No matches"
+                    message="Nothing here fits these filters. Clear them to see everything."
+                  />
+                ) : (
+                  <EmptyState
+                    icon="bag-outline"
+                    title="Nothing here yet"
+                    message="New items are added every day. Try another category."
+                  />
+                )
               }
               renderItem={({ item }) => (
                 <View style={{ width: cardW }}>
@@ -226,6 +252,36 @@ export default function CategoriesScreen() {
         </View>
       </View>
     </View>
+  );
+}
+
+function Chip({
+  label,
+  icon,
+  selected,
+  onPress,
+}: {
+  label: string;
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
+  selected?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.chip, selected && styles.chipActive]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+    >
+      {icon ? (
+        <Ionicons
+          name={icon}
+          size={13}
+          color={selected ? Colors.brandText : Colors.textSecondary}
+        />
+      ) : null}
+      <Text style={[styles.chipText, selected && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
   );
 }
 

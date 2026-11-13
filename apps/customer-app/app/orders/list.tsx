@@ -10,6 +10,7 @@ import { formatPaise } from "../../src/lib/pricing";
 import { useCartStore } from "../../src/store/cart";
 import { ErrorState } from "../../src/components/StateViews";
 import { ProductImage } from "../../src/components/ProductImage";
+import { ScreenHeader } from "../../src/components/ScreenHeader";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -155,7 +156,6 @@ function OrderCard({ order, now }: { order: Order; now: Date }) {
 
 export default function OrdersListScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const ordersQuery = useOrders();
   const now = useNow(1000);
   const [filter, setFilter] = useState<Filter>("All");
@@ -163,13 +163,7 @@ export default function OrdersListScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>My Orders</Text>
-      </View>
+      <ScreenHeader title="My orders" />
 
       {/* Filter chips */}
       <View style={styles.filterRow}>

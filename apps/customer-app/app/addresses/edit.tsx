@@ -21,6 +21,7 @@ import {
 } from "../../src/lib/addresses";
 import { SERVICE_AREAS, servedLocally } from "../../src/lib/serviceAreas";
 import { useAddressStore } from "../../src/store/addresses";
+import { ScreenHeader } from "../../src/components/ScreenHeader";
 
 const KINDS: {
   kind: AddressKind;
@@ -107,17 +108,7 @@ export default function EditAddressScreen() {
       style={[styles.root, { paddingTop: insets.top }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={styles.backBtn}
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>{existing ? "Edit address" : "Add address"}</Text>
-      </View>
+      <ScreenHeader title={existing ? "Edit address" : "Add address"} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: 120 + insets.bottom }]}
@@ -315,7 +306,7 @@ const styles = StyleSheet.create({
   save: {
     height: 50,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.brandPressed,
+    backgroundColor: Colors.brandGreen,
     alignItems: "center",
     justifyContent: "center",
   },

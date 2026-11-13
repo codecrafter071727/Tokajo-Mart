@@ -1,5 +1,13 @@
 import React, { useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal } from "react-native";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
@@ -253,8 +261,13 @@ export default function CheckoutScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Checkout</Text>
       </View>
@@ -354,13 +367,6 @@ export default function CheckoutScreen() {
           })}
         </View>
 
-        {/* Coupons */}
-        <Pressable style={styles.couponCard}>
-          <Ionicons name="pricetag" size={20} color={Colors.brandText} />
-          <Text style={styles.couponText}>Apply coupon / promo code</Text>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
-        </Pressable>
-
         {/* Bill summary */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Bill summary</Text>
@@ -400,33 +406,38 @@ export default function CheckoutScreen() {
       </ScrollView>
 
       {/* Bottom bar */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing[8] }]}>
-        <View style={styles.bottomInfo}>
-          <Text style={styles.bottomTotal}>{formatPaise(bill.totalPaise)}</Text>
-          <Text style={styles.bottomSub}>
-            {items.length === 0 ? "Your cart is empty" : "Pay on delivery"}
-          </Text>
-        </View>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing[10] }]}>
         {placeError ? (
-          <Text style={styles.placeError} accessibilityRole="alert">
-            {placeError}
-          </Text>
+          <View style={styles.placeError} accessibilityRole="alert">
+            <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+            <Text style={styles.placeErrorText}>{placeError}</Text>
+          </View>
         ) : null}
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.placeOrderBtn,
+            pressed && styles.placeOrderPressed,
             (placeOrder.isPending || items.length === 0 || outsideArea) &&
               styles.placeOrderBtnDisabled,
           ]}
           onPress={handlePlaceOrder}
           disabled={placeOrder.isPending || items.length === 0 || outsideArea}
           accessibilityRole="button"
-          accessibilityLabel="Place order"
+          accessibilityLabel={`Place order, ${formatPaise(bill.totalPaise)}, pay on delivery`}
+          accessibilityState={{ busy: placeOrder.isPending }}
         >
-          <Text style={styles.placeOrderText}>
-            {placeOrder.isPending ? "Placing order" : "Place order"}
-          </Text>
-          <Ionicons name="chevron-forward" size={18} color={Colors.surface} />
+          <View>
+            <Text style={styles.bottomTotal}>{formatPaise(bill.totalPaise)}</Text>
+            <Text style={styles.bottomSub}>PAY ON DELIVERY</Text>
+          </View>
+          {placeOrder.isPending ? (
+            <ActivityIndicator color={Colors.surface} />
+          ) : (
+            <View style={styles.placeRight}>
+              <Text style={styles.placeOrderText}>Place order</Text>
+              <Ionicons name="caret-forward" size={14} color={Colors.surface} />
+            </View>
+          )}
         </Pressable>
       </View>
     </View>
@@ -445,18 +456,20 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
   },
   placeError: {
-    position: "absolute",
-    top: -28,
-    left: Spacing[16],
-    right: Spacing[16],
-    textAlign: "center",
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.danger,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FDF1F1",
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing[12],
+    paddingVertical: Spacing[8],
   },
+  placeErrorText: { flex: 1, fontSize: FontSize.caption, fontWeight: "700", color: Colors.danger },
   placeOrderBtnDisabled: {
-    opacity: 0.5,
+    backgroundColor: "#C9D3D1",
   },
+  placeOrderPressed: { backgroundColor: Colors.brandPressed },
+  placeRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   root: {
     flex: 1,
     backgroundColor: Colors.canvas,
@@ -465,21 +478,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing[16],
-    paddingVertical: Spacing[12],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    gap: Spacing[8],
+    paddingHorizontal: Spacing[8],
+    height: 56,
+    gap: Spacing[4],
   },
-  backBtn: { padding: Spacing[4] },
-  backBtnText: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   headerTitle: {
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
+    fontSize: 18,
+    fontWeight: "800",
     color: Colors.textPrimary,
   },
   scroll: { flex: 1 },
@@ -490,9 +496,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
-    padding: Spacing[16],
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: Spacing[14],
     gap: Spacing[8],
   },
   cardTitleRow: {
@@ -501,8 +505,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   cardTitle: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
     color: Colors.textPrimary,
     marginBottom: Spacing[4],
   },
@@ -623,25 +628,6 @@ const styles = StyleSheet.create({
   },
 
   // Coupon
-  couponCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing[16],
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderStyle: "dashed",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[12],
-  },
-  couponEmoji: { fontSize: 20 },
-  couponText: {
-    flex: 1,
-    fontSize: FontSize.body,
-    fontWeight: "600",
-    color: Colors.brandText,
-  },
-  couponChevron: { fontSize: 20, color: Colors.textTertiary },
 
   // Bill
   billRow: {
@@ -694,39 +680,38 @@ const styles = StyleSheet.create({
   // Bottom bar
   bottomBar: {
     backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing[16],
-    paddingTop: Spacing[12],
-    gap: Spacing[16],
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingHorizontal: Spacing[12],
+    paddingTop: Spacing[10],
+    gap: Spacing[8],
     ...Shadow.sticky,
   },
-  bottomInfo: { flex: 1 },
   bottomTotal: {
-    fontSize: 20,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: "800",
-    color: Colors.textPrimary,
+    color: Colors.surface,
+    fontVariant: ["tabular-nums"],
   },
   bottomSub: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.8)",
   },
   placeOrderBtn: {
     backgroundColor: Colors.brandGreen,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing[24],
-    paddingVertical: Spacing[14],
+    paddingHorizontal: Spacing[16],
+    height: 56,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
+    justifyContent: "space-between",
   },
   placeOrderText: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "800",
     color: Colors.surface,
   },
 });

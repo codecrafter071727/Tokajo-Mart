@@ -12,6 +12,10 @@ interface ProductCardProps {
   product: Product;
 }
 
+/**
+ * The one product tile used in rails, grids and search. Every part has a fixed slot, so prices
+ * and ADD buttons line up across a row no matter how long a name is.
+ */
 export function ProductCard({ product }: ProductCardProps) {
   const router = useRouter();
   const [saved, setSaved] = useState(false);
@@ -23,11 +27,11 @@ export function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Pressable
-      style={styles.card}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
       onPress={() => router.push(`/product/${product.id}`)}
       accessibilityLabel={`${product.name}, ${product.unit}, ${product.price} rupees${
         showDiscount ? `, ${product.discount} percent off` : ""
-      }`}
+      }${outOfStock ? ", out of stock" : ""}`}
     >
       <View style={styles.imageWrap}>
         <View style={[styles.imageBlock, outOfStock && styles.dimmed]}>
@@ -39,26 +43,56 @@ export function ProductCard({ product }: ProductCardProps) {
           />
         </View>
 
-        {showDiscount ? (
+        {showDiscount && !outOfStock ? (
           <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>{product.discount}% OFF</Text>
+            <Text style={styles.discountText}>{product.discount}%</Text>
+            <Text style={styles.discountOff}>OFF</Text>
+          </View>
+        ) : null}
+
+        {outOfStock ? (
+          <View style={styles.stockBanner}>
+            <Text style={styles.stockBannerText}>Out of stock</Text>
+          </View>
+        ) : lowStock ? (
+          <View style={[styles.stockBanner, styles.lowBanner]}>
+            <Text style={[styles.stockBannerText, styles.lowText]}>
+              Only {stock?.remaining} left
+            </Text>
           </View>
         ) : null}
 
         <Pressable
           style={styles.heartBtn}
-          hitSlop={8}
+          hitSlop={10}
           onPress={() => setSaved((v) => !v)}
+          accessibilityRole="button"
           accessibilityLabel={saved ? "Remove from favourites" : "Save to favourites"}
         >
           <Ionicons
             name={saved ? "heart" : "heart-outline"}
-            size={15}
+            size={14}
             color={saved ? Colors.danger : Colors.textSecondary}
           />
         </Pressable>
+      </View>
 
-        <View style={styles.addSlot}>
+      <View style={styles.body}>
+        <View style={styles.etaPill}>
+          <Ionicons name="timer-outline" size={10} color={Colors.textSecondary} />
+          <Text style={styles.etaText}>{product.deliveryMins ?? 9} MINS</Text>
+        </View>
+        <Text style={styles.productName} numberOfLines={2}>
+          {product.name}
+        </Text>
+        <Text style={styles.unit} numberOfLines={1}>
+          {product.unit}
+        </Text>
+        <View style={styles.footer}>
+          <View style={styles.priceCol}>
+            <Text style={styles.price}>₹{product.price}</Text>
+            {product.mrp > product.price ? <Text style={styles.mrp}>₹{product.mrp}</Text> : null}
+          </View>
           <AddButton
             productId={product.id}
             productData={{
@@ -76,24 +110,6 @@ export function ProductCard({ product }: ProductCardProps) {
           />
         </View>
       </View>
-
-      <View style={styles.body}>
-        <View style={styles.etaRow}>
-          <Ionicons name="time-outline" size={11} color={Colors.textTertiary} />
-          <Text style={styles.etaText}>{product.deliveryMins ?? 9} mins</Text>
-        </View>
-        <Text style={styles.productName} numberOfLines={2}>
-          {product.name}
-        </Text>
-        {lowStock ? <Text style={styles.lowStock}>Only {stock?.remaining} left</Text> : null}
-        <Text style={styles.unit} numberOfLines={1}>
-          {product.unit}
-        </Text>
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>₹{product.price}</Text>
-          {product.mrp > product.price ? <Text style={styles.mrp}>₹{product.mrp}</Text> : null}
-        </View>
-      </View>
     </Pressable>
   );
 }
@@ -101,104 +117,106 @@ export function ProductCard({ product }: ProductCardProps) {
 const styles = StyleSheet.create({
   card: {
     width: "100%",
-  },
-  imageWrap: {
-    width: "100%",
-    aspectRatio: 1,
-    marginBottom: 18,
-  },
-  imageBlock: {
-    ...StyleSheet.absoluteFill,
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: "#EDF1F0",
+    padding: Spacing[8],
+  },
+  pressed: { opacity: 0.92, transform: [{ scale: 0.985 }] },
+  imageWrap: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: Radius.sm,
     overflow: "hidden",
+    backgroundColor: "#F7F9F8",
   },
-  dimmed: {
-    opacity: 0.5,
-  },
-  lowStock: {
-    ...typography.micro,
-    fontSize: 11,
-    fontWeight: "800",
-    color: Colors.warning,
-  },
+  imageBlock: { ...StyleSheet.absoluteFill },
+  dimmed: { opacity: 0.4 },
+  // Blinkit style ribbon in the top left corner
   discountBadge: {
     position: "absolute",
     top: 0,
+    left: 6,
+    width: 30,
+    paddingTop: 3,
+    paddingBottom: 5,
+    backgroundColor: "#2F6FE4",
+    borderBottomLeftRadius: 6,
+    borderBottomRightRadius: 6,
+    alignItems: "center",
+  },
+  discountText: { fontSize: 10, lineHeight: 11, fontWeight: "900", color: Colors.surface },
+  discountOff: { fontSize: 8, lineHeight: 9, fontWeight: "800", color: Colors.surface },
+  stockBanner: {
+    position: "absolute",
     left: 0,
-    backgroundColor: Colors.brandGreen,
-    borderTopLeftRadius: Radius.md,
-    borderBottomRightRadius: Radius.md,
-    paddingHorizontal: 6,
+    right: 0,
+    bottom: 0,
     paddingVertical: 3,
+    backgroundColor: "rgba(20,32,30,0.72)",
+    alignItems: "center",
   },
-  discountText: {
-    ...typography.micro,
-    fontSize: 9,
-    fontWeight: "800",
-    color: Colors.brandBlack,
-  },
+  stockBannerText: { fontSize: 10, lineHeight: 12, fontWeight: "800", color: Colors.surface },
+  lowBanner: { backgroundColor: "#FFF1E0" },
+  lowText: { color: Colors.warning },
   heartBtn: {
     position: "absolute",
-    top: 6,
-    right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    top: 4,
+    right: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.94)",
     alignItems: "center",
     justifyContent: "center",
   },
-  addSlot: {
-    position: "absolute",
-    right: 6,
-    bottom: -16,
-    zIndex: 3,
-  },
-  body: {
-    paddingTop: Spacing[4],
-    gap: 1,
-  },
-  etaRow: {
+  body: { paddingTop: Spacing[8] },
+  etaPill: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
     gap: 2,
-    marginBottom: 2,
+    backgroundColor: Colors.canvas,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    marginBottom: 4,
   },
-  etaText: {
-    ...typography.micro,
-    fontSize: 10,
-    color: Colors.textTertiary,
-  },
+  etaText: { fontSize: 9, lineHeight: 11, fontWeight: "800", color: Colors.textSecondary },
   productName: {
     ...typography.bodyStrong,
-    fontSize: 12.5,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 17,
     color: Colors.textPrimary,
-    minHeight: 32,
+    height: 34,
   },
   unit: {
     ...typography.caption,
+    fontWeight: "400",
     color: Colors.textTertiary,
+    marginTop: 2,
+    height: 16,
   },
-  priceRow: {
+  footer: {
     flexDirection: "row",
-    alignItems: "baseline",
-    gap: 5,
-    marginTop: 3,
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginTop: Spacing[8],
+    gap: 4,
+    minHeight: 34,
   },
+  priceCol: { flexShrink: 1 },
   price: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "800",
     color: Colors.textPrimary,
     fontVariant: ["tabular-nums"],
   },
   mrp: {
-    ...typography.priceStrike,
     fontSize: 11,
+    lineHeight: 14,
     color: Colors.textTertiary,
     textDecorationLine: "line-through",
     fontVariant: ["tabular-nums"],

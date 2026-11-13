@@ -1,18 +1,31 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Platform } from "react-native";
+import React, { useMemo } from "react";
+import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { TAB_BAR_CONTENT } from "../../src/theme/tabs";
-import { useServiceability } from "../../src/lib/queries";
-import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../../src/theme";
-import { AddButton } from "../../src/components/AddButton";
-import { useCartStore } from "../../src/store/cart";
-import { DELIVERY_FEE_PAISE, formatPaise, priceCart, toPriceLines } from "../../src/lib/pricing";
-import { getSuggestedProducts } from "../../src/lib/mockData";
 import { Ionicons } from "@expo/vector-icons";
+import { TAB_BAR_CONTENT } from "../../src/theme/tabs";
+import { useProducts, useServiceability } from "../../src/lib/queries";
+import { Colors, Radius, Shadow, Spacing, typography } from "../../src/theme";
+import { AddButton } from "../../src/components/AddButton";
+import { ProductCard } from "../../src/components/ProductCard";
 import { ProductImage } from "../../src/components/ProductImage";
+import { useCartStore } from "../../src/store/cart";
+import { useSelectedAddress } from "../../src/store/addresses";
+import { addressSummary, addressTag } from "../../src/lib/addresses";
+import { KIND_ICON } from "../../src/lib/addressIcons";
+import {
+  DELIVERY_FEE_PAISE,
+  FREE_DELIVERY_MIN_PAISE,
+  formatPaise,
+  priceCart,
+  toPriceLines,
+} from "../../src/lib/pricing";
 
-const TIP_AMOUNTS = [0, 20, 30, 50];
+const TIPS = [
+  { rupees: 20, emoji: "😊" },
+  { rupees: 30, emoji: "🤩" },
+  { rupees: 50, emoji: "😍" },
+];
 
 export default function CartScreen() {
   const insets = useSafeAreaInsets();
@@ -21,718 +34,517 @@ export default function CartScreen() {
   const totalItems = useCartStore((s) => s.totalItems());
   const tipRupees = useCartStore((s) => s.tipRupees);
   const setTip = useCartStore((s) => s.setTip);
+  const address = useSelectedAddress();
+  const eta = useServiceability().data;
 
   // One pricing function for the cart, checkout and the order, so the totals always agree
-  const eta = useServiceability().data;
   const bill = priceCart(toPriceLines(items), tipRupees * 100);
+  const progress = Math.min(1, bill.itemTotalPaise / FREE_DELIVERY_MIN_PAISE);
 
-  const suggestedProducts = getSuggestedProducts(items.map((i) => i.id));
+  // Suggestions are real catalog items that are not in the cart yet, cheapest first
+  const products = useProducts({ limit: 100 }).data;
+  const suggestions = useMemo(() => {
+    const inCart = new Set(items.map((i) => i.id));
+    return (products ?? [])
+      .filter((p) => !inCart.has(p.id))
+      .sort((a, b) => a.price - b.price)
+      .slice(0, 10);
+  }, [products, items]);
+
+  const bottomGap = Platform.OS === "ios" ? insets.bottom : TAB_BAR_CONTENT + insets.bottom;
 
   if (items.length === 0) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Cart</Text>
+          <Text style={styles.headerTitle}>My cart</Text>
         </View>
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIconWrap}>
-            <Ionicons name="cart-outline" size={56} color={Colors.brandText} />
+        <View style={styles.empty}>
+          <View style={styles.emptyArt}>
+            <Ionicons name="bag-handle-outline" size={52} color={Colors.brandText} />
           </View>
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
-          <Text style={styles.emptySubtitle}>Add items to your cart to proceed with delivery</Text>
-          <Pressable style={styles.shopBtn} onPress={() => router.push("/(tabs)")}>
-            <Text style={styles.shopBtnText}>Start shopping</Text>
+          <Text style={styles.emptyText}>
+            Fresh groceries and daily needs, at your door in minutes.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.emptyCta, pressed && styles.pressed]}
+            onPress={() => router.push("/(tabs)")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.emptyCtaText}>Start shopping</Text>
           </Pressable>
         </View>
       </View>
     );
   }
 
+  const { line1, line2 } = addressSummary(address);
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Cart</Text>
-        <Text style={styles.headerSubtitle}>
+        <Text style={styles.headerTitle}>My cart</Text>
+        <Text style={styles.headerSub}>
           {totalItems} item{totalItems !== 1 ? "s" : ""}
         </Text>
       </View>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: Spacing[24] }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Delivery strip */}
-        <View style={styles.deliveryStrip}>
-          <View style={styles.deliveryStripLeft}>
-            <View style={styles.clockIconBg}>
-              <Ionicons name="flash" size={18} color={Colors.brandText} />
+        {/* Free delivery nudge */}
+        <View style={[styles.nudge, bill.deliveryFeePaise === 0 && styles.nudgeDone]}>
+          <View style={styles.nudgeRow}>
+            <Ionicons
+              name={bill.deliveryFeePaise === 0 ? "checkmark-circle" : "bicycle"}
+              size={16}
+              color={Colors.brandText}
+            />
+            <Text style={styles.nudgeText}>
+              {bill.deliveryFeePaise === 0 ? (
+                <>
+                  Yay! You got <Text style={styles.bold}>FREE delivery</Text>
+                </>
+              ) : (
+                <>
+                  Add <Text style={styles.bold}>{formatPaise(bill.toFreeDeliveryPaise)}</Text> more
+                  for FREE delivery
+                </>
+              )}
+            </Text>
+          </View>
+          {bill.deliveryFeePaise > 0 ? (
+            <View style={styles.track}>
+              <View style={[styles.fill, { width: `${progress * 100}%` }]} />
             </View>
-            <View>
-              <Text style={styles.deliveryTimeText}>
+          ) : null}
+        </View>
+
+        {/* Shipment with its items */}
+        <View style={styles.card}>
+          <View style={styles.shipHeader}>
+            <View style={styles.shipIcon}>
+              <Ionicons name="timer" size={20} color={Colors.brandText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.shipTitle}>
                 {eta?.serviceable
                   ? `Delivery in ${eta.etaMins} minutes`
                   : "Delivery time unavailable"}
               </Text>
-              <Text style={styles.shipmentText}>
+              <Text style={styles.shipSub}>
                 Shipment of {totalItems} item{totalItems !== 1 ? "s" : ""}
               </Text>
             </View>
           </View>
-          <View style={styles.etaPill}>
-            <Text style={styles.etaPillText}>ON TIME</Text>
-          </View>
-        </View>
 
-        {/* Cart items */}
-        <View style={styles.card}>
-          {items.map((item, index) => (
-            <View key={item.id}>
-              <View style={styles.cartItem}>
-                <View style={styles.cartItemImage}>
-                  <ProductImage
-                    imageUrl={item.imageUrl}
-                    fit={item.imageFit}
-                    emoji={item.image}
-                    emojiSize={32}
-                    style={StyleSheet.absoluteFill}
-                  />
-                </View>
-                <View style={styles.cartItemInfo}>
-                  <Text style={styles.cartItemName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.cartItemUnit}>{item.unit}</Text>
-                  <View style={styles.cartItemPriceRow}>
-                    <Text style={styles.cartItemPrice}>₹{item.price * item.quantity}</Text>
-                    {item.mrp > item.price && (
-                      <Text style={styles.cartItemMrp}>₹{item.mrp * item.quantity}</Text>
-                    )}
-                  </View>
-                </View>
-                <AddButton productId={item.id} productData={item} size="md" />
+          {items.map((item) => (
+            <View key={item.id} style={styles.row}>
+              <View style={styles.thumb}>
+                <ProductImage
+                  imageUrl={item.imageUrl}
+                  fit={item.imageFit}
+                  emoji={item.image}
+                  emojiSize={30}
+                  style={StyleSheet.absoluteFill}
+                />
               </View>
-              {index < items.length - 1 && <View style={styles.divider} />}
+              <View style={styles.rowInfo}>
+                <Text style={styles.rowName} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <Text style={styles.rowUnit}>{item.unit}</Text>
+              </View>
+              <View style={styles.rowRight}>
+                <AddButton productId={item.id} productData={item} size="sm" />
+                <View style={styles.rowPrice}>
+                  {item.mrp > item.price ? (
+                    <Text style={styles.rowMrp}>₹{item.mrp * item.quantity}</Text>
+                  ) : null}
+                  <Text style={styles.rowPriceText}>₹{item.price * item.quantity}</Text>
+                </View>
+              </View>
             </View>
           ))}
         </View>
 
-        {/* Before you checkout (suggestions) */}
-        {suggestedProducts.length > 0 && (
-          <View style={styles.suggestionsSection}>
-            <Text style={styles.suggestionsTitle}>Before you checkout</Text>
+        {suggestions.length > 0 ? (
+          <View style={styles.suggest}>
+            <Text style={styles.sectionTitle}>You might have missed</Text>
             <FlatList
-              data={suggestedProducts}
+              data={suggestions}
               keyExtractor={(p) => p.id}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.suggestionsList}
+              contentContainerStyle={styles.suggestList}
               ItemSeparatorComponent={() => <View style={{ width: Spacing[8] }} />}
               renderItem={({ item }) => (
-                <View style={styles.suggestionCard}>
-                  <View style={styles.suggestionImgBg}>
-                    <ProductImage
-                      imageUrl={item.imageUrl}
-                      fit={item.imageFit}
-                      emoji={item.image}
-                      emojiSize={30}
-                      style={StyleSheet.absoluteFill}
-                    />
-                  </View>
-                  <Text style={styles.suggestionName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.suggestionUnit}>{item.unit}</Text>
-                  <View style={styles.suggestionPriceRow}>
-                    <Text style={styles.suggestionPrice}>₹{item.price}</Text>
-                    <AddButton productId={item.id} productData={item} size="sm" />
-                  </View>
+                <View style={styles.suggestCard}>
+                  <ProductCard product={item} />
                 </View>
               )}
             />
           </View>
-        )}
+        ) : null}
 
-        {/* Tip section */}
+        {/* Bill */}
         <View style={styles.card}>
-          <View style={styles.tipHeader}>
-            <Text style={styles.tipTitle}>Tip your delivery partner</Text>
-            <Text style={styles.tipSubtitle}>
-              They work hard to deliver on time. Show your appreciation!
-            </Text>
-          </View>
-          <View style={styles.tipChips}>
-            {TIP_AMOUNTS.map((amount) => (
-              <Pressable
-                key={amount}
-                style={[styles.tipChip, tipRupees === amount && styles.tipChipActive]}
-                onPress={() => setTip(amount)}
-              >
-                <Text
-                  style={[styles.tipChipText, tipRupees === amount && styles.tipChipTextActive]}
-                >
-                  {amount === 0 ? "None" : `₹${amount}`}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* Bill details */}
-        <View style={styles.card}>
-          <Text style={styles.billTitle}>Bill details</Text>
-
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Item total</Text>
-            <View style={styles.billRight}>
-              {bill.savingsPaise > 0 && (
-                <Text style={styles.billMrp}>{formatPaise(bill.mrpTotalPaise)}</Text>
-              )}
-              <Text style={styles.billValue}>{formatPaise(bill.itemTotalPaise)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Delivery charge</Text>
+          <Text style={styles.sectionTitle}>Bill details</Text>
+          <BillRow icon="document-text-outline" label="Items total">
+            {bill.savingsPaise > 0 ? (
+              <Text style={styles.strike}>{formatPaise(bill.mrpTotalPaise)}</Text>
+            ) : null}
+            <Text style={styles.billValue}>{formatPaise(bill.itemTotalPaise)}</Text>
+          </BillRow>
+          <BillRow icon="bicycle-outline" label="Delivery charge">
             {bill.deliveryFeePaise === 0 ? (
-              <View style={styles.billFreeRow}>
-                <Text style={styles.billFreeOriginal}>{formatPaise(DELIVERY_FEE_PAISE)}</Text>
-                <Text style={styles.billFree}>FREE</Text>
-              </View>
+              <>
+                <Text style={styles.strike}>{formatPaise(DELIVERY_FEE_PAISE)}</Text>
+                <Text style={[styles.billValue, styles.free]}>FREE</Text>
+              </>
             ) : (
               <Text style={styles.billValue}>{formatPaise(bill.deliveryFeePaise)}</Text>
             )}
-          </View>
-
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Handling charge</Text>
+          </BillRow>
+          <BillRow icon="bag-handle-outline" label="Handling charge">
             <Text style={styles.billValue}>{formatPaise(bill.handlingFeePaise)}</Text>
-          </View>
-
-          {bill.tipPaise > 0 && (
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Delivery partner tip</Text>
+          </BillRow>
+          {bill.tipPaise > 0 ? (
+            <BillRow icon="heart-outline" label="Tip for your delivery partner">
               <Text style={styles.billValue}>{formatPaise(bill.tipPaise)}</Text>
-            </View>
-          )}
-
+            </BillRow>
+          ) : null}
           <View style={styles.billDivider} />
-
-          <View style={styles.billRow}>
+          <View style={styles.billTotalRow}>
             <Text style={styles.billTotalLabel}>Grand total</Text>
             <Text style={styles.billTotalValue}>{formatPaise(bill.totalPaise)}</Text>
           </View>
-
-          {bill.savingsPaise > 0 && (
-            <View style={styles.savingsStrip}>
-              <Text style={styles.savingsText}>
-                You saved {formatPaise(bill.savingsPaise)} on this order
-              </Text>
+          {bill.savingsPaise > 0 ? (
+            <View style={styles.savings}>
+              <Text style={styles.savingsText}>Your total savings</Text>
+              <Text style={styles.savingsValue}>{formatPaise(bill.savingsPaise)}</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
-        {/* Cancellation policy */}
-        <View style={styles.policyCard}>
-          <Text style={styles.policyTitle}>Cancellation policy</Text>
-          <Text style={styles.policyText}>
-            Orders can be cancelled within 60 seconds of placement for a full refund. After that, a
-            nominal fee may apply. Items that are out of stock will be automatically refunded.
+        {/* Tip */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Tip your delivery partner</Text>
+          <Text style={styles.muted}>Your kindness means a lot. 100% of the tip goes to them.</Text>
+          <View style={styles.tips}>
+            {TIPS.map((t) => {
+              const active = tipRupees === t.rupees;
+              return (
+                <Pressable
+                  key={t.rupees}
+                  style={[styles.tip, active && styles.tipActive]}
+                  onPress={() => setTip(active ? 0 : t.rupees)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`Tip ${t.rupees} rupees`}
+                >
+                  <Text style={styles.tipEmoji}>{t.emoji}</Text>
+                  <Text style={[styles.tipText, active && styles.tipTextActive]}>₹{t.rupees}</Text>
+                  {active ? <Ionicons name="close" size={12} color={Colors.brandText} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Cancellation policy</Text>
+          <Text style={styles.muted}>
+            You can cancel until the store starts packing your order. After that it is on its way to
+            you and can no longer be cancelled.
           </Text>
         </View>
       </ScrollView>
 
-      {/* Bottom bar - address + total + proceed */}
-      <View
-        style={[
-          styles.bottomBar,
-          // The tab bar floats over the screen on Android and web, so lift the bar above it.
-          // On iOS the native tab bar is already part of the safe area.
-          Platform.OS === "ios"
-            ? { paddingBottom: insets.bottom + Spacing[8] }
-            : { paddingBottom: Spacing[8], marginBottom: TAB_BAR_CONTENT + insets.bottom },
-        ]}
-      >
-        {/* Address row */}
-        <Pressable style={styles.bottomAddressRow}>
-          <Ionicons name="location" size={18} color={Colors.brandText} />
-          <Text style={styles.bottomAddressText} numberOfLines={1}>
-            Delivering to <Text style={styles.bottomAddressBold}>Home</Text> - 123, MG Road
-          </Text>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
-        </Pressable>
-        {/* Total + button */}
-        <View style={styles.bottomBarRow}>
-          <View style={styles.bottomBarLeft}>
-            <Text style={styles.bottomTotal}>{formatPaise(bill.totalPaise)}</Text>
-            <Text style={styles.bottomTotalLabel}>Total (incl. all taxes)</Text>
+      {/* Address and pay, pinned above the tab bar */}
+      <View style={[styles.footer, { marginBottom: bottomGap }]}>
+        <Pressable
+          style={styles.addr}
+          onPress={() => router.push("/addresses")}
+          accessibilityRole="button"
+          accessibilityLabel={`Delivering to ${addressTag(address)}. Change address`}
+        >
+          <View style={styles.addrIcon}>
+            <Ionicons name={KIND_ICON[address.kind]} size={16} color={Colors.brandText} />
           </View>
-          <Pressable style={styles.proceedBtn} onPress={() => router.push("/checkout")}>
-            <Text style={styles.proceedBtnText}>Proceed to pay</Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.surface} />
-          </Pressable>
-        </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.addrTitle} numberOfLines={1}>
+              Delivering to <Text style={styles.bold}>{addressTag(address)}</Text>
+            </Text>
+            <Text style={styles.addrLine} numberOfLines={1}>
+              {[line1, line2].filter(Boolean).join(", ")}
+            </Text>
+          </View>
+          <Text style={styles.change}>Change</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.pay, pressed && styles.payPressed]}
+          onPress={() => router.push("/checkout")}
+          accessibilityRole="button"
+          accessibilityLabel={`Total ${formatPaise(bill.totalPaise)}. Proceed to checkout`}
+        >
+          <View>
+            <Text style={styles.payTotal}>{formatPaise(bill.totalPaise)}</Text>
+            <Text style={styles.payTotalLabel}>TOTAL</Text>
+          </View>
+          <View style={styles.payRight}>
+            <Text style={styles.payText}>Proceed to pay</Text>
+            <Ionicons name="caret-forward" size={14} color={Colors.surface} />
+          </View>
+        </Pressable>
       </View>
     </View>
   );
 }
 
+function BillRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.billRow}>
+      <Ionicons name={icon} size={15} color={Colors.textSecondary} />
+      <Text style={styles.billLabel}>{label}</Text>
+      <View style={styles.billRight}>{children}</View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.canvas,
-  },
+  root: { flex: 1, backgroundColor: Colors.canvas },
   header: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing[16],
-    paddingVertical: Spacing[12],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
     flexDirection: "row",
     alignItems: "baseline",
     gap: Spacing[8],
-  },
-  headerTitle: {
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
-    color: Colors.textPrimary,
-  },
-  headerSubtitle: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    gap: Spacing[12],
-    padding: Spacing[12],
-  },
-
-  // Delivery strip
-  deliveryStrip: {
+    paddingHorizontal: Spacing[16],
+    paddingVertical: Spacing[14],
     backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing[12],
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    ...Shadow.card,
   },
-  deliveryStripLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[10],
-  },
-  clockIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.yellowTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  clockEmoji: {
-    fontSize: 18,
-  },
-  deliveryTimeText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  shipmentText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  etaPill: {
-    backgroundColor: Colors.greenTint,
-    borderWidth: 1,
-    borderColor: Colors.greenBorder,
-    borderRadius: Radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  etaPillText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: Colors.brandText,
-    letterSpacing: 0.5,
-  },
+  headerTitle: { ...typography.title, fontWeight: "800", color: Colors.textPrimary },
+  headerSub: { ...typography.caption, color: Colors.textTertiary },
+  scroll: { flex: 1 },
+  content: { padding: Spacing[12], gap: Spacing[12] },
+  pressed: { opacity: 0.85 },
+  bold: { fontWeight: "800", color: Colors.textPrimary },
 
-  // Card
+  nudge: {
+    backgroundColor: "#EAF6FF",
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing[12],
+    paddingVertical: Spacing[10],
+    gap: Spacing[8],
+  },
+  nudgeDone: { backgroundColor: Colors.greenTint },
+  nudgeRow: { flexDirection: "row", alignItems: "center", gap: Spacing[8] },
+  nudgeText: { ...typography.caption, fontWeight: "600", color: Colors.textSecondary, flex: 1 },
+  track: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(35,138,71,0.15)",
+    overflow: "hidden",
+  },
+  fill: { height: 4, borderRadius: 2, backgroundColor: Colors.brandGreen },
+
   card: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
-    padding: Spacing[16],
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: Spacing[14],
   },
+  sectionTitle: { ...typography.subtitle, fontWeight: "800", color: Colors.textPrimary },
+  muted: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary, marginTop: 4 },
 
-  // Cart item
-  cartItem: {
+  shipHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing[12],
-    paddingVertical: Spacing[8],
+    paddingBottom: Spacing[12],
   },
-  cartItemImage: {
-    width: 60,
-    height: 60,
+  shipIcon: {
+    width: 40,
+    height: 40,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: "hidden",
+    backgroundColor: Colors.canvas,
     alignItems: "center",
     justifyContent: "center",
   },
-  cartItemEmoji: {
-    fontSize: 36,
-  },
-  cartItemInfo: {
-    flex: 1,
-  },
-  cartItemName: {
-    fontSize: FontSize.productName,
-    fontWeight: FontWeight.productName,
-    color: Colors.textPrimary,
-    lineHeight: 17,
-  },
-  cartItemUnit: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  cartItemPriceRow: {
+  shipTitle: { ...typography.subtitle, fontWeight: "800", color: Colors.textPrimary },
+  shipSub: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary, marginTop: 1 },
+
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing[4],
-    marginTop: Spacing[4],
+    gap: Spacing[12],
+    paddingVertical: Spacing[10],
   },
-  cartItemPrice: {
-    fontSize: FontSize.price,
-    fontWeight: FontWeight.price,
-    color: Colors.textPrimary,
+  thumb: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: "#EDF1F0",
+    backgroundColor: Colors.surface,
+    overflow: "hidden",
   },
-  cartItemMrp: {
+  rowInfo: { flex: 1 },
+  rowName: { ...typography.bodyStrong, fontSize: 13, lineHeight: 17, color: Colors.textPrimary },
+  rowUnit: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary, marginTop: 2 },
+  rowRight: { alignItems: "flex-end", gap: 6 },
+  rowPrice: { flexDirection: "row", alignItems: "baseline", gap: 4 },
+  rowMrp: {
     fontSize: 11,
     color: Colors.textTertiary,
     textDecorationLine: "line-through",
+    fontVariant: ["tabular-nums"],
   },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing[4],
+  rowPriceText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
   },
 
-  // Suggestions
-  suggestionsSection: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    paddingTop: Spacing[16],
-    paddingBottom: Spacing[12],
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  suggestionsTitle: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
-    color: Colors.textPrimary,
-    marginBottom: Spacing[12],
-    paddingHorizontal: Spacing[16],
-  },
-  suggestionsList: {
-    paddingHorizontal: Spacing[16],
-  },
-  suggestionCard: {
-    width: 130,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.sm,
-    padding: Spacing[8],
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: Spacing[4],
-  },
-  suggestionImgBg: {
-    height: 72,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: "hidden",
-    borderRadius: Radius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  suggestionEmoji: {
-    fontSize: 32,
-    textAlign: "center",
-  },
-  suggestionName: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-    lineHeight: 14,
-  },
-  suggestionUnit: {
-    fontSize: 10,
-    color: Colors.textSecondary,
-  },
-  suggestionPriceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: Spacing[4],
-  },
-  suggestionPrice: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
+  suggest: { gap: Spacing[10] },
+  suggestList: { paddingRight: Spacing[4] },
+  suggestCard: { width: 136 },
 
-  // Tip
-  tipHeader: {
-    marginBottom: Spacing[12],
-  },
-  tipTitle: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-    marginBottom: Spacing[4],
-  },
-  tipSubtitle: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    lineHeight: 17,
-  },
-  tipChips: {
-    flexDirection: "row",
-    gap: Spacing[8],
-  },
-  tipChip: {
-    flex: 1,
-    paddingVertical: Spacing[8],
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-  },
-  tipChipActive: {
-    borderColor: Colors.brandGreen,
-    backgroundColor: Colors.greenTint,
-  },
-  tipChipText: {
-    fontSize: FontSize.caption,
-    fontWeight: "600",
-    color: Colors.textSecondary,
-  },
-  tipChipTextActive: {
-    color: Colors.brandText,
-  },
-
-  // Bill
-  billTitle: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
-    color: Colors.textPrimary,
-    marginBottom: Spacing[16],
-  },
   billRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing[8],
+    gap: Spacing[8],
+    marginTop: Spacing[10],
   },
-  billLabel: {
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.body,
-    color: Colors.textSecondary,
-  },
-  billRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[4],
-  },
-  billMrp: {
-    fontSize: 12,
+  billLabel: { ...typography.body, color: Colors.textSecondary, flex: 1 },
+  billRight: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  billValue: { ...typography.body, color: Colors.textPrimary, fontVariant: ["tabular-nums"] },
+  strike: {
+    ...typography.caption,
     color: Colors.textTertiary,
     textDecorationLine: "line-through",
   },
-  billValue: {
-    fontSize: FontSize.body,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  billFreeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[4],
-  },
-  billFreeOriginal: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-    textDecorationLine: "line-through",
-  },
-  billFree: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.brandText,
-  },
-  billDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing[12],
-  },
-  billTotalLabel: {
-    fontSize: FontSize.body,
-    fontWeight: "800",
-    color: Colors.textPrimary,
-  },
+  free: { color: Colors.offerBlue, fontWeight: "800" },
+  billDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing[12] },
+  billTotalRow: { flexDirection: "row", justifyContent: "space-between" },
+  billTotalLabel: { ...typography.subtitle, fontWeight: "800", color: Colors.textPrimary },
   billTotalValue: {
-    fontSize: 16,
+    ...typography.subtitle,
     fontWeight: "800",
     color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
   },
-  savingsStrip: {
-    marginTop: Spacing[12],
-    backgroundColor: Colors.greenTint,
+  savings: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#EAF6FF",
     borderRadius: Radius.sm,
-    padding: Spacing[10] ?? 10,
+    paddingHorizontal: Spacing[12],
+    paddingVertical: Spacing[8],
+    marginTop: Spacing[12],
   },
-  savingsText: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.brandText,
-    textAlign: "center",
-  },
+  savingsText: { ...typography.bodyStrong, color: Colors.offerBlue },
+  savingsValue: { ...typography.bodyStrong, fontWeight: "800", color: Colors.offerBlue },
 
-  // Policy
-  policyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing[16],
+  tips: { flexDirection: "row", gap: Spacing[8], marginTop: Spacing[12] },
+  tip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     borderWidth: 1,
     borderColor: Colors.border,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing[12],
+    height: 36,
   },
-  policyTitle: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-    marginBottom: Spacing[8],
-  },
-  policyText: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
+  tipActive: { borderColor: Colors.brandGreen, backgroundColor: Colors.greenTint },
+  tipEmoji: { fontSize: 15 },
+  tipText: { ...typography.bodyStrong, color: Colors.textPrimary },
+  tipTextActive: { color: Colors.brandText, fontWeight: "800" },
 
-  // Bottom bar
-  bottomBar: {
+  footer: {
     backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingHorizontal: Spacing[16],
-    paddingTop: Spacing[8],
-    gap: Spacing[8],
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingHorizontal: Spacing[12],
+    paddingTop: Spacing[10],
+    paddingBottom: Spacing[10],
+    gap: Spacing[10],
     ...Shadow.sticky,
   },
-  bottomAddressRow: {
-    flexDirection: "row",
+  addr: { flexDirection: "row", alignItems: "center", gap: Spacing[10], paddingHorizontal: 4 },
+  addrIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.greenTint,
     alignItems: "center",
-    gap: Spacing[6],
-    paddingVertical: Spacing[6],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    justifyContent: "center",
   },
-  bottomAddressEmoji: { fontSize: 13 },
-  bottomAddressText: {
-    flex: 1,
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-  },
-  bottomAddressBold: {
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  bottomAddressChevron: {
-    fontSize: 16,
-    color: Colors.textTertiary,
-  },
-  bottomBarRow: {
+  addrTitle: { ...typography.caption, color: Colors.textSecondary },
+  addrLine: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary },
+  change: { ...typography.bodyStrong, fontWeight: "800", color: Colors.brandText },
+  pay: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: Spacing[16],
-  },
-  bottomBarLeft: {
-    flex: 1,
-  },
-  bottomTotal: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: Colors.textPrimary,
-  },
-  bottomTotalLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-  },
-  proceedBtn: {
     backgroundColor: Colors.brandGreen,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing[24],
-    paddingVertical: Spacing[14] ?? 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
+    paddingHorizontal: Spacing[16],
+    height: 56,
   },
-  proceedBtnText: {
-    fontSize: FontSize.body + 1,
+  payPressed: { backgroundColor: Colors.brandPressed },
+  payTotal: {
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: "800",
     color: Colors.surface,
+    fontVariant: ["tabular-nums"],
   },
+  payTotalLabel: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.8)",
+  },
+  payRight: { flexDirection: "row", alignItems: "center", gap: 4 },
+  payText: { fontSize: 16, fontWeight: "800", color: Colors.surface },
 
-  // Empty state
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing[12],
-    padding: Spacing[24],
-  },
-  emptyEmoji: {
-    fontSize: 80,
-  },
-  emptyIconWrap: {
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing[32] },
+  emptyArt: {
     width: 112,
     height: 112,
     borderRadius: 56,
-    backgroundColor: Colors.brandTint,
+    backgroundColor: Colors.greenTint,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: Spacing[20],
   },
-  emptyTitle: {
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
-    color: Colors.textPrimary,
-  },
-  emptySubtitle: {
-    fontSize: FontSize.body,
-    color: Colors.textSecondary,
+  emptyTitle: { ...typography.title, fontWeight: "800", color: Colors.textPrimary },
+  emptyText: {
+    ...typography.body,
+    color: Colors.textTertiary,
     textAlign: "center",
-    lineHeight: 21,
-  },
-  shopBtn: {
-    backgroundColor: Colors.brandGreen,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing[24],
-    paddingVertical: Spacing[14] ?? 14,
     marginTop: Spacing[8],
   },
-  shopBtnText: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.surface,
+  emptyCta: {
+    marginTop: Spacing[24],
+    backgroundColor: Colors.brandGreen,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing[32],
+    height: 48,
+    justifyContent: "center",
   },
+  emptyCtaText: { fontSize: 15, fontWeight: "800", color: Colors.surface },
 });

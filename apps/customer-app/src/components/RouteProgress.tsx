@@ -85,8 +85,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.brandTint,
     borderRadius: Radius.lg,
-    padding: Spacing[20],
-    gap: Spacing[4],
+    padding: Spacing[16],
+    gap: 2,
     alignItems: "center",
   },
   routeRow: {
@@ -136,6 +136,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  title: { ...typography.title, fontWeight: "800", color: Colors.textPrimary, textAlign: "center" },
-  subtitle: { ...typography.body, color: Colors.textSecondary, textAlign: "center" },
+  title: {
+    ...typography.subtitle,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    textAlign: "center",
+  },
+  subtitle: {
+    ...typography.caption,
+    fontWeight: "400",
+    color: Colors.textSecondary,
+    textAlign: "center",
+  },
 });

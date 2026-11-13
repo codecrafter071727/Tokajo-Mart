@@ -1,495 +1,286 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import React, { useState } from "react";
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from "../src/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { Colors, Radius, Spacing, typography } from "../src/theme";
 import { useAuthStore } from "../src/store/auth";
 import { signOut } from "../src/lib/auth";
+import { ScreenHeader } from "../src/components/ScreenHeader";
+import { useOrders } from "../src/lib/orderQueries";
+import { statusAt } from "../src/lib/orders";
+import { formatPaise } from "../src/lib/pricing";
+import { useAddressStore } from "../src/store/addresses";
 
-const MENU_ITEMS = [
-  {
-    icon: "receipt-outline" as const,
-    label: "My Orders",
-    subtitle: "Track, reorder & invoices",
-    route: "/orders/list",
-  },
-  {
-    icon: "location-outline" as const,
-    label: "Saved Addresses",
-    subtitle: "Home, work and more",
-    route: "/addresses",
-  },
-  {
-    icon: "card-outline" as const,
-    label: "Payment Modes",
-    subtitle: "UPI, Cards, Netbanking",
-    route: null,
-  },
-  {
-    icon: "pricetag-outline" as const,
-    label: "Offers & Coupons",
-    subtitle: "Exclusive deals for you",
-    route: null,
-  },
-  {
-    icon: "star-outline" as const,
-    label: "Rate Us on Play Store",
-    subtitle: "Love the speed? Let us know",
-    route: null,
-  },
-  {
-    icon: "notifications-outline" as const,
-    label: "Notification Preferences",
-    subtitle: "Order updates & alerts",
-    route: null,
-  },
-  {
-    icon: "help-circle-outline" as const,
-    label: "Customer Support & FAQs",
-    subtitle: "24/7 instant chat",
-    route: null,
-  },
-  {
-    icon: "document-text-outline" as const,
-    label: "Terms, Privacy & Policies",
-    subtitle: "Tokajo Mart v0.1.0",
-    route: null,
-  },
-];
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const orders = useOrders().data ?? [];
+  const addressCount = useAddressStore((s) => s.addresses.length);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+
+  const now = new Date();
+  const delivered = orders.filter((o) => statusAt(o, now) === "delivered");
+  // Savings only count on orders that went through
+  const saved = delivered.reduce((sum, o) => sum + o.savingsPaise, 0);
+  const initials = user.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+
+  React.useEffect(() => {
+    if (!confirmLogout) return;
+    const t = setTimeout(() => setConfirmLogout(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmLogout]);
+
+  const logout = () => {
+    if (!confirmLogout) return setConfirmLogout(true);
+    void signOut();
+    router.replace("/(auth)/login");
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={8}
-          style={styles.backBtn}
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>My account</Text>
-      </View>
+      <ScreenHeader title="Account" />
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing[32] }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarCircle}>
-            <Ionicons name="person" size={28} color={Colors.brandText} />
+        <View style={styles.profile}>
+          <View style={styles.avatar}>
+            {initials ? (
+              <Text style={styles.avatarText}>{initials}</Text>
+            ) : (
+              <Ionicons name="person" size={26} color={Colors.brandText} />
+            )}
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user.name}</Text>
-            <Text style={styles.profilePhone}>{user.phone}</Text>
-          </View>
-          <Pressable style={styles.editBtn}>
-            <Text style={styles.editBtnText}>Edit</Text>
-          </Pressable>
-        </View>
-
-        {/* ── Tokajo Wallet Card ────────────────────────── */}
-        <View style={styles.walletCard}>
-          <View style={styles.walletLeft}>
-            <View style={styles.walletIconBg}>
-              <Ionicons name="wallet" size={22} color={Colors.brandText} />
-            </View>
-            <View>
-              <View style={styles.walletTitleRow}>
-                <Text style={styles.walletTitle}>Tokajo Wallet</Text>
-                <View style={styles.activePill}>
-                  <Text style={styles.activePillText}>ACTIVE</Text>
-                </View>
-              </View>
-              <Text style={styles.walletBalance}>₹{user.walletBalance.toFixed(2)}</Text>
-            </View>
-          </View>
-          <Pressable style={styles.addMoneyBtn}>
-            <Text style={styles.addMoneyText}>Add money</Text>
-          </Pressable>
-        </View>
-
-        {/* ── Referral Promo Card ──────────────────────── */}
-        <View style={styles.referralCard}>
-          <View style={styles.referralLeft}>
-            <Ionicons name="gift" size={32} color={Colors.accentText} />
-            <View style={styles.referralTextContainer}>
-              <Text style={styles.referralTitle}>Invite Friends & Earn ₹100</Text>
-              <Text style={styles.referralSubtitle}>
-                Get ₹100 instant cashback on your friend's first order
-              </Text>
-            </View>
-          </View>
-          <Pressable style={styles.referralBtn}>
-            <Text style={styles.referralBtnText}>Invite</Text>
-          </Pressable>
-        </View>
-
-        {/* Savings summary */}
-        <View style={styles.savingsCard}>
-          <View style={styles.savingsStat}>
-            <Text style={styles.savingsValue}>₹{user.totalSaved}</Text>
-            <Text style={styles.savingsLabel}>Total saved</Text>
-          </View>
-          <View style={styles.statsDivider} />
-          <View style={styles.savingsStat}>
-            <Text style={styles.savingsValue}>{user.ordersPlaced}</Text>
-            <Text style={styles.savingsLabel}>Orders placed</Text>
-          </View>
-          <View style={styles.statsDivider} />
-          <View style={styles.savingsStat}>
-            <Text style={styles.savingsValue}>4.8</Text>
-            <Text style={styles.savingsLabel}>Avg rating</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>
+              {user.name || "Customer"}
+            </Text>
+            <Text style={styles.phone}>{user.phone}</Text>
           </View>
         </View>
 
-        {/* Menu items */}
-        <View style={styles.menuCard}>
-          {MENU_ITEMS.map((item, index) => (
-            <View key={item.label}>
-              <Pressable
-                style={styles.menuItem}
-                onPress={() => {
-                  if (item.route) router.push(item.route as never);
-                }}
-              >
-                <View style={styles.menuIconCircle}>
-                  <Ionicons name={item.icon} size={20} color={Colors.brandText} />
-                </View>
-                <View style={styles.menuLabelContainer}>
-                  <Text style={styles.menuLabel}>{item.label}</Text>
-                  {item.subtitle && <Text style={styles.menuSubLabel}>{item.subtitle}</Text>}
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
-              </Pressable>
-              {index < MENU_ITEMS.length - 1 && <View style={styles.menuDivider} />}
-            </View>
-          ))}
+        <View style={styles.tiles}>
+          <Tile
+            icon="bag-handle-outline"
+            label="Your orders"
+            onPress={() => router.push("/orders/list")}
+          />
+          <Tile
+            icon="location-outline"
+            label="Addresses"
+            onPress={() => router.push("/addresses")}
+          />
+          <Tile
+            icon="grid-outline"
+            label="Categories"
+            onPress={() => router.push("/(tabs)/categories")}
+          />
         </View>
 
-        {/* Logout */}
-        <Pressable
-          style={styles.logoutBtn}
-          onPress={() => {
-            void signOut();
-            router.replace("/(auth)/login");
-          }}
-        >
-          <Text style={styles.logoutText}>Log out</Text>
-        </Pressable>
+        <View style={styles.stats}>
+          <Stat value={String(orders.length)} label="Orders" />
+          <View style={styles.statDivider} />
+          <Stat value={String(delivered.length)} label="Delivered" />
+          <View style={styles.statDivider} />
+          <Stat value={formatPaise(saved)} label="Saved" accent />
+        </View>
 
-        <Text style={styles.version}>Tokajo Mart · Delivered in minutes</Text>
+        <Text style={styles.groupTitle}>YOUR INFORMATION</Text>
+        <View style={styles.group}>
+          <Row
+            icon="receipt-outline"
+            label="Your orders"
+            hint={orders.length ? `${orders.length} so far` : "Track and reorder"}
+            onPress={() => router.push("/orders/list")}
+          />
+          <Row
+            icon="book-outline"
+            label="Address book"
+            hint={`${addressCount} saved`}
+            onPress={() => router.push("/addresses")}
+            last
+          />
+        </View>
+
+        <Text style={styles.groupTitle}>OTHER INFORMATION</Text>
+        <View style={styles.group}>
+          <Row
+            icon="share-social-outline"
+            label="Share the app"
+            onPress={() =>
+              void Share.share({
+                message: "Groceries in minutes with Tokajo Mart. Try it!",
+              }).catch(() => undefined)
+            }
+          />
+          <Row
+            icon={confirmLogout ? "alert-circle-outline" : "log-out-outline"}
+            label={confirmLogout ? "Tap again to log out" : "Log out"}
+            onPress={logout}
+            danger
+            last
+          />
+        </View>
+
+        <Text style={styles.footer}>Tokajo Mart{"\n"}India's last minute app</Text>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  backBtn: {
-    marginRight: Spacing[8],
-  },
-  root: {
-    flex: 1,
-    backgroundColor: Colors.canvas,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing[16],
-    paddingVertical: Spacing[14],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  headerTitle: {
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
-    color: Colors.textPrimary,
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    gap: Spacing[12],
-    padding: Spacing[12],
-  },
+function Tile({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <Ionicons name={icon} size={22} color={Colors.textPrimary} />
+      <Text style={styles.tileText}>{label}</Text>
+    </Pressable>
+  );
+}
 
-  // Profile card
-  profileCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing[16],
+function Stat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={[styles.statValue, accent && { color: Colors.brandText }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function Row({
+  icon,
+  label,
+  hint,
+  onPress,
+  danger,
+  last,
+}: {
+  icon: IconName;
+  label: string;
+  hint?: string;
+  onPress: () => void;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.row, !last && styles.rowBorder, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <View style={styles.rowIcon}>
+        <Ionicons name={icon} size={18} color={danger ? Colors.danger : Colors.textSecondary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.rowLabel, danger && { color: Colors.danger }]}>{label}</Text>
+        {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
+      </View>
+      {danger ? null : <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Colors.canvas },
+  content: { padding: Spacing[12], gap: Spacing[12] },
+  pressed: { opacity: 0.7 },
+
+  profile: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing[12],
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.card,
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[8],
   },
-  avatarCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.brandTint,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarEmoji: {
-    fontSize: 26,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
-    color: Colors.textPrimary,
-  },
-  profilePhone: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  editBtn: {
-    paddingHorizontal: Spacing[12],
-    paddingVertical: Spacing[6],
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: "#F9FAFC",
-  },
-  editBtnText: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.brandText,
-  },
+  avatarText: { fontSize: 20, fontWeight: "900", color: Colors.brandText },
+  name: { ...typography.title, fontWeight: "800", color: Colors.textPrimary },
+  phone: { ...typography.body, color: Colors.textTertiary, marginTop: 1 },
 
-  // Wallet Card
-  walletCard: {
+  tiles: { flexDirection: "row", gap: Spacing[8] },
+  tile: {
+    flex: 1,
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
-    padding: Spacing[14],
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    ...Shadow.card,
-  },
-  walletLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[12],
-  },
-  walletIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.greenTint,
-    borderWidth: 1,
-    borderColor: Colors.greenBorder,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  walletIconEmoji: {
-    fontSize: 22,
-  },
-  walletTitleRow: {
-    flexDirection: "row",
+    paddingVertical: Spacing[14],
     alignItems: "center",
     gap: 6,
   },
-  walletTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.textSecondary,
-  },
-  activePill: {
-    backgroundColor: Colors.greenTint,
-    borderRadius: Radius.pill,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  activePillText: {
-    fontSize: 8,
-    fontWeight: "800",
-    color: Colors.brandText,
-  },
-  walletBalance: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: Colors.textPrimary,
-    marginTop: 2,
-  },
-  addMoneyBtn: {
-    backgroundColor: Colors.greenTint,
-    borderWidth: 1,
-    borderColor: Colors.brandGreen,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing[10],
-    paddingVertical: Spacing[6],
-  },
-  addMoneyText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: Colors.brandText,
-  },
+  tileText: { ...typography.caption, fontWeight: "700", color: Colors.textPrimary },
 
-  // Referral Card
-  referralCard: {
-    backgroundColor: Colors.yellowTint,
-    borderRadius: Radius.md,
-    padding: Spacing[14],
-    borderWidth: 1,
-    borderColor: Colors.brandGreen,
+  stats: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  referralLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[10],
-    flex: 1,
-    marginRight: Spacing[8],
-  },
-  referralEmoji: {
-    fontSize: 28,
-  },
-  referralTextContainer: {
-    flex: 1,
-  },
-  referralTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: Colors.brandBlack,
-  },
-  referralSubtitle: {
-    fontSize: 11,
-    color: "#665200",
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  referralBtn: {
-    backgroundColor: Colors.brandGreen,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing[12],
-    paddingVertical: Spacing[8],
-  },
-  referralBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: Colors.surface,
-  },
-
-  // Savings summary
-  savingsCard: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
-    padding: Spacing[16],
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.card,
-  },
-  savingsStat: {
-    alignItems: "center",
-  },
-  savingsValue: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: Colors.brandText,
-  },
-  savingsLabel: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  statsDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: Colors.border,
-  },
-
-  // Menu items
-  menuCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.card,
-    overflow: "hidden",
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing[16],
     paddingVertical: Spacing[14],
-    gap: Spacing[12],
   },
-  menuIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F7F8FA",
+  stat: { flex: 1, alignItems: "center", gap: 2 },
+  statValue: {
+    ...typography.subtitle,
+    fontWeight: "900",
+    color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  statLabel: { ...typography.caption, fontWeight: "500", color: Colors.textTertiary },
+  statDivider: { width: 1, height: 28, backgroundColor: Colors.border },
+
+  groupTitle: {
+    ...typography.micro,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    color: Colors.textTertiary,
+    marginTop: Spacing[8],
+    marginLeft: Spacing[4],
+    marginBottom: -Spacing[4],
+  },
+  group: { backgroundColor: Colors.surface, borderRadius: Radius.md, overflow: "hidden" },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[12],
+    paddingHorizontal: Spacing[14],
+    minHeight: 56,
+    paddingVertical: Spacing[10],
+  },
+  rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
+  rowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.canvas,
     alignItems: "center",
     justifyContent: "center",
   },
-  menuEmoji: {
-    fontSize: 18,
-  },
-  menuLabelContainer: {
-    flex: 1,
-  },
-  menuLabel: {
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.h2,
-    color: Colors.textPrimary,
-  },
-  menuSubLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  menuChevron: {
-    fontSize: 18,
-    color: Colors.textTertiary,
-    fontWeight: "700",
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginLeft: 64,
-  },
+  rowLabel: { ...typography.bodyStrong, color: Colors.textPrimary },
+  rowHint: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary, marginTop: 1 },
 
-  // Logout
-  logoutBtn: {
-    backgroundColor: "#FFF0F1",
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[14],
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#FFD6D9",
-    marginTop: Spacing[4],
-  },
-  logoutText: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.danger,
-  },
-  version: {
-    textAlign: "center",
-    fontSize: 11,
-    color: Colors.textTertiary,
-    marginTop: Spacing[8],
+  footer: {
+    marginTop: Spacing[24],
+    marginLeft: Spacing[4],
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "900",
+    color: "#C4CDCB",
   },
 });

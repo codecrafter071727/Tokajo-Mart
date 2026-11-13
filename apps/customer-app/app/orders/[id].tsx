@@ -1,52 +1,107 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { setStatusBarStyle } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { Colors, Radius, Shadow, Spacing, typography } from "../../src/theme";
+import { colors } from "../../src/theme/tokens";
 import { useCancelOrder, useNow, useOrder } from "../../src/lib/orderQueries";
 import { etaMinutes, riderProgress, statusAt, type OrderStatus } from "../../src/lib/orders";
 import { RouteProgress } from "../../src/components/RouteProgress";
+import { ProductImage } from "../../src/components/ProductImage";
+import { Skeleton } from "../../src/components/Skeleton";
 import { formatPaise } from "../../src/lib/pricing";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-const ORDER_STEPS: { key: OrderStatus; label: string; icon: IconName }[] = [
-  { key: "placed", label: "Order placed", icon: "receipt-outline" },
-  { key: "confirmed", label: "Order confirmed", icon: "checkmark-circle-outline" },
-  { key: "picking", label: "Picking items", icon: "bag-handle-outline" },
+const STEPS: { key: OrderStatus; label: string; icon: IconName }[] = [
+  { key: "confirmed", label: "Confirmed", icon: "checkmark" },
+  { key: "picking", label: "Packing", icon: "bag-handle" },
   { key: "on_the_way", label: "On the way", icon: "bicycle" },
-  { key: "delivered", label: "Delivered", icon: "gift-outline" },
+  { key: "delivered", label: "Delivered", icon: "home" },
 ];
+const RANK: Record<OrderStatus, number> = {
+  placed: 0,
+  confirmed: 0,
+  picking: 1,
+  on_the_way: 2,
+  delivered: 3,
+  cancelled: -1,
+};
 
 /** Demo rider until the delivery service assigns a real one. Matches the rider app's demo login. */
-const DEMO_RIDER = { name: "Ravi Kumar", rating: 4.8 };
+const DEMO_RIDER = { name: "Ravi Kumar", rating: 4.8, phone: null as string | null };
+
+function headline(status: OrderStatus, eta: number, riderName?: string) {
+  switch (status) {
+    case "cancelled":
+      return { title: "Order cancelled", sub: "You have not been charged for this order" };
+    case "delivered":
+      return { title: "Order delivered", sub: "Thanks for shopping with us. Enjoy!" };
+    case "on_the_way":
+      return {
+        title: `Arriving in ${eta} min`,
+        sub: `${riderName ?? "Your delivery partner"} is on the way`,
+      };
+    case "picking":
+      return { title: `Arriving in ${eta} min`, sub: "Your order is being packed" };
+    default:
+      return {
+        title: `Arriving in ${eta} min`,
+        sub: "Order confirmed, the store is getting it ready",
+      };
+  }
+}
 
 export default function OrderTrackingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-
   const orderQuery = useOrder(id);
   const cancel = useCancelOrder();
   const now = useNow(1000);
   const order = orderQuery.data;
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle("dark");
+    }, []),
+  );
+
+  // The confirm step quietly resets if it is not used
+  useEffect(() => {
+    if (!confirmCancel) return;
+    const t = setTimeout(() => setConfirmCancel(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmCancel]);
+
+  const back = () => (router.canGoBack() ? router.back() : router.replace("/(tabs)"));
 
   if (!order) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Pressable
-            style={styles.backBtn}
-            onPress={() => router.back()}
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>
-            {orderQuery.isPending ? "Loading order" : "Order not found"}
-          </Text>
-        </View>
+      <View style={styles.root}>
+        <LinearGradient
+          colors={[colors.brand[700], colors.brand[600]]}
+          style={[styles.hero, { paddingTop: insets.top + Spacing[4] }]}
+        >
+          <View style={styles.topRow}>
+            <Pressable style={styles.iconBtn} onPress={back} accessibilityLabel="Back">
+              <Ionicons name="arrow-back" size={22} color={Colors.surface} />
+            </Pressable>
+          </View>
+          {orderQuery.isPending ? (
+            <View style={{ gap: 8 }}>
+              <Skeleton width={200} height={30} borderRadius={8} />
+              <Skeleton width={240} height={16} borderRadius={6} />
+            </View>
+          ) : (
+            <Text style={styles.heroTitle}>Order not found</Text>
+          )}
+        </LinearGradient>
       </View>
     );
   }
@@ -55,544 +110,384 @@ export default function OrderTrackingScreen() {
   const cancelled = status === "cancelled";
   const delivered = status === "delivered";
   const inFlight = !cancelled && !delivered;
-  const currentStepIdx = ORDER_STEPS.findIndex((s) => s.key === status);
   const eta = etaMinutes(order, now);
-  const hasRider = status === "on_the_way" || delivered;
-  // The real rider from the delivery service, or the demo one when running on fixtures
   const rider = order.server ? order.server.rider : DEMO_RIDER;
-  const canCancel = order.server?.status === "confirmed";
+  const hasRider = (status === "on_the_way" || delivered) && rider;
+  const canCancel = order.server ? order.server.status === "confirmed" : status === "confirmed";
+  const rank = RANK[status];
+  const head = headline(status, eta, rider?.name);
+  const itemCount = order.items.reduce((n, i) => n + i.quantity, 0);
+
+  const heroColors: [string, string] = cancelled
+    ? ["#5B6B68", "#7A8986"]
+    : [colors.brand[700], colors.brand[600]];
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Track Order</Text>
-        <Text style={styles.orderId}>#{order.server?.number ?? order.id}</Text>
-      </View>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={heroColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, { paddingTop: insets.top + Spacing[4] }]}
+      >
+        <View style={styles.topRow}>
+          <Pressable style={styles.iconBtn} onPress={back} accessibilityLabel="Back">
+            <Ionicons name="arrow-back" size={22} color={Colors.surface} />
+          </Pressable>
+          <Text style={styles.orderNo} numberOfLines={1}>
+            Order #{order.server?.number ?? order.id.slice(0, 8).toUpperCase()}
+          </Text>
+          <View style={styles.iconBtn} />
+        </View>
+
+        <Text style={styles.heroTitle} accessibilityRole="header">
+          {head.title}
+        </Text>
+        <Text style={styles.heroSub}>{head.sub}</Text>
+
+        {!cancelled ? (
+          <View style={styles.steps} accessibilityLabel={`Step ${rank + 1} of ${STEPS.length}`}>
+            {STEPS.map((step, i) => {
+              const done = i <= rank;
+              return (
+                <View key={step.key} style={styles.step}>
+                  <View style={[styles.stepBar, done && styles.stepBarDone]} />
+                  <Text style={[styles.stepLabel, done && styles.stepLabelDone]}>{step.label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+      </LinearGradient>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing[32] }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Route: store to home with the rider moving along it */}
-        <RouteProgress
-          progress={riderProgress(order, now)}
-          cancelled={cancelled}
-          title={
-            cancelled
-              ? "Order cancelled"
-              : delivered
-                ? "Delivered"
-                : status === "on_the_way"
-                  ? `${rider?.name ?? "Your delivery partner"} is on the way`
-                  : status === "picking"
-                    ? "Packing your order"
-                    : "Getting your order ready"
-          }
-          subtitle={
-            cancelled
-              ? "No charge for this order"
-              : delivered
-                ? "Enjoy your order"
-                : status === "on_the_way"
-                  ? `About ${eta} min away`
-                  : "We will show your rider once they pick up your order"
-          }
-        />
-
-        {/* ETA card */}
-        <View style={[styles.card, styles.etaCard]}>
-          <View style={styles.etaLeft}>
-            <Text style={styles.etaTime}>
-              {cancelled ? "Cancelled" : delivered ? "Delivered" : `${eta} min`}
-            </Text>
-            <Text style={styles.etaLabel}>
-              {cancelled
-                ? "No charge for this order"
-                : delivered
-                  ? "Your order was delivered"
-                  : "Estimated delivery time"}
-            </Text>
-          </View>
-          <View style={styles.etaBadge}>
-            <Ionicons name="bicycle" size={26} color={Colors.brandText} />
-          </View>
-        </View>
-
-        {/* Delivery code: the customer reads this out to the rider at the door */}
         {inFlight ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Delivery code</Text>
-            <Text
-              style={styles.deliveryCode}
+          <View style={styles.codeCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.codeLabel}>Delivery code</Text>
+              <Text style={styles.codeHint}>Share it with your delivery partner at the door</Text>
+            </View>
+            <View
+              style={styles.codeDigits}
+              accessible
               accessibilityLabel={`Delivery code ${order.deliveryCode.split("").join(" ")}`}
             >
-              {order.deliveryCode}
-            </Text>
-            <Text style={styles.codeHint}>
-              Tell this to your delivery partner when they arrive.
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Delivery partner */}
-        {hasRider && rider ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Delivery partner</Text>
-            <View style={styles.riderRow}>
-              <View style={styles.riderAvatar}>
-                <Ionicons name="person" size={24} color={Colors.brandText} />
-              </View>
-              <View style={styles.riderInfo}>
-                <Text style={styles.riderName}>{rider.name}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                  <Ionicons name="star" size={13} color={Colors.accent} />
-                  <Text style={styles.riderRating}>{rider.rating}</Text>
+              {order.deliveryCode.split("").map((d, i) => (
+                <View key={i} style={styles.codeDigit}>
+                  <Text style={styles.codeDigitText}>{d}</Text>
                 </View>
-              </View>
-              <Pressable
-                style={styles.callBtn}
-                onPress={() => {
-                  const phone = "phone" in rider ? rider.phone : null;
-                  if (phone) void Linking.openURL(`tel:${phone}`);
-                }}
-              >
-                <Ionicons name="call" size={16} color={Colors.brandText} />
-                <Text style={styles.callBtnText}>Call</Text>
-              </Pressable>
+              ))}
             </View>
           </View>
         ) : null}
 
-        {/* Status timeline */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Order status</Text>
-          {ORDER_STEPS.map((step, i) => {
-            const done = i <= currentStepIdx;
-            const isLast = i === ORDER_STEPS.length - 1;
-            return (
-              <View key={step.key} style={styles.stepRow}>
-                <View style={styles.stepLeft}>
-                  <View style={[styles.stepDot, done ? styles.stepDotDone : styles.stepDotPending]}>
-                    {done ? <Ionicons name="checkmark" size={14} color={Colors.surface} /> : null}
-                  </View>
-                  {!isLast && (
-                    <View
-                      style={[
-                        styles.stepLine,
-                        done && i < currentStepIdx ? styles.stepLineDone : styles.stepLinePending,
-                      ]}
-                    />
-                  )}
-                </View>
-                <View style={styles.stepContent}>
-                  <Ionicons
-                    name={step.icon}
-                    size={18}
-                    color={done ? Colors.brandText : Colors.textTertiary}
-                  />
-                  <Text
-                    style={[
-                      styles.stepLabel,
-                      done ? styles.stepLabelDone : styles.stepLabelPending,
-                    ]}
-                  >
-                    {step.label}
+        {!cancelled ? (
+          <RouteProgress
+            progress={riderProgress(order, now)}
+            title={
+              delivered
+                ? "Delivered to your door"
+                : status === "on_the_way"
+                  ? `About ${eta} min away`
+                  : "Your rider will be assigned once it is packed"
+            }
+            subtitle={`${itemCount} item${itemCount !== 1 ? "s" : ""} from the store near you`}
+          />
+        ) : null}
+
+        {hasRider && rider ? (
+          <View style={styles.card}>
+            <View style={styles.riderRow}>
+              <View style={styles.riderAvatar}>
+                <Ionicons name="person" size={22} color={Colors.brandText} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.riderName}>{rider.name}</Text>
+                <View style={styles.ratingRow}>
+                  <Ionicons name="star" size={12} color={Colors.accent} />
+                  <Text style={styles.riderMeta}>
+                    {rider.rating} · {delivered ? "Delivered your order" : "Your delivery partner"}
                   </Text>
                 </View>
               </View>
-            );
-          })}
-        </View>
+              {rider.phone && inFlight ? (
+                <Pressable
+                  style={styles.callBtn}
+                  onPress={() => void Linking.openURL(`tel:${rider.phone}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Call ${rider.name}`}
+                >
+                  <Ionicons name="call" size={18} color={Colors.brandText} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
 
-        {/* Order items */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Items ordered</Text>
+          <View style={styles.cardHead}>
+            <Text style={styles.cardTitle}>
+              {itemCount} item{itemCount !== 1 ? "s" : ""} in this order
+            </Text>
+          </View>
           {order.items.map((item) => (
-            <View key={item.productId} style={styles.orderItem}>
-              <Text style={styles.orderItemEmoji}>{item.emoji}</Text>
-              <Text style={styles.orderItemName} numberOfLines={1}>
-                {item.name}
-              </Text>
-              <Text style={styles.orderItemQty}>×{item.quantity}</Text>
-              <Text style={styles.orderItemPrice}>
+            <View key={item.productId} style={styles.item}>
+              <View style={styles.itemThumb}>
+                <ProductImage
+                  imageUrl={item.imageUrl}
+                  emoji={item.emoji}
+                  emojiSize={22}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={styles.itemMeta}>
+                  {item.unit} · Qty {item.quantity}
+                </Text>
+              </View>
+              <Text style={styles.itemPrice}>
                 {formatPaise(item.unitPricePaise * item.quantity)}
               </Text>
             </View>
           ))}
-          <View style={styles.orderTotalRow}>
-            <Text style={styles.orderTotalLabel}>
-              {cancelled ? "Total" : delivered ? "Total paid" : "To pay on delivery"}
+          <View style={styles.divider} />
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>
+              {cancelled ? "Order total" : delivered ? "Paid on delivery" : "To pay on delivery"}
             </Text>
-            <Text style={styles.orderTotalValue}>{formatPaise(order.totalPaise)}</Text>
+            <Text style={styles.totalValue}>{formatPaise(order.totalPaise)}</Text>
+          </View>
+          {order.savingsPaise > 0 && !cancelled ? (
+            <Text style={styles.saved}>You saved {formatPaise(order.savingsPaise)}</Text>
+          ) : null}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.addrRow}>
+            <View style={styles.addrIcon}>
+              <Ionicons name="location" size={16} color={Colors.brandText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>
+                {cancelled ? "Address" : delivered ? "Delivered to" : "Delivering to"}{" "}
+                {order.address.tag}
+              </Text>
+              <Text style={styles.addrText}>
+                {[order.address.line1, order.address.line2].filter(Boolean).join(", ")}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Delivery address */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Delivery address</Text>
-          <Text style={styles.addressText}>
-            {order.address.tag}: {order.address.line1}, {order.address.line2}
-          </Text>
-        </View>
-
-        {/* Cancel: only until the warehouse starts packing */}
         {canCancel ? (
-          <View style={styles.card}>
+          <View style={styles.cancelWrap}>
             <Pressable
-              onPress={() => cancel.mutate(order.id)}
+              style={[styles.cancelBtn, confirmCancel && styles.cancelBtnConfirm]}
+              onPress={() => {
+                if (!confirmCancel) return setConfirmCancel(true);
+                setConfirmCancel(false);
+                cancel.mutate(order.id);
+              }}
               disabled={cancel.isPending}
               accessibilityRole="button"
             >
-              <Text style={[styles.helpBtnText, { color: Colors.danger, textAlign: "center" }]}>
-                {cancel.isPending ? "Cancelling..." : "Cancel order"}
+              <Text style={[styles.cancelText, confirmCancel && styles.cancelTextConfirm]}>
+                {cancel.isPending
+                  ? "Cancelling"
+                  : confirmCancel
+                    ? "Tap again to cancel this order"
+                    : "Cancel order"}
               </Text>
             </Pressable>
+            <Text style={styles.cancelHint}>You can cancel until the store starts packing.</Text>
             {cancel.isError ? (
-              <Text style={styles.codeHint}>
+              <Text style={styles.cancelError} accessibilityRole="alert">
                 {cancel.error instanceof Error ? cancel.error.message : "Could not cancel."}
               </Text>
             ) : null}
           </View>
         ) : null}
 
-        {/* Help */}
-        <View style={styles.helpCard}>
-          <Pressable style={styles.helpBtn}>
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.brandText} />
-            <Text style={styles.helpBtnText}>Chat with us</Text>
+        {delivered || cancelled ? (
+          <Pressable
+            style={({ pressed }) => [styles.primary, pressed && { opacity: 0.9 }]}
+            onPress={() => router.replace("/(tabs)")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryText}>Continue shopping</Text>
           </Pressable>
-          <View style={styles.helpDivider} />
-          <Pressable style={styles.helpBtn}>
-            <Ionicons name="help-circle-outline" size={18} color={Colors.brandText} />
-            <Text style={styles.helpBtnText}>Help with order</Text>
-          </Pressable>
-        </View>
+        ) : null}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  deliveryCode: {
-    fontSize: 40,
-    fontWeight: "800",
-    letterSpacing: 12,
-    color: Colors.textPrimary,
+  root: { flex: 1, backgroundColor: Colors.canvas },
+  hero: {
+    paddingHorizontal: Spacing[16],
+    paddingBottom: Spacing[20],
+    borderBottomLeftRadius: Radius.xl,
+    borderBottomRightRadius: Radius.xl,
+  },
+  topRow: { flexDirection: "row", alignItems: "center", marginBottom: Spacing[8] },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    marginLeft: -8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderNo: {
+    flex: 1,
     textAlign: "center",
+    ...typography.caption,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.85)",
+  },
+  heroTitle: { ...typography.display, fontWeight: "900", color: Colors.surface },
+  heroSub: { ...typography.body, color: "rgba(255,255,255,0.9)", marginTop: 2 },
+  steps: { flexDirection: "row", gap: 6, marginTop: Spacing[16] },
+  step: { flex: 1, gap: 6 },
+  stepBar: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.3)" },
+  stepBarDone: { backgroundColor: Colors.surface },
+  stepLabel: { fontSize: 10, lineHeight: 12, fontWeight: "700", color: "rgba(255,255,255,0.65)" },
+  stepLabelDone: { color: Colors.surface },
+
+  scroll: { flex: 1 },
+  content: { padding: Spacing[12], gap: Spacing[12] },
+
+  codeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing[12],
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    padding: Spacing[14],
+    ...Shadow.card,
+  },
+  codeLabel: { ...typography.subtitle, fontWeight: "800", color: Colors.textPrimary },
+  codeHint: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary, marginTop: 2 },
+  codeDigits: { flexDirection: "row", gap: 4 },
+  codeDigit: {
+    width: 30,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: Colors.greenTint,
+    borderWidth: 1,
+    borderColor: colors.brand[200],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  codeDigitText: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: Colors.brandText,
     fontVariant: ["tabular-nums"],
   },
-  codeHint: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    textAlign: "center",
-  },
-  root: {
-    flex: 1,
-    backgroundColor: Colors.canvas,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing[16],
-    paddingVertical: Spacing[12],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    gap: Spacing[8],
-  },
-  backBtn: { padding: Spacing[4] },
-  backBtnText: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
-    color: Colors.textPrimary,
-  },
-  orderId: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    fontWeight: "600",
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    gap: Spacing[12],
-    padding: Spacing[12],
-  },
 
-  // Map
-  mapPlaceholder: {
-    height: 200,
-    backgroundColor: "#E8F0F8",
-    borderRadius: Radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing[8],
-    overflow: "hidden",
-  },
-  mapEmoji: {
-    fontSize: 56,
-  },
-  mapText: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
-    color: Colors.textPrimary,
-  },
-  mapSubtext: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-  },
+  card: { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing[14] },
+  cardHead: { marginBottom: Spacing[4] },
+  cardTitle: { ...typography.subtitle, fontWeight: "800", color: Colors.textPrimary },
 
-  // Cards
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing[16],
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: Spacing[8],
-  },
-  cardTitle: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
-    color: Colors.textPrimary,
-    marginBottom: Spacing[4],
-  },
-
-  // ETA card
-  etaCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.yellowTint,
-    borderColor: Colors.accent,
-  },
-  etaLeft: { flex: 1 },
-  etaTime: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: Colors.brandBlack,
-  },
-  etaLabel: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    marginTop: Spacing[2],
-  },
-  etaBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  etaBadgeEmoji: {
-    fontSize: 28,
-  },
-
-  // Rider
-  riderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[12],
-  },
+  riderRow: { flexDirection: "row", alignItems: "center", gap: Spacing[12] },
   riderAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.canvas,
+    backgroundColor: Colors.greenTint,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  riderAvatarEmoji: {
-    fontSize: 24,
-  },
-  riderInfo: { flex: 1 },
-  riderName: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  riderRating: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-  },
+  riderName: { ...typography.subtitle, fontWeight: "800", color: Colors.textPrimary },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  riderMeta: { ...typography.caption, color: Colors.textSecondary },
   callBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.brand[200],
+    backgroundColor: Colors.greenTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  item: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing[4],
-    borderWidth: 1,
-    borderColor: Colors.brandGreen,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing[12],
+    gap: Spacing[12],
     paddingVertical: Spacing[8],
   },
-  callBtnEmoji: {
-    fontSize: 14,
+  itemThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: "#EDF1F0",
+    backgroundColor: Colors.surface,
+    overflow: "hidden",
   },
-  callBtnText: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.brandText,
+  itemName: { ...typography.bodyStrong, fontSize: 13, color: Colors.textPrimary },
+  itemMeta: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary, marginTop: 1 },
+  itemPrice: {
+    ...typography.bodyStrong,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
   },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing[8] },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  totalLabel: { ...typography.bodyStrong, color: Colors.textSecondary },
+  totalValue: {
+    ...typography.subtitle,
+    fontWeight: "900",
+    color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  saved: { ...typography.caption, fontWeight: "700", color: Colors.offerBlue, marginTop: 6 },
 
-  // Status steps
-  stepRow: {
-    flexDirection: "row",
-    gap: Spacing[12],
-    minHeight: 48,
-  },
-  stepLeft: {
-    alignItems: "center",
-    width: 24,
-  },
-  stepDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  addrRow: { flexDirection: "row", gap: Spacing[12] },
+  addrIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.greenTint,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
   },
-  stepDotDone: {
-    backgroundColor: Colors.brandGreen,
-    borderColor: Colors.brandGreen,
-  },
-  stepDotPending: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-  },
-  stepDotEmoji: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: Colors.surface,
-  },
-  stepLine: {
-    width: 2,
-    flex: 1,
-    marginVertical: Spacing[2],
-  },
-  stepLineDone: {
-    backgroundColor: Colors.brandGreen,
-  },
-  stepLinePending: {
-    backgroundColor: Colors.border,
-  },
-  stepContent: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[8],
-    paddingBottom: Spacing[12],
-  },
-  stepEmoji: {
-    fontSize: 16,
-  },
-  stepLabel: {
-    fontSize: FontSize.body,
-    fontWeight: "600",
-  },
-  stepLabelDone: {
-    color: Colors.textPrimary,
-  },
-  stepLabelPending: {
-    color: Colors.textTertiary,
-  },
+  addrText: { ...typography.caption, fontWeight: "400", color: Colors.textSecondary, marginTop: 2 },
 
-  // Order items
-  orderItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[8],
-    paddingVertical: Spacing[4],
-  },
-  orderItemEmoji: {
-    fontSize: 20,
-    width: 28,
-    textAlign: "center",
-  },
-  orderItemName: {
-    flex: 1,
-    fontSize: FontSize.caption,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  orderItemQty: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    width: 24,
-    textAlign: "center",
-  },
-  orderItemPrice: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-    minWidth: 40,
-    textAlign: "right",
-  },
-  orderTotalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Spacing[8],
-    marginTop: Spacing[4],
-  },
-  orderTotalLabel: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  orderTotalValue: {
-    fontSize: FontSize.body,
-    fontWeight: "800",
-    color: Colors.textPrimary,
-  },
-
-  // Address
-  addressText: {
-    fontSize: FontSize.body,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-
-  // Help
-  helpCard: {
-    backgroundColor: Colors.surface,
+  cancelWrap: { alignItems: "center", gap: 6, marginTop: Spacing[4] },
+  cancelBtn: {
+    alignSelf: "stretch",
+    height: 48,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    flexDirection: "row",
-    overflow: "hidden",
-  },
-  helpBtn: {
-    flex: 1,
-    flexDirection: "row",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing[8],
-    paddingVertical: Spacing[16],
   },
-  helpDivider: {
-    width: 1,
-    backgroundColor: Colors.border,
+  cancelBtnConfirm: { borderColor: Colors.danger, backgroundColor: "#FDF1F1" },
+  cancelText: { ...typography.bodyStrong, fontWeight: "800", color: Colors.textSecondary },
+  cancelTextConfirm: { color: Colors.danger },
+  cancelHint: { ...typography.caption, fontWeight: "400", color: Colors.textTertiary },
+  cancelError: { ...typography.caption, fontWeight: "700", color: Colors.danger },
+
+  primary: {
+    height: 52,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.brandGreen,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  helpBtnEmoji: {
-    fontSize: 18,
-  },
-  helpBtnText: {
-    fontSize: FontSize.caption,
-    fontWeight: "700",
-    color: Colors.brandText,
-  },
+  primaryText: { fontSize: 16, fontWeight: "800", color: Colors.surface },
 });

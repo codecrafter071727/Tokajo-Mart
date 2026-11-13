@@ -1,21 +1,34 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Colors, Spacing, Radius, FontSize, FontWeight } from "../../src/theme";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { Colors, Radius, Shadow, Spacing, typography } from "../../src/theme";
 import { noWebOutline } from "../../src/theme/web";
 import { requestOtp } from "../../src/lib/auth";
 import { backendEnabled } from "../../src/lib/session";
+import { products } from "../../src/lib/mockData";
+import { ProductImage } from "../../src/components/ProductImage";
+
+/** Product photos for the collage behind the sign in card, in three staggered columns */
+const COLLAGE = [
+  ["p1", "p9", "p4", "p13"],
+  ["p5", "p2", "p17", "p7"],
+  ["p3", "p20", "p11", "p6"],
+].map((col) => col.map((id) => products.find((p) => p.id === id)).filter(Boolean));
+
+const OFFSETS = [24, -18, 36];
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -23,255 +36,279 @@ export default function LoginScreen() {
   const [phone, setPhone] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
 
-  const isValid = phone.replace(/\s/g, "").length === 10;
+  const digits = phone.replace(/\D/g, "");
+  const isValid = /^[6-9]\d{9}$/.test(digits);
+  const looksWrong = digits.length === 10 && !isValid;
+
+  const submit = async () => {
+    if (!isValid || sending) return;
+    setError(null);
+    if (!backendEnabled) {
+      router.push({ pathname: "/(auth)/otp", params: { phone: digits, length: "4", demo: "1" } });
+      return;
+    }
+    setSending(true);
+    try {
+      const sent = await requestOtp(digits);
+      router.push({
+        pathname: "/(auth)/otp",
+        params: { phone: digits, length: String(sent.codeLength), demo: sent.demoMode ? "1" : "0" },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send the code. Try again.");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={[styles.heroSection, { paddingTop: insets.top + Spacing[24] }]}>
-        <Ionicons name="flash" size={40} color={Colors.surface} />
-        <Text style={styles.appName}>Tokajo Mart</Text>
-        <Text style={styles.tagline}>Groceries in minutes</Text>
-      </View>
-
       <ScrollView
-        contentContainerStyle={[
-          styles.formContainer,
-          { paddingBottom: insets.bottom + Spacing[24] },
-        ]}
+        contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
+        bounces={false}
       >
-        <Text style={styles.formTitle}>India's last minute app</Text>
-        <Text style={styles.formSubtitle}>Log in or sign up with your phone number</Text>
-
-        {/* Phone input */}
-        <View style={styles.phoneInputWrapper}>
-          <View style={styles.countryCode}>
-            <Text style={styles.countryFlag}>🇮🇳</Text>
-            <Text style={styles.countryCodeText}>+91</Text>
-            <Ionicons name="chevron-down" size={14} color={Colors.textSecondary} />
+        {/* Collage of what we sell, fading into the card */}
+        <View style={styles.hero}>
+          <View style={styles.collage} pointerEvents="none">
+            {COLLAGE.map((col, c) => (
+              <View key={c} style={[styles.column, { marginTop: OFFSETS[c] }]}>
+                {col.map((p) => (
+                  <View key={p!.id} style={styles.tile}>
+                    <ProductImage
+                      imageUrl={p!.imageUrl}
+                      fit={p!.imageFit ?? "contain"}
+                      emoji={p!.image}
+                      emojiSize={36}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  </View>
+                ))}
+              </View>
+            ))}
           </View>
-          <TextInput
-            style={[styles.phoneInput, noWebOutline]}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="Enter mobile number"
-            placeholderTextColor={Colors.textTertiary}
-            keyboardType="phone-pad"
-            maxLength={10}
-            autoFocus
+          <LinearGradient
+            colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.85)", Colors.surface]}
+            locations={[0.35, 0.8, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
           />
+          <View style={[styles.etaPill, { top: insets.top + Spacing[12] }]}>
+            <Ionicons name="flash" size={12} color={Colors.brandBlack} />
+            <Text style={styles.etaText}>Delivery in 10 minutes</Text>
+          </View>
         </View>
 
-        {/* OTP note */}
-        <Text style={styles.otpNote}>A one time code will be sent to this number</Text>
-        {error ? (
-          <Text style={{ color: Colors.danger, fontWeight: "700" }} accessibilityRole="alert">
-            {error}
-          </Text>
-        ) : null}
+        <View style={[styles.card, { paddingBottom: insets.bottom + Spacing[24] }]}>
+          <View style={styles.logo}>
+            <Ionicons name="flash" size={26} color={Colors.surface} />
+          </View>
+          <Text style={styles.title}>India's last minute app</Text>
+          <Text style={styles.subtitle}>Log in or sign up</Text>
 
-        {/* Continue button */}
-        <Pressable
-          style={[styles.continueBtn, !isValid && styles.continueBtnDisabled]}
-          onPress={async () => {
-            if (!isValid || sending) return;
-            setError(null);
-            if (!backendEnabled) {
-              router.push({ pathname: "/(auth)/otp", params: { phone, length: "4", demo: "1" } });
-              return;
-            }
-            setSending(true);
-            try {
-              const sent = await requestOtp(phone);
-              router.push({
-                pathname: "/(auth)/otp",
-                params: {
-                  phone,
-                  length: String(sent.codeLength),
-                  demo: sent.demoMode ? "1" : "0",
-                },
-              });
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Could not send the code. Try again.");
-            } finally {
-              setSending(false);
-            }
-          }}
-        >
-          <Text style={[styles.continueBtnText, !isValid && styles.continueBtnTextDisabled]}>
-            {sending ? "Sending..." : "Continue"}
-          </Text>
-        </Pressable>
+          <View
+            style={[
+              styles.phoneField,
+              focused && styles.phoneFieldFocused,
+              (looksWrong || error) && styles.phoneFieldError,
+            ]}
+          >
+            <Text style={styles.prefix}>+91</Text>
+            <View style={styles.prefixDivider} />
+            <TextInput
+              style={[styles.phoneInput, noWebOutline]}
+              value={phone}
+              onChangeText={(v) => {
+                setError(null);
+                setPhone(v.replace(/\D/g, "").slice(0, 10));
+              }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onSubmitEditing={submit}
+              placeholder="Enter mobile number"
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="phone-pad"
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={10}
+              autoFocus
+              accessibilityLabel="Mobile number"
+            />
+            {digits.length > 0 ? (
+              <Pressable
+                onPress={() => setPhone("")}
+                hitSlop={10}
+                accessibilityLabel="Clear number"
+                style={styles.clear}
+              >
+                <Ionicons name="close-circle" size={18} color={Colors.textTertiary} />
+              </Pressable>
+            ) : null}
+          </View>
 
-        {/* Terms */}
-        <Text style={styles.termsText}>
-          By continuing, you agree to our <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
-          <Text style={styles.termsLink}>Privacy Policy</Text>
-        </Text>
+          {looksWrong || error ? (
+            <Text style={styles.error} accessibilityRole="alert">
+              {error ?? "Enter a valid 10 digit Indian mobile number."}
+            </Text>
+          ) : null}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.cta,
+              !isValid && styles.ctaDisabled,
+              pressed && isValid && styles.ctaPressed,
+            ]}
+            onPress={submit}
+            disabled={!isValid || sending}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !isValid || sending, busy: sending }}
+          >
+            {sending ? (
+              <ActivityIndicator color={Colors.surface} />
+            ) : (
+              <Text style={[styles.ctaText, !isValid && styles.ctaTextDisabled]}>Continue</Text>
+            )}
+          </Pressable>
+
+          <Text style={styles.terms}>
+            By continuing, you agree to our <Text style={styles.termsLink}>Terms of service</Text>{" "}
+            and <Text style={styles.termsLink}>Privacy policy</Text>
+          </Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+const TILE = 92;
+
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.surface,
+  root: { flex: 1, backgroundColor: Colors.surface },
+  hero: {
+    height: 330,
+    overflow: "hidden",
+    backgroundColor: Colors.brandTint,
   },
-  heroSection: {
+  collage: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    transform: [{ rotate: "-8deg" }],
+    marginTop: -28,
+  },
+  column: { gap: 12 },
+  tile: {
+    width: TILE,
+    height: TILE,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface,
+    overflow: "hidden",
+    ...Shadow.card,
+  },
+  etaPill: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    ...Shadow.card,
+  },
+  etaText: { ...typography.caption, fontWeight: "800", color: Colors.brandBlack },
+
+  card: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: Spacing[24],
+    marginTop: -56,
+  },
+  logo: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     backgroundColor: Colors.brandGreen,
     alignItems: "center",
-    paddingBottom: Spacing[32] ?? 32,
-    paddingHorizontal: Spacing[24],
+    justifyContent: "center",
+    marginBottom: Spacing[16],
+    ...Shadow.header,
   },
-  logoText: {
-    fontSize: 64,
-    marginBottom: Spacing[8],
-  },
-  appName: {
-    fontSize: FontSize.display,
-    fontWeight: FontWeight.display,
-    color: Colors.surface,
-  },
-  tagline: {
-    fontSize: FontSize.body,
-    fontWeight: FontWeight.body,
-    color: Colors.surface,
-    opacity: 0.85,
-    marginTop: Spacing[4],
-  },
-  formContainer: {
-    padding: Spacing[24],
-    gap: Spacing[16],
-  },
-  formTitle: {
-    fontSize: FontSize.h1,
-    fontWeight: FontWeight.h1,
+  title: {
+    ...typography.titleLg,
+    fontWeight: "800",
     color: Colors.textPrimary,
-    marginBottom: Spacing[4],
+    textAlign: "center",
   },
-  formSubtitle: {
-    fontSize: FontSize.body,
+  subtitle: {
+    ...typography.body,
     color: Colors.textSecondary,
-    lineHeight: 21,
-    marginBottom: Spacing[8],
+    marginTop: Spacing[4],
+    marginBottom: Spacing[20],
   },
 
-  // Phone input
-  phoneInputWrapper: {
+  phoneField: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
+    height: 52,
     borderWidth: 1.5,
-    borderColor: Colors.brandGreen,
+    borderColor: Colors.border,
     borderRadius: Radius.md,
-    height: 54,
-    overflow: "hidden",
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing[14],
   },
-  countryCode: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing[12],
-    gap: Spacing[4],
-    borderRightWidth: 1,
-    borderRightColor: Colors.border,
-    height: "100%",
-  },
-  countryFlag: {
-    fontSize: 18,
-  },
-  countryCodeText: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  countryChevron: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+  phoneFieldFocused: { borderColor: Colors.textPrimary },
+  phoneFieldError: { borderColor: Colors.danger },
+  prefix: { fontSize: 16, fontWeight: "700", color: Colors.textPrimary },
+  prefixDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing[12],
   },
   phoneInput: {
     flex: 1,
-    paddingHorizontal: Spacing[12],
-    fontSize: 18,
-    fontWeight: "600",
-    color: Colors.textPrimary,
     height: "100%",
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    color: Colors.textPrimary,
   },
-
-  otpNote: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
-    marginTop: -Spacing[8],
-  },
-
-  // Buttons
-  continueBtn: {
-    backgroundColor: Colors.brandGreen,
-    borderRadius: Radius.md,
-    height: 52,
-    alignItems: "center",
-    justifyContent: "center",
+  clear: { padding: 4 },
+  error: {
+    alignSelf: "flex-start",
+    ...typography.caption,
+    color: Colors.danger,
     marginTop: Spacing[8],
   },
-  continueBtnDisabled: {
-    backgroundColor: Colors.disabledBg,
-  },
-  continueBtnText: {
-    fontSize: FontSize.body,
-    fontWeight: "700",
-    color: Colors.surface,
-  },
-  continueBtnTextDisabled: {
-    color: Colors.disabledText,
-  },
 
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing[12],
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    fontSize: FontSize.caption,
-    color: Colors.textTertiary,
-  },
-
-  googleBtn: {
-    flexDirection: "row",
+  cta: {
+    width: "100%",
+    height: 52,
+    marginTop: Spacing[16],
+    borderRadius: Radius.md,
+    backgroundColor: Colors.brandGreen,
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing[12],
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    height: 52,
   },
-  googleIcon: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#4285F4",
-  },
-  googleText: {
-    fontSize: FontSize.body,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-
-  termsText: {
-    fontSize: FontSize.caption,
-    color: Colors.textSecondary,
+  ctaPressed: { backgroundColor: Colors.brandPressed },
+  ctaDisabled: { backgroundColor: "#C9D3D1" },
+  ctaText: { fontSize: 16, fontWeight: "800", color: Colors.surface },
+  ctaTextDisabled: { color: Colors.surface },
+  terms: {
+    ...typography.caption,
+    fontWeight: "400",
+    color: Colors.textTertiary,
     textAlign: "center",
+    marginTop: Spacing[24],
     lineHeight: 18,
   },
-  termsLink: {
-    color: Colors.offerBlue,
-    fontWeight: "600",
-  },
+  termsLink: { textDecorationLine: "underline", color: Colors.textSecondary },
 });

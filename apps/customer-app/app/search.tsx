@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
@@ -10,8 +10,10 @@ import { useDebouncedValue } from "../src/lib/useDebouncedValue";
 import { ErrorState, ProductGridSkeleton } from "../src/components/StateViews";
 import { Ionicons } from "@expo/vector-icons";
 import { noWebOutline } from "../src/theme/web";
+import { useSearchStore } from "../src/store/searches";
+import { SectionRail } from "../src/components/SectionRail";
 
-const RECENT_SEARCHES = ["milk", "banana", "bread", "cola", "onion"];
+const POPULAR = ["Milk", "Bread", "Eggs", "Banana", "Chips", "Atta", "Curd", "Coffee"];
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -25,13 +27,28 @@ export default function SearchScreen() {
     { enabled: term.length > 0, keepPrevious: true },
   );
   const results = productsQuery.data ?? [];
+  const recent = useSearchStore((st) => st.recent);
+  const remember = useSearchStore((st) => st.remember);
+  const clearRecent = useSearchStore((st) => st.clear);
+  // Trending is just the catalog's first page for now; a popularity signal replaces it later
+  const trending = useProducts({ limit: 100 }).data?.slice(0, 10) ?? [];
+
+  // A search counts once it settled and found something
+  React.useEffect(() => {
+    if (term && productsQuery.isSuccess && results.length > 0) remember(term);
+  }, [term, productsQuery.isSuccess, results.length, remember]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* Search bar header */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
+          hitSlop={8}
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
         </Pressable>
         <View style={styles.searchBarWrapper}>
           <Ionicons name="search" size={18} color={Colors.brandText} />
@@ -55,32 +72,45 @@ export default function SearchScreen() {
       </View>
 
       {query.length === 0 ? (
-        /* Recent searches / suggestions */
-        <View style={styles.recentSection}>
-          <Text style={styles.recentTitle}>Recent searches</Text>
-          <View style={styles.recentChips}>
-            {RECENT_SEARCHES.map((s) => (
-              <Pressable key={s} style={styles.chip} onPress={() => setQuery(s)}>
-                <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-                <Text style={styles.chipText}>{s}</Text>
-              </Pressable>
-            ))}
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 140 + insets.bottom }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {recent.length > 0 ? (
+            <View style={styles.recentSection}>
+              <View style={styles.sectionHead}>
+                <Text style={styles.recentTitle}>Recent searches</Text>
+                <Pressable onPress={clearRecent} hitSlop={8} accessibilityRole="button">
+                  <Text style={styles.clearText}>Clear</Text>
+                </Pressable>
+              </View>
+              <View style={styles.recentChips}>
+                {recent.map((r) => (
+                  <Pressable key={r} style={styles.chip} onPress={() => setQuery(r)}>
+                    <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+                    <Text style={styles.chipText}>{r}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.recentSection}>
+            <Text style={styles.recentTitle}>Popular searches</Text>
+            <View style={styles.recentChips}>
+              {POPULAR.map((p) => (
+                <Pressable key={p} style={styles.chip} onPress={() => setQuery(p)}>
+                  <Ionicons name="trending-up" size={14} color={Colors.brandText} />
+                  <Text style={styles.chipText}>{p}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
-          <Text style={styles.recentTitle}>Popular right now</Text>
-          <View style={styles.recentChips}>
-            {["Atta", "Eggs", "Curd", "Chips", "Coffee"].map((s) => (
-              <Pressable
-                key={s}
-                style={[styles.chip, styles.chipTrending]}
-                onPress={() => setQuery(s)}
-              >
-                <Ionicons name="trending-up" size={14} color={Colors.brandText} />
-                <Text style={styles.chipText}>{s}</Text>
-              </Pressable>
-            ))}
+          <View style={{ marginTop: Spacing[20] }}>
+            <SectionRail title="Trending near you" products={trending} />
           </View>
-        </View>
+        </ScrollView>
       ) : productsQuery.isPending ? (
         <View style={styles.skeletonWrap}>
           <ProductGridSkeleton columns={3} rows={3} />
@@ -97,17 +127,24 @@ export default function SearchScreen() {
           <Ionicons name="search-outline" size={56} color={Colors.border} />
           <Text style={styles.emptyTitle}>No results for "{query}"</Text>
           <Text style={styles.emptySubtitle}>Try a shorter word, or browse the categories.</Text>
+          <Pressable
+            style={styles.emptyCta}
+            onPress={() => router.replace("/(tabs)/categories")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.emptyCtaText}>Browse categories</Text>
+          </Pressable>
         </View>
       ) : (
         /* Results grid - 3 columns */
         <FlatList
           data={results}
           keyExtractor={(p) => p.id}
-          numColumns={3}
-          key="3col"
+          numColumns={2}
+          key="2col"
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={[styles.resultsList, { paddingBottom: 140 + insets.bottom }]}
-          ItemSeparatorComponent={() => <View style={{ height: Spacing[6] }} />}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing[8] }} />}
           ListHeaderComponent={
             <Text style={styles.resultsCount}>
               {results.length} result{results.length !== 1 ? "s" : ""} for "{query}"
@@ -142,9 +179,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  backBtn: {
-    padding: Spacing[4],
-  },
+  backBtn: { width: 36, height: 44, alignItems: "center", justifyContent: "center" },
   backBtnText: {
     fontSize: 24,
     fontWeight: "700",
@@ -181,20 +216,23 @@ const styles = StyleSheet.create({
 
   // Recent
   recentSection: {
-    padding: Spacing[16],
-    gap: Spacing[12],
+    paddingHorizontal: Spacing[16],
+    paddingTop: Spacing[16],
+    gap: Spacing[10],
   },
+  sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  clearText: { fontSize: FontSize.caption, fontWeight: "800", color: Colors.brandText },
   recentTitle: {
-    fontSize: FontSize.h2,
-    fontWeight: FontWeight.h2,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
     color: Colors.textPrimary,
-    marginBottom: Spacing[4],
   },
   recentChips: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing[8],
-    marginBottom: Spacing[8],
+    marginBottom: Spacing[4],
   },
   chip: {
     flexDirection: "row",
@@ -231,11 +269,11 @@ const styles = StyleSheet.create({
     padding: Spacing[8],
   },
   columnWrapper: {
-    gap: Spacing[6],
+    gap: Spacing[8],
   },
   gridCard: {
     flex: 1,
-    maxWidth: "33.33%",
+    maxWidth: "50%",
   },
   resultsCount: {
     fontSize: FontSize.caption,
@@ -261,6 +299,16 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     textAlign: "center",
   },
+  emptyCta: {
+    marginTop: Spacing[8],
+    borderWidth: 1,
+    borderColor: Colors.brandGreen,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing[20],
+    height: 44,
+    justifyContent: "center",
+  },
+  emptyCtaText: { fontSize: FontSize.body, fontWeight: "800", color: Colors.brandText },
   emptySubtitle: {
     fontSize: FontSize.body,
     color: Colors.textSecondary,
