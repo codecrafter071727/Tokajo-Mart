@@ -68,7 +68,25 @@ export function coveringWarehouse(lat: number, lng: number): string | null {
   return hit?.id ?? null;
 }
 
-export const servedLocally = (area: Pick<ServiceArea, "lat" | "lng">) =>
-  coveringWarehouse(area.lat, area.lng) !== null;
+/**
+ * Mirrors the seeded warehouse pincodes (services/warehouse-inventory seed). Once pincodes are set
+ * up the server matches an address by its pincode first, so the hint here does the same.
+ */
+export const WAREHOUSE_PINCODES: Record<string, readonly string[]> = {
+  "wh-noida-62": ["201301", "201307", "201309"],
+  "wh-indiranagar": ["560008", "560038", "560075"],
+};
 
 export const findArea = (id: string) => SERVICE_AREAS.find((a) => a.id === id);
+
+/** Whether we expect to deliver to a place: by its pincode when it has one, else by distance. */
+export function servedLocally(place: {
+  lat: number;
+  lng: number;
+  pincode?: string | null;
+  areaId?: string;
+}): boolean {
+  const pincode = place.pincode ?? (place.areaId ? findArea(place.areaId)?.pincode : undefined);
+  if (pincode) return Object.values(WAREHOUSE_PINCODES).some((list) => list.includes(pincode));
+  return coveringWarehouse(place.lat, place.lng) !== null;
+}

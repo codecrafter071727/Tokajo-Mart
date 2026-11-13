@@ -16,6 +16,7 @@ import {
   orderSummaryQuerySchema,
   orderSummarySchema,
   listOrdersResponseSchema,
+  invoiceLinkResponseSchema,
   orderParamsSchema,
   orderSchema,
   orderStatusSchema,
@@ -27,7 +28,8 @@ import {
   queueResponseSchema,
   transitionBodySchema,
 } from "@qc/contracts";
-import { requireIdentity, requireRole, type ServiceApp } from "@qc/service-kit";
+import { DEV_INTERNAL_KEY, requireIdentity, requireRole, type ServiceApp } from "@qc/service-kit";
+import { env } from "../../config/env";
 import { z } from "zod";
 import { badRequest } from "./errors";
 import { STAFF_ROLES, toOrder, type OrderService } from "./service";
@@ -228,6 +230,92 @@ export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void
       },
     },
     async (request) => orders.markPacked(requireRole(request, ...STAFF_ROLES), request.params.id),
+  );
+
+  // --- Invoices ------------------------------------------------------------------------------
+  // Signs the short lived links. Production always has INTERNAL_API_KEY (internal calls refuse to
+  // work without it), so the development fallback never signs a real invoice link.
+  const linkSecret = env.INTERNAL_API_KEY ?? DEV_INTERNAL_KEY;
+  const sendPdf = (
+    reply: { header: (k: string, v: string) => unknown; send: (b: Buffer) => unknown },
+    file: { pdf: Uint8Array; filename: string },
+    disposition: "attachment" | "inline",
+  ) => {
+    reply.header("content-type", "application/pdf");
+    reply.header("content-disposition", `${disposition}; filename="${file.filename}"`);
+    reply.header("cache-control", "private, no-store");
+    return reply.send(Buffer.from(file.pdf));
+  };
+
+  app.get(
+    "/v1/orders/:id/invoice.pdf",
+    {
+      schema: {
+        tags: ["orders"],
+        summary: "Invoice PDF of a delivered order (its customer, admin, warehouse manager)",
+        params: orderParamsSchema,
+      },
+    },
+    async (request, reply) =>
+      sendPdf(
+        reply,
+        await orders.invoiceFor(requireIdentity(request), request.params.id),
+        "attachment",
+      ),
+  );
+
+  app.post(
+    "/v1/orders/:id/invoice-link",
+    {
+      schema: {
+        tags: ["orders"],
+        summary: "A 10 minute link that opens the invoice in a browser",
+        params: orderParamsSchema,
+        response: { 200: invoiceLinkResponseSchema },
+      },
+    },
+    async (request) => orders.invoiceLink(requireIdentity(request), request.params.id, linkSecret),
+  );
+
+  app.get(
+    "/v1/invoices/:token",
+    {
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["orders"],
+        summary: "Open an invoice from a short lived link (no sign in)",
+        params: z.object({ token: z.string().min(10).max(200) }),
+      },
+    },
+    async (request, reply) =>
+      sendPdf(reply, await orders.invoiceByToken(request.params.token, linkSecret), "inline"),
+  );
+
+  // Internal: the identity service clears a customer's details when they delete their account
+  app.get(
+    "/internal/customers/:userId/active-orders",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "A customer's orders that are still in progress",
+        params: z.object({ userId: z.uuid() }),
+        response: { 200: z.object({ count: z.number().int(), numbers: z.array(z.string()) }) },
+      },
+    },
+    async (request) => orders.activeOrdersFor(request.params.userId),
+  );
+
+  app.post(
+    "/internal/customers/:userId/scrub",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Remove a deleted customer's name, phone and notes from their past orders",
+        params: z.object({ userId: z.uuid() }),
+        response: { 200: z.object({ orders: z.number().int() }) },
+      },
+    },
+    async (request) => orders.scrubCustomer(request.params.userId),
   );
 
   // Internal: called by the delivery service as the rider moves the order along

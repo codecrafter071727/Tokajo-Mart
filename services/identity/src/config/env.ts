@@ -27,6 +27,10 @@ const envSchema = baseEnvSchema.extend({
    * sms mode, for app store reviewers and QA. Empty by default; keep the list short.
    */
   OTP_TEST_NUMBERS: optionalString(),
+  /** Called when a customer deletes their account, to clear what other services hold */
+  ORDER_SERVICE_URL: optionalUrl(),
+  PAYMENT_SERVICE_URL: optionalUrl(),
+  NOTIFICATION_SERVICE_URL: optionalUrl(),
 });
 
 export const env = loadServiceEnv(

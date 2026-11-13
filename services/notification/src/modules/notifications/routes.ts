@@ -196,4 +196,23 @@ export function registerNotificationRoutes(app: ServiceApp, notifications: Notif
     },
     async (request) => notifications.stockRestocked(request.body),
   );
+
+  app.post(
+    "/internal/users/:userId/purge",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Erase a deleted account's inbox, Notify me requests and devices",
+        params: z.object({ userId: z.uuid() }),
+        response: {
+          200: z.object({
+            notifications: z.number().int(),
+            subscriptions: z.number().int(),
+            devices: z.number().int(),
+          }),
+        },
+      },
+    },
+    async (request) => notifications.purgeUser(request.params.userId),
+  );
 }

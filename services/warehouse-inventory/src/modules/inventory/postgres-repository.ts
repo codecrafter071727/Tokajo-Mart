@@ -10,6 +10,7 @@ import {
   WarehouseExistsError,
 } from "./errors";
 import { checkLines, mergeLines, removalMessage, type InventoryRepository } from "./repository";
+import { emptySetup, normalisePincodes, type ClosureRange } from "./schedule";
 
 type Reader = Kysely<DB> | Transaction<DB>;
 
@@ -578,6 +579,141 @@ export function createPostgresInventoryRepository(db: Kysely<DB>): InventoryRepo
       }
       return count;
     },
+
+    async getServiceSetup() {
+      const [areas, hours, closures] = await Promise.all([
+        db
+          .selectFrom("inventory.serviceAreas")
+          .select(["warehouseId", "pincode"])
+          .where("active", "=", true)
+          .execute(),
+        db
+          .selectFrom("inventory.warehouseHours")
+          .select([
+            "warehouseId",
+            "weekday",
+            sql<string>`to_char(opens_at, 'HH24:MI')`.as("opensAt"),
+            sql<string>`to_char(closes_at, 'HH24:MI')`.as("closesAt"),
+          ])
+          .orderBy("weekday")
+          .execute(),
+        // Closures that ended long ago do not matter for the next opening
+        db
+          .selectFrom("inventory.warehouseClosures")
+          .select([
+            "id",
+            "warehouseId",
+            "reason",
+            "createdAt",
+            sql<string>`to_char(starts_on, 'YYYY-MM-DD')`.as("startsOn"),
+            sql<string>`to_char(ends_on, 'YYYY-MM-DD')`.as("endsOn"),
+          ])
+          .where(sql<boolean>`ends_on >= current_date - 2`)
+          .orderBy("startsOn")
+          .execute(),
+      ]);
+      const setup = emptySetup();
+      for (const a of areas) {
+        const set = setup.pincodes.get(a.warehouseId) ?? new Set<string>();
+        set.add(a.pincode);
+        setup.pincodes.set(a.warehouseId, set);
+      }
+      for (const h of hours) {
+        setup.hours.set(h.warehouseId, [
+          ...(setup.hours.get(h.warehouseId) ?? []),
+          { weekday: h.weekday, opensAt: h.opensAt, closesAt: h.closesAt },
+        ]);
+      }
+      for (const c of closures) {
+        const range: ClosureRange = {
+          id: c.id,
+          startsOn: c.startsOn,
+          endsOn: c.endsOn,
+          reason: c.reason,
+          createdAt: new Date(c.createdAt).toISOString(),
+        };
+        setup.closures.set(c.warehouseId, [...(setup.closures.get(c.warehouseId) ?? []), range]);
+      }
+      return setup;
+    },
+
+    async setPincodes(warehouseId, pincodes) {
+      const list = normalisePincodes(pincodes);
+      return db.transaction().execute(async (trx) => {
+        await assertWarehouse(trx, warehouseId);
+        await trx
+          .deleteFrom("inventory.serviceAreas")
+          .where("warehouseId", "=", warehouseId)
+          .execute();
+        if (list.length > 0) {
+          await trx
+            .insertInto("inventory.serviceAreas")
+            .values(list.map((pincode) => ({ warehouseId, pincode })))
+            .execute();
+        }
+        return list;
+      });
+    },
+
+    async setHours(warehouseId, hours) {
+      const sorted = [...hours].sort((a, b) => a.weekday - b.weekday);
+      return db.transaction().execute(async (trx) => {
+        await assertWarehouse(trx, warehouseId);
+        await trx
+          .deleteFrom("inventory.warehouseHours")
+          .where("warehouseId", "=", warehouseId)
+          .execute();
+        if (sorted.length > 0) {
+          await trx
+            .insertInto("inventory.warehouseHours")
+            .values(
+              sorted.map((h) => ({
+                warehouseId,
+                weekday: h.weekday,
+                opensAt: h.opensAt,
+                closesAt: h.closesAt,
+              })),
+            )
+            .execute();
+        }
+        return sorted;
+      });
+    },
+
+    async addClosure({ warehouseId, startsOn, endsOn, reason }) {
+      await assertWarehouse(db, warehouseId);
+      const row = await db
+        .insertInto("inventory.warehouseClosures")
+        .values({ warehouseId, startsOn, endsOn, reason })
+        .returning(["id", "createdAt"])
+        .executeTakeFirstOrThrow();
+      return {
+        id: row.id,
+        warehouseId,
+        startsOn,
+        endsOn,
+        reason,
+        createdAt: new Date(row.createdAt).toISOString(),
+      };
+    },
+
+    async removeClosure(warehouseId, closureId) {
+      const result = await db
+        .deleteFrom("inventory.warehouseClosures")
+        .where("id", "=", closureId)
+        .where("warehouseId", "=", warehouseId)
+        .executeTakeFirst();
+      return Number(result.numDeletedRows) > 0;
+    },
   };
   return repo;
+}
+
+async function assertWarehouse(db: Reader, warehouseId: string): Promise<void> {
+  const found = await db
+    .selectFrom("inventory.warehouses")
+    .select("id")
+    .where("id", "=", warehouseId)
+    .executeTakeFirst();
+  if (!found) throw new NotFoundError("Warehouse not found.");
 }

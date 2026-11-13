@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Tag,
+  TrendingUp,
   Users,
   Warehouse,
   X,
@@ -43,6 +44,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     label: "Run",
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+      { href: "/reports", label: "Reports", icon: TrendingUp },
       { href: "/orders", label: "Live orders", icon: ShoppingBag },
       { href: "/customers", label: "Customers", icon: Users },
       { href: "/notifications", label: "Notifications", icon: Bell },

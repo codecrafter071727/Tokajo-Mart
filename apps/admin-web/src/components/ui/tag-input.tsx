@@ -12,19 +12,30 @@ export function TagInput({
   defaultValue = [],
   suggestions = [],
   placeholder = "Type and press Enter",
+  onChange,
+  max = 12,
 }: {
   name: string;
   defaultValue?: string[];
   suggestions?: string[];
   placeholder?: string;
+  /** Called with the new list, for forms that keep their own state */
+  onChange?: (tags: string[]) => void;
+  max?: number;
 }) {
-  const [tags, setTags] = useState<string[]>(defaultValue);
+  const [tags, setTagsState] = useState<string[]>(defaultValue);
+  const setTags = (next: string[] | ((cur: string[]) => string[])) =>
+    setTagsState((cur) => {
+      const value = typeof next === "function" ? next(cur) : next;
+      onChange?.(value);
+      return value;
+    });
   const [text, setText] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const clean = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 40);
   const add = (raw: string) => {
     const t = raw.split(",").map(clean).filter(Boolean);
-    if (t.length) setTags((cur) => [...new Set([...cur, ...t])].slice(0, 12));
+    if (t.length) setTags((cur) => [...new Set([...cur, ...t])].slice(0, max));
     setText("");
   };
   const left = suggestions.filter((s) => !tags.includes(s));

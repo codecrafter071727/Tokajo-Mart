@@ -22,7 +22,10 @@ async function forward(request: NextRequest, path: string[]) {
       method: request.method,
       headers: {
         accept: "application/json",
-        ...(body ? { "content-type": "application/json" } : {}),
+        // Keep the caller's type so a CSV import arrives as text/csv, not JSON
+        ...(body
+          ? { "content-type": request.headers.get("content-type") ?? "application/json" }
+          : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
       },

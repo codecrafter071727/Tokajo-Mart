@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors, Radius, Spacing, typography } from "../theme";
 import { AddButton } from "./AddButton";
 import { ProductImage } from "./ProductImage";
+import { VariantAddButton } from "./product/VariantSheet";
 import { useStock } from "../lib/queries";
 import type { Product } from "../lib/mockData";
 
@@ -93,21 +94,25 @@ export function ProductCard({ product }: ProductCardProps) {
             <Text style={styles.price}>₹{product.price}</Text>
             {product.mrp > product.price ? <Text style={styles.mrp}>₹{product.mrp}</Text> : null}
           </View>
-          <AddButton
-            productId={product.id}
-            productData={{
-              id: product.id,
-              name: product.name,
-              unit: product.unit,
-              price: product.price,
-              mrp: product.mrp,
-              image: product.image,
-              imageUrl: product.imageUrl,
-              imageFit: product.imageFit,
-            }}
-            size="sm"
-            optionsCount={product.optionsCount}
-          />
+          {product.groupId && (product.optionsCount ?? 0) > 1 && !outOfStock ? (
+            <VariantAddButton product={product} />
+          ) : (
+            <AddButton
+              productId={product.id}
+              productData={{
+                id: product.id,
+                name: product.name,
+                unit: product.unit,
+                price: product.price,
+                mrp: product.mrp,
+                image: product.image,
+                imageUrl: product.imageUrl,
+                imageFit: product.imageFit,
+              }}
+              size="sm"
+              optionsCount={product.optionsCount}
+            />
+          )}
         </View>
       </View>
     </Pressable>

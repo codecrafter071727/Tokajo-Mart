@@ -32,6 +32,7 @@ export default function ProfileScreen() {
   const signOut = useSession((s) => s.signOut);
   const state = useRiderState();
   const [confirming, setConfirming] = useState(false);
+  const [askedToDelete, setAskedToDelete] = useState(false);
 
   if (!rider) return null;
 
@@ -124,6 +125,14 @@ export default function ProfileScreen() {
         ) : (
           <TextLink label="Log out" tone="danger" onPress={() => setConfirming(true)} />
         )}
+        {askedToDelete ? (
+          <Text style={styles.deleteNote} accessibilityRole="alert">
+            Rider accounts are closed by your warehouse. Ask your warehouse manager to close your
+            account and remove your details.
+          </Text>
+        ) : (
+          <TextLink label="Close my account" tone="muted" onPress={() => setAskedToDelete(true)} />
+        )}
       </View>
     </ScrollView>
   );
@@ -159,6 +168,12 @@ function Line({
 }
 
 const styles = StyleSheet.create({
+  deleteNote: {
+    ...typography.body,
+    color: colors.ink[700],
+    textAlign: "center",
+    paddingHorizontal: space[4],
+  },
   root: { flex: 1, backgroundColor: colors.surface[100] },
   content: { padding: space[4], gap: space[4] },
   flex: { flex: 1 },

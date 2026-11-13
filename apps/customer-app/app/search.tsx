@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "../src/theme";
 import { ProductCard } from "../src/components/ProductCard";
 import { CartBar } from "../src/components/CartBar";
@@ -18,7 +18,9 @@ const POPULAR = ["Milk", "Bread", "Eggs", "Banana", "Chips", "Atta", "Curd", "Co
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  // A brand link on a product page opens search already filled in
+  const params = useLocalSearchParams<{ q?: string }>();
+  const [query, setQuery] = useState(typeof params.q === "string" ? params.q : "");
 
   // Search as you type, but only ask once typing pauses (DESIGN.md: 200ms)
   const term = useDebouncedValue(query.trim(), 200);

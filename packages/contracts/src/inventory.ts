@@ -1,11 +1,16 @@
 import { z } from "zod";
 
 /** Is this address inside a service area, and which warehouse would serve it. */
+/** A 6 digit Indian postal code. */
+export const pincodeSchema = z.string().regex(/^[1-9][0-9]{5}$/, "Enter a 6 digit pincode.");
+
 export const serviceabilityQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
+  /** When sent and warehouses list pincodes, the pincode decides who serves (else the radius) */
+  pincode: pincodeSchema.optional(),
 });
-export type ServiceabilityQuery = { lat: number; lng: number };
+export type ServiceabilityQuery = { lat: number; lng: number; pincode?: string };
 
 export const serviceabilityResponseSchema = z.object({
   serviceable: z.boolean(),
@@ -14,6 +19,16 @@ export const serviceabilityResponseSchema = z.object({
   etaMins: z.number().int().positive().nullable(),
   /** Set when not serviceable, for example "OUTSIDE_SERVICE_AREA" or "WAREHOUSE_CLOSED" */
   reason: z.string().nullable(),
+  /** The warehouse that covers this place, also when it is closed right now */
+  coveringWarehouseId: z.string().nullable().optional(),
+  /** Whether that warehouse is taking orders now */
+  openNow: z.boolean().optional(),
+  /** When closed: the next opening (ISO time), null when it has no hours ahead or is shut by hand */
+  opensAt: z.string().nullable().optional(),
+  /** When open with hours: when it closes (ISO time) */
+  closesAt: z.string().nullable().optional(),
+  /** How the place was matched: by its pincode or by distance */
+  matchedBy: z.enum(["pincode", "radius"]).nullable().optional(),
 });
 export type ServiceabilityResponse = z.infer<typeof serviceabilityResponseSchema>;
 
@@ -64,6 +79,7 @@ export type StockLine = z.infer<typeof stockLineSchema>;
 export const resolveRequestSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
+  pincode: pincodeSchema.optional(),
   items: z.array(stockLineSchema).min(1).max(100),
 });
 export type ResolveRequest = z.infer<typeof resolveRequestSchema>;
@@ -336,3 +352,81 @@ export const stockAlertsResponseSchema = z.object({
   }),
 });
 export type StockAlertsResponse = z.infer<typeof stockAlertsResponseSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Service areas by pincode, opening hours and closures (admin; managers read their own)
+// ---------------------------------------------------------------------------------------------
+
+/** "06:00" style local time in India. */
+export const clockTimeSchema = z
+  .string()
+  .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, "Use a 24 hour time like 06:00.");
+
+export const servicePincodesSchema = z.object({ pincodes: z.array(z.string()) });
+/** Replace the whole list. Duplicates are dropped; at most 500 pincodes per warehouse. */
+export const setPincodesBodySchema = z.object({
+  pincodes: z.array(pincodeSchema).max(500),
+});
+export type SetPincodesBody = z.infer<typeof setPincodesBodySchema>;
+
+/** One opening window. closesAt at or before opensAt means it closes after midnight. */
+export const openingWindowSchema = z
+  .object({
+    /** 0 Sunday to 6 Saturday */
+    weekday: z.number().int().min(0).max(6),
+    opensAt: clockTimeSchema,
+    closesAt: clockTimeSchema,
+  })
+  .refine((w) => w.opensAt !== w.closesAt, {
+    message: "Opening and closing time cannot be the same. Leave the day out for 24 hours.",
+  });
+export type OpeningWindow = z.infer<typeof openingWindowSchema>;
+
+/** Replace the week. A day missing from the list is closed; an empty list means open all day. */
+export const setHoursBodySchema = z
+  .object({ hours: z.array(openingWindowSchema).max(7) })
+  .refine((b) => new Set(b.hours.map((h) => h.weekday)).size === b.hours.length, {
+    message: "One window per day.",
+  });
+export type SetHoursBody = z.infer<typeof setHoursBodySchema>;
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-12-25.");
+
+export const closureSchema = z.object({
+  id: z.string(),
+  warehouseId: z.string(),
+  startsOn: isoDay,
+  endsOn: isoDay,
+  reason: z.string(),
+  createdAt: z.string(),
+});
+export type Closure = z.infer<typeof closureSchema>;
+
+export const createClosureBodySchema = z
+  .object({ startsOn: isoDay, endsOn: isoDay, reason: z.string().trim().min(2).max(120) })
+  .refine((b) => b.endsOn >= b.startsOn, { message: "The end date cannot be before the start." });
+export type CreateClosureBody = z.infer<typeof createClosureBodySchema>;
+
+export const closureParamsSchema = z.object({
+  id: z.string().min(1),
+  closureId: z.string().uuid(),
+});
+
+export const openStatusSchema = z.object({
+  openNow: z.boolean(),
+  opensAt: z.string().nullable(),
+  closesAt: z.string().nullable(),
+  /** "manual" (switched off), "hours", "closure" or null when open */
+  closedBy: z.enum(["manual", "hours", "closure"]).nullable(),
+});
+export type OpenStatus = z.infer<typeof openStatusSchema>;
+
+export const warehouseScheduleSchema = z.object({
+  warehouseId: z.string(),
+  /** Empty means open all day, every day */
+  hours: z.array(openingWindowSchema),
+  closures: z.array(closureSchema),
+  pincodes: z.array(z.string()),
+  status: openStatusSchema,
+});
+export type WarehouseSchedule = z.infer<typeof warehouseScheduleSchema>;

@@ -398,3 +398,13 @@ export const updateCouponBodySchema = z
 export type UpdateCouponBody = z.input<typeof updateCouponBodySchema>;
 
 export const couponParamsSchema = z.object({ id: z.uuid() });
+
+// --- Invoices ---------------------------------------------------------------------------------
+
+/** A short lived link that opens a delivered order's invoice PDF without a sign in token. */
+export const invoiceLinkResponseSchema = z.object({
+  /** Path on the gateway, for example /v1/invoices/<token> */
+  url: z.string(),
+  expiresAt: z.string(),
+});
+export type InvoiceLinkResponse = z.infer<typeof invoiceLinkResponseSchema>;

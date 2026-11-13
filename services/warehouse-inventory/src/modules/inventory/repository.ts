@@ -1,4 +1,6 @@
 import type {
+  Closure,
+  OpeningWindow,
   Reservation,
   ResolveResponse,
   StockLine,
@@ -21,6 +23,7 @@ import {
   WarehouseClosedError,
   WarehouseExistsError,
 } from "./errors";
+import { coveringCandidates, emptySetup, normalisePincodes, type ServiceSetup } from "./schedule";
 
 export type ServingWarehouse = { warehouse: Warehouse; distanceKm: number };
 
@@ -125,6 +128,20 @@ export interface InventoryRepository {
   listBatches(filter: { warehouseId?: string; expiresOnOrBefore: string }): Promise<BatchRecord[]>;
   /** Which products a reservation covers, to tell who was waiting when its stock comes back */
   reservationLines(reference: string): Promise<{ warehouseId: string; lines: StockLine[] } | null>;
+  /** Pincodes, opening hours and closures of every warehouse */
+  getServiceSetup(): Promise<ServiceSetup>;
+  /** Replace a warehouse's pincodes. Returns the stored list. */
+  setPincodes(warehouseId: string, pincodes: string[]): Promise<string[]>;
+  /** Replace a warehouse's weekly hours. An empty list means open all day. */
+  setHours(warehouseId: string, hours: OpeningWindow[]): Promise<OpeningWindow[]>;
+  addClosure(input: {
+    warehouseId: string;
+    startsOn: string;
+    endsOn: string;
+    reason: string;
+  }): Promise<Closure>;
+  /** False when there was no such closure for that warehouse */
+  removeClosure(warehouseId: string, closureId: string): Promise<boolean>;
 }
 
 // -------------------------------------------------------------------------------------------
@@ -165,9 +182,20 @@ export async function resolveBasket(
   lat: number,
   lng: number,
   items: StockLine[],
+  options: { pincode?: string; now?: Date } = {},
 ): Promise<ResolveResponse> {
   const lines = mergeLines(items);
-  const covering = coveringWarehouses(await repo.listWarehouses(), lat, lng);
+  const { candidates } = coveringCandidates(
+    await repo.listWarehouses(),
+    await repo.getServiceSetup(),
+    { lat, lng, pincode: options.pincode },
+    options.now ?? new Date(),
+  );
+  // Closed by hand, outside its hours or on a holiday: all the same to a customer
+  const covering = candidates.map((c) => ({
+    warehouse: { ...c.warehouse, open: c.status.openNow },
+    distanceKm: c.distanceKm,
+  }));
   const none = {
     serviceable: false,
     warehouseId: null,
@@ -303,6 +331,10 @@ export function createInMemoryInventoryRepository(
   const reservations = new Map<string, MemoryReservation>();
   const key = (warehouseId: string, productId: string) => `${warehouseId}/${productId}`;
   const batches: Omit<BatchRecord, "onHand">[] = [];
+  const setup: ServiceSetup & { closures: Map<string, Closure[]> } = {
+    ...emptySetup(),
+    closures: new Map(),
+  };
 
   const view = (r: MemoryReservation): Reservation => ({
     id: r.id,
@@ -557,6 +589,52 @@ export function createInMemoryInventoryRepository(
     async reservationLines(reference) {
       const r = reservations.get(reference);
       return r ? { warehouseId: r.warehouseId, lines: r.lines } : null;
+    },
+
+    async getServiceSetup() {
+      return {
+        pincodes: new Map([...setup.pincodes].map(([k, v]) => [k, new Set(v)])),
+        hours: new Map([...setup.hours].map(([k, v]) => [k, [...v]])),
+        closures: new Map([...setup.closures].map(([k, v]) => [k, [...v]])),
+      };
+    },
+
+    async setPincodes(warehouseId, pincodes) {
+      if (!warehouses.some((w) => w.id === warehouseId))
+        throw new NotFoundError("Warehouse not found.");
+      const list = normalisePincodes(pincodes);
+      setup.pincodes.set(warehouseId, new Set(list));
+      return list;
+    },
+
+    async setHours(warehouseId, hours) {
+      if (!warehouses.some((w) => w.id === warehouseId))
+        throw new NotFoundError("Warehouse not found.");
+      const sorted = [...hours].sort((a, b) => a.weekday - b.weekday);
+      setup.hours.set(warehouseId, sorted);
+      return sorted;
+    },
+
+    async addClosure({ warehouseId, startsOn, endsOn, reason }) {
+      if (!warehouses.some((w) => w.id === warehouseId))
+        throw new NotFoundError("Warehouse not found.");
+      const closure = {
+        id: crypto.randomUUID(),
+        warehouseId,
+        startsOn,
+        endsOn,
+        reason,
+        createdAt: new Date().toISOString(),
+      };
+      setup.closures.set(warehouseId, [...(setup.closures.get(warehouseId) ?? []), closure]);
+      return closure;
+    },
+
+    async removeClosure(warehouseId, closureId) {
+      const list = setup.closures.get(warehouseId) ?? [];
+      const kept = list.filter((c) => c.id !== closureId);
+      setup.closures.set(warehouseId, kept);
+      return kept.length !== list.length;
     },
   };
   return repo;

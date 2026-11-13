@@ -431,5 +431,73 @@ export function inventoryRepositoryContract(
         ).rejects.toBeDefined();
       });
     });
+
+    it("stores pincodes, hours and closures per warehouse and replaces them whole", async () => {
+      const repo = await make();
+      const id = "wh-test-schedule";
+      await repo.createWarehouse({
+        id,
+        name: "Schedule test",
+        lat: 28.6,
+        lng: 77.3,
+        radiusKm: 3,
+        open: true,
+      });
+
+      expect(await repo.setPincodes(id, ["201309", "201301", "201301"])).toEqual([
+        "201301",
+        "201309",
+      ]);
+      expect(await repo.setPincodes(id, ["201307"])).toEqual(["201307"]);
+      await repo.setHours(id, [
+        { weekday: 5, opensAt: "06:00", closesAt: "01:00" },
+        { weekday: 0, opensAt: "08:00", closesAt: "22:00" },
+      ]);
+      const closure = await repo.addClosure({
+        warehouseId: id,
+        startsOn: "2026-12-25",
+        endsOn: "2026-12-26",
+        reason: "Christmas",
+      });
+      expect(closure).toMatchObject({
+        warehouseId: id,
+        startsOn: "2026-12-25",
+        endsOn: "2026-12-26",
+      });
+
+      const setup = await repo.getServiceSetup();
+      expect([...(setup.pincodes.get(id) ?? [])]).toEqual(["201307"]);
+      expect(setup.hours.get(id)).toEqual([
+        { weekday: 0, opensAt: "08:00", closesAt: "22:00" },
+        { weekday: 5, opensAt: "06:00", closesAt: "01:00" },
+      ]);
+      expect(setup.closures.get(id)?.map((c) => [c.startsOn, c.endsOn, c.reason])).toEqual([
+        ["2026-12-25", "2026-12-26", "Christmas"],
+      ]);
+
+      await repo.setHours(id, []);
+      expect((await repo.getServiceSetup()).hours.get(id) ?? []).toEqual([]);
+      expect(await repo.removeClosure(id, closure.id)).toBe(true);
+      expect(await repo.removeClosure(id, closure.id)).toBe(false);
+      await expect(repo.setPincodes("wh-missing", [])).rejects.toBeInstanceOf(NotFoundError);
+      await expect(repo.setHours("wh-missing", [])).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it("refuses a basket at a warehouse that is shut for the day", async () => {
+      const repo = await make();
+      const id = "wh-test-holiday";
+      await repo.createWarehouse({
+        id,
+        name: "Holiday",
+        lat: 19.076,
+        lng: 72.8777,
+        radiusKm: 3,
+        open: true,
+      });
+      const day = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+      await repo.addClosure({ warehouseId: id, startsOn: day, endsOn: day, reason: "Holiday" });
+      const result = await resolveBasket(repo, 19.076, 72.8777, [{ productId: "p1", quantity: 1 }]);
+      expect(result).toMatchObject({ serviceable: false, reason: "WAREHOUSE_CLOSED" });
+    });
   });
 }

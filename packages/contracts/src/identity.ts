@@ -89,7 +89,7 @@ export const GATEWAY_HEADERS = {
 
 // --- Admin: user administration ---------------------------------------------------------------
 
-export const userStatusSchema = z.enum(["active", "blocked", "pending"]);
+export const userStatusSchema = z.enum(["active", "blocked", "pending", "deleted"]);
 
 export const adminUsersQuerySchema = z.object({
   role: roleSchema.optional(),
@@ -113,6 +113,8 @@ export const adminUserSchema = z.object({
   /** Only for riders */
   vehicle: z.string().nullable(),
   rating: z.number().nullable(),
+  /** Set when the customer deleted their account */
+  deletedAt: z.string().nullable().optional(),
 });
 export type AdminUser = z.infer<typeof adminUserSchema>;
 
@@ -232,3 +234,17 @@ export type UpdateAddressBody = z.input<typeof updateAddressBodySchema>;
 export const addressParamsSchema = z.object({ id: z.uuid() });
 export const addressListResponseSchema = z.object({ items: z.array(customerAddressSchema) });
 export type AddressListResponse = z.infer<typeof addressListResponseSchema>;
+
+// --- Account deletion -------------------------------------------------------------------------
+
+/** A customer deletes their own account from the app (required by the App Store and Play). */
+export const deleteAccountBodySchema = z.object({
+  reason: z.string().trim().max(300).optional(),
+});
+export type DeleteAccountBody = z.infer<typeof deleteAccountBodySchema>;
+
+export const deleteAccountResponseSchema = z.object({
+  deleted: z.literal(true),
+  deletedAt: z.string(),
+});
+export type DeleteAccountResponse = z.infer<typeof deleteAccountResponseSchema>;

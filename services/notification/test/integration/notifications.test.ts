@@ -52,6 +52,41 @@ suite("notification service", async () => {
     await db.destroy();
   });
 
+  describe("account deletion", () => {
+    it("erases one person's inbox, Notify me and devices, leaves others alone, and can repeat", async () => {
+      await notify({
+        userId: ALICE,
+        type: "order_confirmed",
+        title: "Order confirmed",
+        body: "On its way soon",
+      });
+      await notify({
+        userId: BOB,
+        type: "order_confirmed",
+        title: "Order confirmed",
+        body: "Hi Bob",
+      });
+      await post("/v1/notifications/me/subscriptions", alice, {
+        productId: "p1",
+        warehouseId: "wh-noida-62",
+      });
+      await post("/v1/notifications/me/devices", alice, {
+        platform: "android",
+        token: "alice-device-token-123",
+      });
+
+      const first = await app.inject({ method: "POST", url: `/internal/users/${ALICE}/purge` });
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toEqual({ notifications: 1, subscriptions: 1, devices: 1 });
+
+      expect((await get("/v1/notifications/me", alice)).json().items).toEqual([]);
+      expect((await get("/v1/notifications/me", bob)).json().items).toHaveLength(1);
+
+      const again = await app.inject({ method: "POST", url: `/internal/users/${ALICE}/purge` });
+      expect(again.json()).toEqual({ notifications: 0, subscriptions: 0, devices: 0 });
+    });
+  });
+
   describe("inbox", () => {
     it("shows only my own notifications, newest first, and counts unread", async () => {
       await notify({

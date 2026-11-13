@@ -27,6 +27,7 @@ import {
 } from "../../components/kit";
 import { rupees } from "../../lib/api";
 import { catalogAdmin } from "../../lib/catalog-admin";
+import { categoryOptions } from "./category-tree";
 import { ProductDialog } from "./product-dialog";
 
 export function CatalogTable() {
@@ -121,9 +122,9 @@ export function CatalogTable() {
           className={selectCls}
         >
           <option value="">All categories</option>
-          {(categories.data ?? []).map((c) => (
+          {categoryOptions(categories.data ?? []).map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {c.label}
             </option>
           ))}
         </select>
@@ -164,7 +165,14 @@ export function CatalogTable() {
                         >
                           {p.name}
                         </Link>
-                        <div className="text-xs text-muted">{p.unit}</div>
+                        <div className="text-xs text-muted">
+                          {[p.brand, p.unit].filter(Boolean).join(" · ")}
+                          {p.groupId ? (
+                            <span className="ml-1.5 rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-semibold text-accent">
+                              {p.optionsCount ?? 1} sizes
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </td>

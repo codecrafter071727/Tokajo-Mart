@@ -9,4 +9,7 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/((?!api|_next|favicon.ico).*)"] };
+// The install files must load without a session: browsers fetch the manifest without cookies
+export const config = {
+  matcher: ["/((?!api|_next|favicon.ico|manifest.webmanifest|sw.js|offline.html|icons/).*)"],
+};

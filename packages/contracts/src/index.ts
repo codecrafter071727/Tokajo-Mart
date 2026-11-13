@@ -135,6 +135,25 @@ export {
   type StockAlert,
   type StockAlertKind,
   type StockAlertsResponse,
+  // Service areas by pincode, opening hours and closures
+  pincodeSchema,
+  clockTimeSchema,
+  servicePincodesSchema,
+  setPincodesBodySchema,
+  openingWindowSchema,
+  setHoursBodySchema,
+  closureSchema,
+  createClosureBodySchema,
+  closureParamsSchema,
+  openStatusSchema,
+  warehouseScheduleSchema,
+  type SetPincodesBody,
+  type OpeningWindow,
+  type SetHoursBody,
+  type Closure,
+  type CreateClosureBody,
+  type OpenStatus,
+  type WarehouseSchedule,
 } from "./inventory";
 export * from "./pricing";
 export * from "./identity";

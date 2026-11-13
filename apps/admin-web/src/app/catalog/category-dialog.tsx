@@ -30,17 +30,23 @@ const formSchema = z.object({
     .string()
     .regex(/^\d+$/, "Whole number, zero or more")
     .refine((v) => Number(v) <= 10_000, "At most 10000"),
+  parentId: z.string(),
 });
 type FormValues = z.infer<typeof formSchema>;
 
 export function CategoryDialog({
   category,
+  categories,
+  defaultParentId = "",
   nextSortOrder,
   onClose,
   onSaved,
 }: {
   /** Null to add a new category */
   category: Category | null;
+  /** Every category, to pick a parent from */
+  categories: Category[];
+  defaultParentId?: string;
   nextSortOrder: number;
   onClose: () => void;
   onSaved: (message: string) => void;
@@ -55,10 +61,15 @@ export function CategoryDialog({
       imageUrl: category?.imageUrl ?? "",
       imageFit: category?.imageFit ?? "cover",
       sortOrder: String(category?.sortOrder ?? nextSortOrder),
+      parentId: category?.parentId ?? defaultParentId,
     },
   });
   const { errors } = form.formState;
   const [imageUrl, emoji, color, imageFit] = form.watch(["imageUrl", "emoji", "color", "imageFit"]);
+
+  // Two levels only: a parent must itself be top level, and never this category
+  const parents = categories.filter((c) => !c.parentId && c.id !== category?.id);
+  const hasChildren = Boolean(category && categories.some((c) => c.parentId === category.id));
 
   const save = useMutation({
     mutationFn: (v: FormValues) => {
@@ -69,11 +80,13 @@ export function CategoryDialog({
         imageUrl: blankToNull(v.imageUrl),
         imageFit: v.imageFit,
         sortOrder: Number(v.sortOrder),
+        parentId: v.parentId === "" ? null : v.parentId,
       };
       if (!category) return catalogAdmin.createCategory(next);
       const changes: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(next)) {
-        if (value !== (category as unknown as Record<string, unknown>)[key]) changes[key] = value;
+        const before = (category as unknown as Record<string, unknown>)[key] ?? null;
+        if (value !== before) changes[key] = value;
       }
       if (Object.keys(changes).length === 0) return Promise.resolve(category);
       return catalogAdmin.updateCategory(category.id, changes);
@@ -92,6 +105,23 @@ export function CategoryDialog({
           Name
           <input {...form.register("name")} className={fieldClass} />
           <FieldError message={errors.name?.message} />
+        </label>
+
+        <label className="block text-sm font-semibold">
+          Sits under
+          <select {...form.register("parentId")} disabled={hasChildren} className={fieldClass}>
+            <option value="">Nothing: a top level category</option>
+            {parents.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          {hasChildren ? (
+            <span className="mt-1 block text-xs font-normal text-muted">
+              It has sub categories of its own, so it stays at the top level.
+            </span>
+          ) : null}
         </label>
 
         <div className="grid grid-cols-3 gap-4">

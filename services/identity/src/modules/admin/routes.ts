@@ -142,6 +142,7 @@ export function registerAdminRoutes(app: ServiceApp, db: Kysely<DB>): void {
           "u.email",
           "u.status",
           "u.createdAt",
+          "u.deletedAt",
           // Kept as text: a JS Date loses the microseconds, and the cursor must not skip rows
           sql<string>`u.created_at::text`.as("createdAtRaw"),
           "r.vehicle",
@@ -184,6 +185,7 @@ export function registerAdminRoutes(app: ServiceApp, db: Kysely<DB>): void {
           status: u.status as AdminUser["status"],
           warehouseId: u.warehouseId,
           createdAt: u.createdAt.toISOString(),
+          deletedAt: u.deletedAt ? u.deletedAt.toISOString() : null,
           vehicle: u.vehicle,
           rating: u.rating === null ? null : Number(u.rating),
         })),
@@ -216,6 +218,7 @@ export function registerAdminRoutes(app: ServiceApp, db: Kysely<DB>): void {
           "u.email",
           "u.status",
           "u.createdAt",
+          "u.deletedAt",
           "r.vehicle",
           "r.rating",
           (eb) => eb.fn.coalesce("r.warehouseId", "u.warehouseId").as("warehouseId"),
@@ -232,6 +235,7 @@ export function registerAdminRoutes(app: ServiceApp, db: Kysely<DB>): void {
         status: u.status as AdminUser["status"],
         warehouseId: u.warehouseId,
         createdAt: u.createdAt.toISOString(),
+        deletedAt: u.deletedAt ? u.deletedAt.toISOString() : null,
         vehicle: u.vehicle,
         rating: u.rating === null ? null : Number(u.rating),
       };
@@ -363,9 +367,19 @@ export function registerAdminRoutes(app: ServiceApp, db: Kysely<DB>): void {
           .updateTable("identity.users")
           .set({ status })
           .where("id", "=", request.params.id)
+          .where("status", "<>", "deleted")
           .returning("id")
           .executeTakeFirst();
-        if (!updated) throw app.httpErrors.notFound("User not found.");
+        if (!updated) {
+          const exists = await db
+            .selectFrom("identity.users")
+            .select("status")
+            .where("id", "=", request.params.id)
+            .executeTakeFirst();
+          if (exists?.status === "deleted")
+            throw conflict("This account was deleted by its owner.");
+          throw app.httpErrors.notFound("User not found.");
+        }
         if (status === "blocked") {
           // Existing sessions end at once; the short lived access token runs out on its own
           await db

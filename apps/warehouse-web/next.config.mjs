@@ -20,7 +20,18 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   outputFileTracingRoot: monorepoRoot,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The service worker must never be cached, or tablets would keep running an old one
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      { source: "/manifest.webmanifest", headers: [{ key: "Cache-Control", value: "no-cache" }] },
+    ];
   },
 };
 

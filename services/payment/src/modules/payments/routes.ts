@@ -153,6 +153,38 @@ export function registerPaymentRoutes(app: ServiceApp, payments: PaymentService)
     async (request) => ({ items: await payments.batch(request.query.orderIds) }),
   );
 
+  app.get(
+    "/internal/payments/orders/:orderId",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Status and Razorpay payment id of one order (for its invoice)",
+        params: paymentOrderParamsSchema,
+        response: {
+          200: z.object({
+            status: z.string(),
+            method: z.string().nullable(),
+            razorpayPaymentId: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    async (request) => payments.forOrder(request.params.orderId),
+  );
+
+  app.post(
+    "/internal/payments/customers/:userId/scrub",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Drop a deleted customer's name and phone from their payments",
+        params: z.object({ userId: z.uuid() }),
+        response: { 200: z.object({ payments: z.number().int() }) },
+      },
+    },
+    async (request) => payments.scrubCustomer(request.params.userId),
+  );
+
   app.post(
     "/internal/payments/orders/:orderId/refund",
     {

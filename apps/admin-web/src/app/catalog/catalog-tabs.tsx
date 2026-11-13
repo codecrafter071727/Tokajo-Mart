@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { CategoriesPanel } from "./categories-panel";
 import { CatalogTable } from "./catalog-table";
+import { ImportPanel } from "./import-panel";
 
 const TABS = [
   { id: "products", label: "Products" },
   { id: "categories", label: "Categories" },
+  { id: "import", label: "Import and export" },
 ] as const;
 
 export function CatalogTabs() {
@@ -31,7 +33,15 @@ export function CatalogTabs() {
           </button>
         ))}
       </div>
-      <div role="tabpanel">{tab === "products" ? <CatalogTable /> : <CategoriesPanel />}</div>
+      <div role="tabpanel">
+        {tab === "products" ? (
+          <CatalogTable />
+        ) : tab === "categories" ? (
+          <CategoriesPanel />
+        ) : (
+          <ImportPanel />
+        )}
+      </div>
     </>
   );
 }

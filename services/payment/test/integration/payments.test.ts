@@ -354,6 +354,34 @@ suite("payment service", async () => {
     const refund = (orderId: string) =>
       app.inject({ method: "POST", url: `/internal/payments/orders/${orderId}/refund` });
 
+    it("tells the invoice the Razorpay payment id, and scrubs a deleted customer", async () => {
+      const order = await paid();
+      const info = await app.inject({
+        method: "GET",
+        url: `/internal/payments/orders/${order.id}`,
+      });
+      expect(info.json()).toMatchObject({
+        status: "captured",
+        razorpayPaymentId: `pay_${order.id.slice(0, 6)}`,
+      });
+      expect(
+        (await app.inject({ method: "GET", url: `/internal/payments/orders/${newOrder().id}` }))
+          .statusCode,
+      ).toBe(404);
+
+      const scrub = await app.inject({
+        method: "POST",
+        url: `/internal/payments/customers/${ALICE}/scrub`,
+      });
+      expect(scrub.json().payments).toBeGreaterThanOrEqual(1);
+      const rows = await db
+        .selectFrom("payments.payments")
+        .select(["customerName", "customerPhone", "amountPaise"])
+        .where("userId", "=", ALICE)
+        .execute();
+      for (const r of rows) expect(r).toMatchObject({ customerName: null, customerPhone: null });
+    });
+
     it("refunds a captured payment in full, once", async () => {
       const order = await paid();
       expect((await refund(order.id)).json()).toEqual({ refunded: true });
