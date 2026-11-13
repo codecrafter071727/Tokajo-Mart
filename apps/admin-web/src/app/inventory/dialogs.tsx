@@ -9,7 +9,8 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Modal } from "../../components/dialogs";
-import { Alert, Button, Field, inputCls } from "../../components/ui";
+import { Icon } from "../../components/icons";
+import { Alert, Button, Field, inputCls, dialogFooter } from "../../components/ui";
 import { errorMessage, gw } from "../../lib/gw";
 import type { ProductName } from "../../lib/products";
 
@@ -17,7 +18,7 @@ type DialogProps<T = unknown> = { onClose: () => void; onDone: (message: string)
 
 function Actions({ busy, onClose, label }: { busy: boolean; onClose: () => void; label: string }) {
   return (
-    <div className="flex justify-end gap-3 pt-2">
+    <div className={dialogFooter}>
       <Button onClick={onClose}>Cancel</Button>
       <Button type="submit" variant="primary" disabled={busy}>
         {busy ? "Saving" : label}
@@ -115,7 +116,7 @@ export function ReceiveDialog({
                 placeholder="Search a product"
                 value={line.productId}
                 onChange={(e) => setLine(index, { productId: e.target.value })}
-                className={`${inputCls} mt-0 min-w-0 flex-1`}
+                className={`${inputCls} !mt-0 min-w-0 flex-1`}
               />
               <input
                 aria-label={`Quantity ${index + 1}`}
@@ -123,21 +124,23 @@ export function ReceiveDialog({
                 placeholder="Qty"
                 value={line.quantity}
                 onChange={(e) => setLine(index, { quantity: e.target.value.replace(/\D/g, "") })}
-                className={`${inputCls.replace("w-full", "")} mt-0 w-24 shrink-0`}
+                className={`${inputCls.replace("w-full", "")} !mt-0 w-24 shrink-0 text-right tabular-nums`}
               />
-              <Button
-                small
+              <button
+                type="button"
                 aria-label={`Remove line ${index + 1}`}
+                title="Remove"
                 disabled={lines.length === 1}
                 onClick={() => setLines((current) => current.filter((_, i) => i !== index))}
+                className="grid size-10 shrink-0 place-items-center rounded-lg text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-30 disabled:hover:bg-transparent"
               >
-                Remove
-              </Button>
+                <Icon name="close" size={16} />
+              </button>
             </div>
           ))}
           <Button
-            small
             variant="ghost"
+            icon="plus"
             onClick={() => setLines((current) => [...current, { productId: "", quantity: "" }])}
           >
             Add another item

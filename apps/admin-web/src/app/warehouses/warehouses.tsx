@@ -1,5 +1,6 @@
 "use client";
 
+import { PageActions } from "../../components/page-actions";
 import {
   createWarehouseBodySchema,
   updateWarehouseBodySchema,
@@ -19,7 +20,8 @@ import {
   TableShell,
   th,
   td,
-  Toolbar,
+  tdActions,
+  dialogFooter,
 } from "../../components/ui";
 import { errorMessage, gw } from "../../lib/gw";
 
@@ -52,13 +54,11 @@ export function Warehouses() {
 
   return (
     <>
-      <Toolbar>
-        <div className="ml-auto">
-          <Button variant="primary" onClick={() => setEditing("new")}>
-            Add warehouse
-          </Button>
-        </div>
-      </Toolbar>
+      <PageActions>
+        <Button variant="primary" icon="plus" onClick={() => setEditing("new")}>
+          Add warehouse
+        </Button>
+      </PageActions>
       {notice ? (
         <div className="mb-4">
           <Alert tone="success">{notice}</Alert>
@@ -85,7 +85,7 @@ export function Warehouses() {
             ) : (
               list.data?.items.map((w) => (
                 <tr key={w.id} className="border-b border-line last:border-0 hover:bg-brand-50/40">
-                  <td className={`${td} font-bold`}>{w.name}</td>
+                  <td className={`${td} font-medium`}>{w.name}</td>
                   <td className={`${td} text-ink-500`}>{w.id}</td>
                   <td className={`${td} tabular-nums`}>
                     {w.lat.toFixed(4)}, {w.lng.toFixed(4)}
@@ -94,7 +94,7 @@ export function Warehouses() {
                   <td className={td}>
                     <Badge tone={w.open ? "green" : "gray"}>{w.open ? "Open" : "Closed"}</Badge>
                   </td>
-                  <td className={`${td} whitespace-nowrap text-right`}>
+                  <td className={tdActions}>
                     <Button small variant="ghost" onClick={() => setToggling(w)}>
                       {w.open ? "Close" : "Open"}
                     </Button>
@@ -255,7 +255,7 @@ function WarehouseDialog({
         </label>
         {problem ? <Alert>{problem}</Alert> : null}
         {save.isError ? <Alert>{errorMessage(save.error)}</Alert> : null}
-        <div className="flex justify-end gap-3 pt-2">
+        <div className={dialogFooter}>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={save.isPending}>
             {save.isPending ? "Saving" : creating ? "Add warehouse" : "Save changes"}

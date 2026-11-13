@@ -3,15 +3,27 @@
 import type { AdminProduct } from "@qc/contracts";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { ConfirmModal, Thumb, Toast } from "../../components/catalog-ui";
+import { PageActions } from "../../components/page-actions";
 import {
-  ConfirmModal,
-  fieldClass,
-  primaryButton,
-  secondaryButton,
-  Thumb,
-  Toast,
-} from "../../components/catalog-ui";
-import { Badge, TableShell, td, th } from "../../components/ui";
+  Alert,
+  Badge,
+  Button,
+  EmptyRow,
+  LoadingRows,
+  rowAction,
+  rowActionDanger,
+  SearchInput,
+  selectCls,
+  TableShell,
+  td,
+  tdActions,
+  tdNum,
+  th,
+  thNum,
+  Toggle,
+  Toolbar,
+} from "../../components/ui";
 import { rupees } from "../../lib/api";
 import { catalogAdmin } from "../../lib/catalog-admin";
 import { ProductDialog } from "./product-dialog";
@@ -68,41 +80,44 @@ export function CatalogTable() {
 
   if (products.isError || categories.isError) {
     return (
-      <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-6">
-        <p className="font-bold text-red-800">Could not load the catalog.</p>
-        <p className="mt-1 text-sm text-red-800">
-          Check that the catalog service is running, then try again.
-        </p>
-        <button
-          type="button"
+      <div className="space-y-3">
+        <Alert>Could not load the catalog. Check that the catalog service is running.</Alert>
+        <Button
           onClick={() => {
             void products.refetch();
             void categories.refetch();
           }}
-          className={`mt-3 ${primaryButton}`}
         >
           Try again
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="search"
+      <PageActions>
+        <Button
+          variant="primary"
+          icon="plus"
+          onClick={() => setEditing("new")}
+          disabled={!categories.data?.length}
+        >
+          New product
+        </Button>
+      </PageActions>
+      <Toolbar>
+        <SearchInput
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search products"
           aria-label="Search products"
-          className="w-72 rounded-lg border border-line bg-white px-3 py-2 text-sm"
         />
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
           aria-label="Filter by category"
-          className={`${fieldClass} !mt-0 !w-auto`}
+          className={selectCls}
         >
           <option value="">All categories</option>
           {(categories.data ?? []).map((c) => (
@@ -111,105 +126,95 @@ export function CatalogTable() {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-2 text-sm font-semibold">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="size-4 accent-brand-600"
-          />
-          Show archived
-        </label>
-        <span className="ml-auto text-sm text-ink-500">
+        <Toggle label="Show archived" checked={showArchived} onChange={setShowArchived} />
+        <span className="ml-auto text-sm text-ink-500 tabular-nums">
           {products.isPending ? "Loading" : `${rows.length} shown`}
         </span>
-        <button
-          type="button"
-          onClick={() => setEditing("new")}
-          disabled={!categories.data?.length}
-          className={primaryButton}
-        >
-          New product
-        </button>
-      </div>
+      </Toolbar>
 
       <TableShell>
-        <table className="w-full">
-          <thead className="border-b border-line">
+        <table>
+          <thead>
             <tr>
-              {["Product", "Category", "Price", "MRP", "Off", "Status", ""].map((h) => (
-                <th key={h || "actions"} className={th}>
-                  {h}
-                </th>
-              ))}
+              <th className={th}>Product</th>
+              <th className={th}>Category</th>
+              <th className={thNum}>Price</th>
+              <th className={`${thNum} hidden xl:table-cell`}>MRP</th>
+              <th className={`${thNum} hidden xl:table-cell`}>Off</th>
+              <th className={th}>Status</th>
+              <th className={th}>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {products.isPending
-              ? Array.from({ length: 6 }, (_, i) => (
-                  <tr key={i} className="border-b border-line last:border-0">
-                    <td className={td} colSpan={7}>
-                      <div className="h-8 animate-pulse rounded bg-surface" />
-                    </td>
-                  </tr>
-                ))
-              : rows.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={`border-b border-line last:border-0 hover:bg-brand-50/40 ${p.archived ? "opacity-60" : ""}`}
-                  >
-                    <td className={td}>
-                      <div className="flex items-center gap-3">
-                        <Thumb imageUrl={p.imageUrl} emoji={p.emoji} fit={p.imageFit} />
-                        <div>
-                          <div className="font-semibold">{p.name}</div>
-                          <div className="text-xs text-ink-500">{p.unit}</div>
-                        </div>
+            {products.isPending ? (
+              <LoadingRows colSpan={7} rows={8} />
+            ) : (
+              rows.map((p) => (
+                <tr key={p.id} className={p.archived ? "opacity-60" : ""}>
+                  <td className={`${td} min-w-60`}>
+                    <div className="flex items-center gap-3">
+                      <Thumb imageUrl={p.imageUrl} emoji={p.emoji} fit={p.imageFit} />
+                      <div>
+                        <div className="font-medium text-ink-900">{p.name}</div>
+                        <div className="text-xs text-ink-500">{p.unit}</div>
                       </div>
-                    </td>
-                    <td className={td}>{names.get(p.categoryId) ?? p.categoryId}</td>
-                    <td className={`${td} font-bold tabular-nums`}>{rupees(p.pricePaise)}</td>
-                    <td className={`${td} tabular-nums text-ink-500`}>{rupees(p.mrpPaise)}</td>
-                    <td className={td}>
-                      {p.discountPercent > 0 ? (
-                        <Badge tone="green">{`${p.discountPercent}%`}</Badge>
-                      ) : (
-                        <span className="text-ink-500">None</span>
-                      )}
-                    </td>
-                    <td className={td}>
-                      {p.archived ? (
-                        <Badge tone="gray">Archived</Badge>
-                      ) : (
-                        <Badge tone="green">On sale</Badge>
-                      )}
-                    </td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(p)}
-                        className={`${secondaryButton} mr-2 !px-3 !py-1.5`}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirm({ product: p, restore: p.archived })}
-                        className={`${secondaryButton} !px-3 !py-1.5`}
-                      >
-                        {p.archived ? "Restore" : "Archive"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    </div>
+                  </td>
+                  <td className={`${td} whitespace-nowrap text-ink-700`}>
+                    {names.get(p.categoryId) ?? p.categoryId}
+                  </td>
+                  <td className={tdNum}>
+                    <div className="font-semibold">{rupees(p.pricePaise)}</div>
+                    {p.mrpPaise > p.pricePaise ? (
+                      <div className="text-xs text-ink-500 line-through xl:hidden">
+                        {rupees(p.mrpPaise)}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className={`${tdNum} hidden text-ink-500 xl:table-cell`}>
+                    {p.mrpPaise > p.pricePaise ? (
+                      <span className="line-through">{rupees(p.mrpPaise)}</span>
+                    ) : (
+                      rupees(p.mrpPaise)
+                    )}
+                  </td>
+                  <td className={`${tdNum} hidden xl:table-cell`}>
+                    {p.discountPercent > 0 ? (
+                      <span className="font-semibold text-brand-700">{`${p.discountPercent}%`}</span>
+                    ) : (
+                      <span className="text-ink-300">0%</span>
+                    )}
+                  </td>
+                  <td className={td}>
+                    {p.archived ? (
+                      <Badge tone="gray">Archived</Badge>
+                    ) : (
+                      <Badge tone="green">On sale</Badge>
+                    )}
+                  </td>
+                  <td className={tdActions}>
+                    <button type="button" onClick={() => setEditing(p)} className={rowAction}>
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirm({ product: p, restore: p.archived })}
+                      className={p.archived ? rowAction : rowActionDanger}
+                    >
+                      {p.archived ? "Restore" : "Archive"}
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
             {!products.isPending && rows.length === 0 ? (
-              <tr>
-                <td className={`${td} py-10 text-center text-ink-500`} colSpan={7}>
-                  {archivedCount > 0 && !showArchived
-                    ? "Only archived products match. Turn on Show archived to see them."
-                    : "No products match."}
-                </td>
-              </tr>
+              <EmptyRow colSpan={7}>
+                {archivedCount > 0 && !showArchived
+                  ? "Only archived products match. Turn on Show archived to see them."
+                  : "No products match."}
+              </EmptyRow>
             ) : null}
           </tbody>
         </table>
@@ -217,14 +222,12 @@ export function CatalogTable() {
 
       {products.hasNextPage ? (
         <div className="mt-4 text-center">
-          <button
-            type="button"
+          <Button
             onClick={() => void products.fetchNextPage()}
             disabled={products.isFetchingNextPage}
-            className={secondaryButton}
           >
             {products.isFetchingNextPage ? "Loading" : "Load more"}
-          </button>
+          </Button>
         </div>
       ) : null}
 

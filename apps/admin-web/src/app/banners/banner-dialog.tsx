@@ -1,5 +1,6 @@
 "use client";
 
+import { dialogFooter } from "../../components/ui";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Banner, Category } from "@qc/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -226,7 +227,7 @@ export function BannerDialog({
         </label>
 
         <ErrorBanner error={save.error} />
-        <div className="flex justify-end gap-3 pt-2">
+        <div className={dialogFooter}>
           <button type="button" onClick={onClose} className={secondaryButton}>
             Cancel
           </button>

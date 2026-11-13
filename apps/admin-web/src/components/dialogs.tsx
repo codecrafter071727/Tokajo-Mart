@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import { Alert, Button } from "./ui";
+import { Icon } from "./icons";
+import { Alert, Button, dialogFooter } from "./ui";
 
 /**
  * A modal dialog. Mount it to open it, and it calls onClose when dismissed (Escape, the close
@@ -37,25 +38,25 @@ export function Modal({
       aria-labelledby={id}
       className={
         side
-          ? "fixed inset-y-0 right-0 left-auto m-0 h-screen max-h-none w-full max-w-xl rounded-none p-0 shadow-xl backdrop:bg-black/40"
-          : `m-auto w-full rounded-2xl p-0 shadow-xl backdrop:bg-black/40 ${wide ? "max-w-2xl" : "max-w-lg"}`
+          ? "fixed inset-y-0 right-0 left-auto m-0 h-screen max-h-none w-full max-w-xl rounded-none border-l border-line bg-white p-0 shadow-dialog"
+          : `m-auto w-[calc(100%-2rem)] rounded-xl border border-line bg-white p-0 shadow-dialog ${wide ? "max-w-2xl" : "max-w-lg"}`
       }
     >
-      <div className="max-h-[90vh] overflow-y-auto p-6">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 id={id} className="text-lg font-extrabold">
+      <div className={side ? "flex h-full flex-col" : "flex max-h-[88vh] flex-col"}>
+        <div className="flex items-center justify-between gap-4 border-b border-line px-6 py-4">
+          <h2 id={id} className="text-base font-semibold text-ink-900">
             {title}
           </h2>
           <button
             type="button"
             aria-label="Close"
             onClick={() => ref.current?.close()}
-            className="rounded-lg px-2 py-1 text-ink-500 hover:bg-surface"
+            className="grid size-8 place-items-center rounded-lg text-ink-500 hover:bg-surface hover:text-ink-900"
           >
-            ✕
+            <Icon name="close" size={18} />
           </button>
         </div>
-        {children}
+        <div className="overflow-y-auto px-6 py-5">{children}</div>
       </div>
     </dialog>
   );
@@ -83,13 +84,13 @@ export function ConfirmDialog({
 }) {
   return (
     <Modal title={title} onClose={onClose}>
-      <p className="text-sm text-ink-700">{message}</p>
+      <p className="text-sm leading-6 text-ink-700">{message}</p>
       {error ? (
         <div className="mt-4">
           <Alert>{error}</Alert>
         </div>
       ) : null}
-      <div className="mt-6 flex justify-end gap-3">
+      <div className={dialogFooter}>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant={danger ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>
           {busy ? "Working" : confirmLabel}

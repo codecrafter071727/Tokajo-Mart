@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
+import { BrandMark } from "../../components/shell";
+import { Alert, buttonClass, inputCls } from "../../components/ui";
 
 function LoginForm() {
   const router = useRouter();
@@ -39,18 +41,15 @@ function LoginForm() {
     <main className="grid min-h-screen place-items-center bg-surface p-4">
       <form
         onSubmit={(e) => void submit(e)}
-        className="w-full max-w-sm rounded-2xl border border-line bg-white p-8 shadow-sm"
+        className="w-full max-w-sm rounded-xl border border-line bg-white p-8 shadow-dialog"
       >
-        <div className="mb-6 flex items-center gap-2">
-          <span className="grid size-9 place-items-center rounded-lg bg-brand-600 font-extrabold text-ink-900">
-            Q
-          </span>
-          <span className="text-lg font-extrabold">QC Admin</span>
+        <div className="mb-8">
+          <BrandMark size="lg" />
         </div>
-        <h1 className="text-2xl font-extrabold">Sign in</h1>
-        <p className="mt-1 text-sm text-ink-700">Platform admins only.</p>
+        <h1 className="text-xl font-bold tracking-tight">Sign in</h1>
+        <p className="mt-1 text-sm text-ink-500">For platform admins. Use your work email.</p>
 
-        <label className="mt-6 block text-sm font-bold" htmlFor="email">
+        <label className="mt-6 block text-sm font-medium" htmlFor="email">
           Email
         </label>
         <input
@@ -59,9 +58,9 @@ function LoginForm() {
           type="email"
           autoComplete="username"
           required
-          className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
+          className={inputCls}
         />
-        <label className="mt-4 block text-sm font-bold" htmlFor="password">
+        <label className="mt-4 block text-sm font-medium" htmlFor="password">
           Password
         </label>
         <input
@@ -70,19 +69,19 @@ function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
-          className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
+          className={inputCls}
         />
 
         {error ? (
-          <p role="alert" className="mt-4 text-sm font-semibold text-red-700">
-            {error}
-          </p>
+          <div className="mt-4">
+            <Alert>{error}</Alert>
+          </div>
         ) : null}
 
         <button
           type="submit"
           disabled={busy}
-          className="mt-6 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-extrabold text-ink-900 disabled:opacity-60"
+          className={`${buttonClass("primary")} mt-6 h-10 w-full`}
         >
           {busy ? "Signing in" : "Sign in"}
         </button>

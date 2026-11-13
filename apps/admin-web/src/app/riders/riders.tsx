@@ -1,5 +1,6 @@
 "use client";
 
+import { PageActions } from "../../components/page-actions";
 import { phoneSchema, type AdminRider, type AdminUser } from "@qc/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -16,7 +17,9 @@ import {
   TableShell,
   th,
   td,
-  Toolbar,
+  tdActions,
+  dialogFooter,
+  PersonCell,
 } from "../../components/ui";
 import { errorMessage, gw } from "../../lib/gw";
 import { useUserList, useWarehouses } from "../../lib/users";
@@ -51,17 +54,34 @@ export function Riders() {
 
   return (
     <>
-      <Toolbar>
-        <span className="text-sm text-ink-700">
-          {working} of {riders.filter((r) => r.status === "active").length} active riders are
-          working right now.
-        </span>
-        <div className="ml-auto">
-          <Button variant="primary" onClick={() => setEditing("new")}>
-            Add rider
-          </Button>
-        </div>
-      </Toolbar>
+      <PageActions>
+        <Button variant="primary" icon="plus" onClick={() => setEditing("new")}>
+          Add rider
+        </Button>
+      </PageActions>
+      <div className="mb-4 grid grid-cols-3 gap-3 sm:max-w-xl">
+        {[
+          { label: "Working now", value: working, tone: "text-brand-700" },
+          {
+            label: "Active riders",
+            value: riders.filter((r) => r.status === "active").length,
+            tone: "text-ink-900",
+          },
+          {
+            label: "Blocked",
+            value: riders.filter((r) => r.status === "blocked").length,
+            tone: "text-ink-500",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl border border-line bg-white px-4 py-3 shadow-card"
+          >
+            <p className="text-xs font-medium text-ink-500">{stat.label}</p>
+            <p className={`mt-0.5 text-xl font-bold tabular-nums ${stat.tone}`}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
       {notice ? (
         <div className="mb-4">
           <Alert tone="success">{notice}</Alert>
@@ -97,11 +117,15 @@ export function Riders() {
                     className="border-b border-line last:border-0 hover:bg-brand-50/40"
                   >
                     <td className={td}>
-                      <div className="font-bold">{r.name}</div>
-                      <div className="text-xs tabular-nums text-ink-500">
-                        {r.phone ?? ""}
-                        {r.rating ? ` · ${r.rating.toFixed(1)} rating` : ""}
-                      </div>
+                      <PersonCell
+                        name={r.name}
+                        detail={
+                          <span className="tabular-nums">
+                            {r.phone ?? ""}
+                            {r.rating ? ` · ${r.rating.toFixed(1)} rating` : ""}
+                          </span>
+                        }
+                      />
                     </td>
                     <td className={`${td} max-w-40`}>{r.vehicle}</td>
                     <td className={td}>
@@ -115,11 +139,11 @@ export function Riders() {
                       </div>
                     </td>
                     <td className={td}>{nameOf(r.warehouseId)}</td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
+                    <td className={tdActions}>
                       <Button small variant="ghost" onClick={() => setEditing(r)}>
                         Edit
                       </Button>
-                      <Button small variant="ghost" onClick={() => setBlocking(r)}>
+                      <Button small variant="dangerGhost" onClick={() => setBlocking(r)}>
                         {blocked ? "Unblock" : "Block"}
                       </Button>
                     </td>
@@ -273,7 +297,7 @@ function RiderDialog({
         </Field>
         {problem ? <Alert>{problem}</Alert> : null}
         {save.isError ? <Alert>{errorMessage(save.error)}</Alert> : null}
-        <div className="flex justify-end gap-3 pt-2">
+        <div className={dialogFooter}>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={save.isPending}>
             {save.isPending ? "Saving" : creating ? "Add rider" : "Save changes"}

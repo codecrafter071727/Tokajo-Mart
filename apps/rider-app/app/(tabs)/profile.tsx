@@ -1,13 +1,28 @@
 import { useRouter } from "expo-router";
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BigButton } from "../../src/components/BigButton";
 import { Card } from "../../src/components/Card";
+import { TextLink } from "../../src/components/TextLink";
+import { earningsPaise, formatPaise } from "../../src/lib/delivery";
+import { useRiderState } from "../../src/lib/queries";
 import { useSession } from "../../src/store/session";
-import { colors, space, typography } from "../../src/theme";
+import { colors, radius, space, typography } from "../../src/theme";
+
+const initials = (name: string) =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+/** "+919810000011" as "+91 98100 00011", which is easier to read back */
+const prettyPhone = (phone: string) =>
+  /^\+91\d{10}$/.test(phone) ? `+91 ${phone.slice(3, 8)} ${phone.slice(8)}` : phone;
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -15,33 +30,100 @@ export default function ProfileScreen() {
   const client = useQueryClient();
   const rider = useSession((s) => s.rider);
   const signOut = useSession((s) => s.signOut);
+  const state = useRiderState();
+  const [confirming, setConfirming] = useState(false);
 
   if (!rider) return null;
 
-  return (
-    <View style={[styles.root, { paddingTop: insets.top + space[4] }]}>
-      <View style={styles.avatar}>
-        <Ionicons name="person" size={40} color={colors.ink[900]} />
-      </View>
-      <Text style={styles.name}>{rider.name}</Text>
-      <Text style={styles.phone}>{rider.phone}</Text>
+  const history = state.data?.history ?? [];
+  const online = state.data?.online ?? false;
+  const busy = state.data?.active != null && state.data.active.status !== "offered";
 
-      <Card style={styles.card}>
-        <Line icon="bicycle" label="Vehicle" value={rider.vehicle} />
-        <Line icon="star" label="Rating" value={rider.rating.toFixed(1)} />
+  return (
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + space[4], paddingBottom: insets.bottom + space[6] },
+      ]}
+    >
+      <Text style={styles.pageTitle}>Profile</Text>
+
+      <View style={styles.idCard}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials(rider.name) || "R"}</Text>
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.name}>{rider.name}</Text>
+          <Text style={styles.phone}>{prettyPhone(rider.phone)}</Text>
+          <View style={styles.badges}>
+            <View style={styles.badge}>
+              <Ionicons name="star" size={12} color={colors.accent[900]} />
+              <Text style={styles.badgeText}>{rider.rating.toFixed(1)}</Text>
+            </View>
+            <View style={[styles.badge, online ? styles.badgeOn : styles.badgeOff]}>
+              <View style={[styles.dot, online ? styles.dotOn : styles.dotOff]} />
+              <Text style={[styles.badgeText, online ? styles.badgeTextOn : styles.badgeTextOff]}>
+                {online ? "On duty" : "Off duty"}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <Card title="Today">
+        <View style={styles.statsRow}>
+          <Stat value={String(history.length)} label="Deliveries" />
+          <Stat
+            value={formatPaise(history.reduce((sum, d) => sum + earningsPaise(d), 0))}
+            label="Earned"
+          />
+        </View>
       </Card>
 
-      <View style={styles.spacer} />
-      <BigButton
-        label="Log out"
-        variant="danger"
-        icon="log-out-outline"
-        onPress={() => {
-          client.clear();
-          signOut();
-          router.replace("/(auth)/login");
-        }}
-      />
+      <Card title="Your details">
+        <Line icon="bicycle" label="Vehicle" value={rider.vehicle} />
+        <View style={styles.sep} />
+        <Line icon="call" label="Phone" value={prettyPhone(rider.phone)} />
+        <View style={styles.sep} />
+        <Line icon="star" label="Rating" value={`${rider.rating.toFixed(1)} of 5`} />
+      </Card>
+
+      <View style={styles.signOut}>
+        {confirming ? (
+          <View style={styles.confirm}>
+            <Text style={styles.confirmText}>
+              {busy
+                ? "Finish your current delivery before you log out."
+                : "Log out of Tokajo Rider on this phone?"}
+            </Text>
+            {!busy ? (
+              <BigButton
+                label="Yes, log out"
+                variant="danger"
+                icon="log-out-outline"
+                onPress={() => {
+                  client.clear();
+                  signOut();
+                  router.replace("/(auth)/login");
+                }}
+              />
+            ) : null}
+            <TextLink label="Cancel" tone="muted" onPress={() => setConfirming(false)} />
+          </View>
+        ) : (
+          <TextLink label="Log out" tone="danger" onPress={() => setConfirming(true)} />
+        )}
+      </View>
+    </ScrollView>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -57,7 +139,9 @@ function Line({
 }) {
   return (
     <View style={styles.line}>
-      <Ionicons name={icon} size={22} color={colors.brand[700]} />
+      <View style={styles.lineIcon}>
+        <Ionicons name={icon} size={18} color={colors.brand[800]} />
+      </View>
       <Text style={styles.lineLabel}>{label}</Text>
       <Text style={styles.lineValue}>{value}</Text>
     </View>
@@ -65,20 +149,75 @@ function Line({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surface[100], padding: space[5], alignItems: "center" },
+  root: { flex: 1, backgroundColor: colors.surface[100] },
+  content: { padding: space[4], gap: space[4] },
+  flex: { flex: 1 },
+  pageTitle: { ...typography.titleLg, fontWeight: "800", color: colors.ink[900] },
+  idCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space[4],
+    backgroundColor: colors.night[900],
+    borderRadius: radius.xl,
+    padding: space[5],
+  },
   avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colors.brand[600],
     alignItems: "center",
     justifyContent: "center",
   },
-  name: { ...typography.titleLg, fontWeight: "800", color: colors.ink[900], marginTop: space[3] },
-  phone: { ...typography.body, color: colors.ink[700], marginBottom: space[5] },
-  card: { alignSelf: "stretch" },
-  line: { flexDirection: "row", alignItems: "center", gap: space[3] },
-  lineLabel: { ...typography.body, color: colors.ink[700], flex: 1 },
-  lineValue: { ...typography.bodyStrong, color: colors.ink[900] },
-  spacer: { flex: 1 },
+  avatarText: { fontSize: 28, fontWeight: "800", color: colors.ink[900] },
+  name: { ...typography.titleLg, fontWeight: "800", color: colors.surface[0] },
+  phone: { ...typography.body, color: colors.ink[300], marginTop: 2 },
+  badges: { flexDirection: "row", gap: space[2], marginTop: space[2] },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.accent[100],
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  badgeOn: { backgroundColor: colors.brand[100] },
+  badgeOff: { backgroundColor: colors.night[700] },
+  badgeText: { ...typography.caption, fontWeight: "800", color: colors.accent[900] },
+  badgeTextOn: { color: colors.brand[900] },
+  badgeTextOff: { color: colors.ink[300] },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  dotOn: { backgroundColor: colors.brand[600] },
+  dotOff: { backgroundColor: colors.ink[500] },
+  statsRow: { flexDirection: "row" },
+  stat: { flex: 1, gap: 2 },
+  statValue: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: "800",
+    color: colors.ink[900],
+    fontVariant: ["tabular-nums"],
+  },
+  statLabel: { ...typography.caption, fontWeight: "700", color: colors.ink[500] },
+  line: { flexDirection: "row", alignItems: "center", gap: space[3], minHeight: 40 },
+  lineIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.brand[50],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lineLabel: { ...typography.body, fontSize: 15, color: colors.ink[700], flex: 1 },
+  lineValue: { ...typography.bodyStrong, fontSize: 15, color: colors.ink[900] },
+  sep: { height: 1, backgroundColor: colors.line[300] },
+  signOut: { marginTop: space[2] },
+  confirm: {
+    backgroundColor: colors.surface[0],
+    borderRadius: radius.lg,
+    padding: space[4],
+    gap: space[3],
+  },
+  confirmText: { ...typography.subtitle, color: colors.ink[900], textAlign: "center" },
 });

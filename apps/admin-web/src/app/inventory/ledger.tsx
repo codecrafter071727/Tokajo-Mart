@@ -3,7 +3,7 @@
 import type { StockMovement, StockRow } from "@qc/contracts";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Modal } from "../../components/dialogs";
-import { Alert, Badge, Button } from "../../components/ui";
+import { Alert, Badge, Button, EmptyState } from "../../components/ui";
 import { errorMessage, gw, qs } from "../../lib/gw";
 
 const TYPE: Record<
@@ -43,9 +43,17 @@ export function LedgerDrawer({
   return (
     <Modal title={`${productLabel}: stock history`} onClose={onClose} side>
       {query.isError ? <Alert>{errorMessage(query.error)}</Alert> : null}
-      {query.isPending ? <p className="text-sm text-ink-500">Loading</p> : null}
+      {query.isPending ? (
+        <div className="space-y-3" aria-busy="true">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="h-12 animate-pulse rounded-lg bg-surface" />
+          ))}
+        </div>
+      ) : null}
       {!query.isPending && items.length === 0 ? (
-        <p className="text-sm text-ink-500">Nothing has happened to this stock yet.</p>
+        <EmptyState icon="inventory" title="No movements yet">
+          Deliveries received, sales and adjustments for this product will show here.
+        </EmptyState>
       ) : null}
       <ul className="divide-y divide-line">
         {items.map((m) => (

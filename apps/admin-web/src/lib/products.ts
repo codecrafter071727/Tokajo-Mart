@@ -3,7 +3,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { gw } from "./gw";
 
-export type ProductName = { id: string; name: string; unit: string; emoji: string };
+export type ProductName = {
+  id: string;
+  name: string;
+  unit: string;
+  emoji: string;
+  imageUrl?: string | null;
+  imageFit?: "cover" | "contain";
+};
 
 /** Every product (archived too, so old stock still has a name), paged through the admin list. */
 export function useProductNames() {

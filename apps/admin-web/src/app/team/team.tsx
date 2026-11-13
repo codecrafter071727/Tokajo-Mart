@@ -1,5 +1,6 @@
 "use client";
 
+import { PageActions } from "../../components/page-actions";
 import { resetPasswordBodySchema, type AdminUser } from "@qc/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -16,7 +17,9 @@ import {
   TableShell,
   th,
   td,
-  Toolbar,
+  tdActions,
+  dialogFooter,
+  PersonCell,
 } from "../../components/ui";
 import { errorMessage, gw } from "../../lib/gw";
 import { useMe, useUserList, useWarehouses } from "../../lib/users";
@@ -58,13 +61,11 @@ export function Team() {
 
   return (
     <>
-      <Toolbar>
-        <div className="ml-auto">
-          <Button variant="primary" onClick={() => setDialog({ kind: "create" })}>
-            Add team member
-          </Button>
-        </div>
-      </Toolbar>
+      <PageActions>
+        <Button variant="primary" icon="plus" onClick={() => setDialog({ kind: "create" })}>
+          Add team member
+        </Button>
+      </PageActions>
       {notice ? (
         <div className="mb-4">
           <Alert tone="success">{notice}</Alert>
@@ -98,13 +99,17 @@ export function Team() {
                     className="border-b border-line last:border-0 hover:bg-brand-50/40"
                   >
                     <td className={td}>
-                      <div className="font-bold">
-                        {p.name}
-                        {self ? (
-                          <span className="ml-2 text-xs font-semibold text-ink-500">(you)</span>
-                        ) : null}
-                      </div>
-                      <div className="text-xs text-ink-500">{p.email}</div>
+                      <PersonCell
+                        name={p.name}
+                        detail={p.email}
+                        badge={
+                          self ? (
+                            <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] font-semibold text-ink-500">
+                              You
+                            </span>
+                          ) : null
+                        }
+                      />
                     </td>
                     <td className={td}>
                       <Badge tone={isAdmin ? "blue" : "gray"}>{ROLE_LABEL[p.role] ?? p.role}</Badge>
@@ -115,7 +120,7 @@ export function Team() {
                         {p.status === "blocked" ? "Blocked" : "Active"}
                       </Badge>
                     </td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
+                    <td className={tdActions}>
                       {self ? (
                         <span className="text-xs text-ink-500">
                           You cannot change your own account
@@ -140,7 +145,7 @@ export function Team() {
                           </Button>
                           <Button
                             small
-                            variant="ghost"
+                            variant="dangerGhost"
                             onClick={() => setDialog({ kind: "block", user: p })}
                           >
                             {p.status === "blocked" ? "Unblock" : "Block"}
@@ -295,7 +300,7 @@ function StaffDialog({
         </div>
         {problem ? <Alert>{problem}</Alert> : null}
         {save.isError ? <Alert>{errorMessage(save.error)}</Alert> : null}
-        <div className="flex justify-end gap-3 pt-2">
+        <div className={dialogFooter}>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={save.isPending}>
             {save.isPending ? "Saving" : creating ? "Add member" : "Save changes"}
@@ -349,7 +354,7 @@ function PasswordDialog({
         </Field>
         {problem ? <Alert>{problem}</Alert> : null}
         {save.isError ? <Alert>{errorMessage(save.error)}</Alert> : null}
-        <div className="flex justify-end gap-3 pt-2">
+        <div className={dialogFooter}>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={save.isPending}>
             {save.isPending ? "Saving" : "Set password"}

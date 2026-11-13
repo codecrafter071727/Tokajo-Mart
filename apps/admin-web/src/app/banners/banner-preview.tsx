@@ -12,12 +12,12 @@ export function BannerPreview({
 }) {
   return (
     <div
-      className="relative flex h-28 w-full max-w-sm overflow-hidden rounded-2xl"
+      className="relative flex h-24 w-full max-w-sm overflow-hidden rounded-xl ring-1 ring-black/5"
       style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#E8F5E9" }}
     >
       <div className="z-10 flex min-w-0 flex-1 flex-col justify-center p-4">
-        <p className="truncate text-base font-extrabold text-ink-900">{title || "Banner title"}</p>
-        <p className="line-clamp-2 text-xs font-semibold text-ink-700">{subtitle}</p>
+        <p className="truncate text-[15px] font-bold text-ink-900">{title || "Banner title"}</p>
+        <p className="line-clamp-2 text-xs font-medium text-ink-700">{subtitle}</p>
       </div>
       {imageUrl ? (
         <img src={imageUrl} alt="" className="h-full w-32 shrink-0 object-cover" />

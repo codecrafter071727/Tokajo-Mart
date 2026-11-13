@@ -3,14 +3,22 @@
 import type { Category } from "@qc/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { ConfirmModal, Thumb, Toast } from "../../components/catalog-ui";
+import { PageActions } from "../../components/page-actions";
 import {
-  ConfirmModal,
-  primaryButton,
-  secondaryButton,
-  Thumb,
-  Toast,
-} from "../../components/catalog-ui";
-import { TableShell, td, th } from "../../components/ui";
+  Alert,
+  Button,
+  EmptyRow,
+  LoadingRows,
+  rowAction,
+  rowActionDanger,
+  TableShell,
+  td,
+  tdActions,
+  tdNum,
+  th,
+  thNum,
+} from "../../components/ui";
 import { catalogAdmin } from "../../lib/catalog-admin";
 import { CategoryDialog } from "./category-dialog";
 
@@ -38,15 +46,9 @@ export function CategoriesPanel() {
 
   if (categories.isError) {
     return (
-      <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-6">
-        <p className="font-bold text-red-800">Could not load categories.</p>
-        <button
-          type="button"
-          onClick={() => void categories.refetch()}
-          className={`mt-3 ${primaryButton}`}
-        >
-          Try again
-        </button>
+      <div className="space-y-3">
+        <Alert>Could not load categories.</Alert>
+        <Button onClick={() => void categories.refetch()}>Try again</Button>
       </div>
     );
   }
@@ -56,92 +58,74 @@ export function CategoriesPanel() {
 
   return (
     <>
-      <div className="mb-4 flex items-center gap-3">
-        <p className="text-sm text-ink-500">
-          Categories show on the customer home screen in this order. Lower numbers come first.
-        </p>
-        <button
-          type="button"
-          onClick={() => setEditing("new")}
-          className={`ml-auto ${primaryButton}`}
-        >
+      <PageActions>
+        <Button variant="primary" icon="plus" onClick={() => setEditing("new")}>
           New category
-        </button>
-      </div>
+        </Button>
+      </PageActions>
+      <p className="mb-4 text-sm text-ink-500">
+        Categories show on the customer home screen in this order. Lower numbers come first.
+      </p>
 
       <TableShell>
-        <table className="w-full">
-          <thead className="border-b border-line">
+        <table>
+          <thead>
             <tr>
-              {["Category", "Colour", "Order", ""].map((h) => (
-                <th key={h || "actions"} className={th}>
-                  {h}
-                </th>
-              ))}
+              <th className={th}>Category</th>
+              <th className={th}>Colour</th>
+              <th className={thNum}>Order</th>
+              <th className={th}>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {categories.isPending
-              ? Array.from({ length: 4 }, (_, i) => (
-                  <tr key={i} className="border-b border-line last:border-0">
-                    <td className={td} colSpan={4}>
-                      <div className="h-8 animate-pulse rounded bg-surface" />
-                    </td>
-                  </tr>
-                ))
-              : list.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="border-b border-line last:border-0 hover:bg-brand-50/40"
-                  >
-                    <td className={td}>
-                      <div className="flex items-center gap-3">
-                        <Thumb
-                          imageUrl={c.imageUrl}
-                          emoji={c.emoji}
-                          fit={c.imageFit}
-                          color={c.color}
-                        />
-                        <div>
-                          <div className="font-semibold">{c.name}</div>
-                          <div className="text-xs text-ink-500">{c.id}</div>
-                        </div>
+            {categories.isPending ? (
+              <LoadingRows colSpan={4} />
+            ) : (
+              list.map((c) => (
+                <tr key={c.id}>
+                  <td className={td}>
+                    <div className="flex items-center gap-3">
+                      <Thumb
+                        imageUrl={c.imageUrl}
+                        emoji={c.emoji}
+                        fit={c.imageFit}
+                        color={c.color}
+                      />
+                      <div>
+                        <div className="font-medium">{c.name}</div>
+                        <div className="text-xs text-ink-500">{c.id}</div>
                       </div>
-                    </td>
-                    <td className={td}>
-                      <span className="inline-flex items-center gap-2 text-ink-500">
-                        <span
-                          className="size-4 rounded border border-line"
-                          style={{ backgroundColor: c.color }}
-                        />
-                        {c.color}
-                      </span>
-                    </td>
-                    <td className={`${td} tabular-nums`}>{c.sortOrder}</td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(c)}
-                        className={`${secondaryButton} mr-2 !px-3 !py-1.5`}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleting(c)}
-                        className={`${secondaryButton} !px-3 !py-1.5`}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    </div>
+                  </td>
+                  <td className={td}>
+                    <span className="inline-flex items-center gap-2 text-ink-500">
+                      <span
+                        className="size-4 rounded border border-line"
+                        style={{ backgroundColor: c.color }}
+                      />
+                      {c.color}
+                    </span>
+                  </td>
+                  <td className={tdNum}>{c.sortOrder}</td>
+                  <td className={tdActions}>
+                    <button type="button" onClick={() => setEditing(c)} className={rowAction}>
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleting(c)}
+                      className={rowActionDanger}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
             {!categories.isPending && list.length === 0 ? (
-              <tr>
-                <td className={`${td} py-10 text-center text-ink-500`} colSpan={4}>
-                  No categories yet.
-                </td>
-              </tr>
+              <EmptyRow colSpan={4}>No categories yet.</EmptyRow>
             ) : null}
           </tbody>
         </table>

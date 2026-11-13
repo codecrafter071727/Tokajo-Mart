@@ -3,15 +3,24 @@
 import type { AdminWarehouse, StockRow } from "@qc/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Thumb } from "../../components/catalog-ui";
+import { PageActions } from "../../components/page-actions";
 import {
   Button,
   Alert,
   Badge,
   EmptyRow,
   LoadingRows,
+  rowAction,
+  SearchInput,
+  selectCls,
   TableShell,
   th,
   td,
+  tdActions,
+  tdNum,
+  thNum,
+  Toggle,
   Toolbar,
 } from "../../components/ui";
 import { errorMessage, gw } from "../../lib/gw";
@@ -93,12 +102,22 @@ export function Inventory() {
 
   return (
     <>
+      <PageActions>
+        <Button
+          variant="primary"
+          icon="plus"
+          disabled={!warehouseId}
+          onClick={() => setDialog({ kind: "receive" })}
+        >
+          Receive stock
+        </Button>
+      </PageActions>
       <Toolbar>
         <select
           aria-label="Warehouse"
           value={warehouseId}
           onChange={(event) => setChosen(event.target.value)}
-          className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
+          className={selectCls}
         >
           {warehouses.data?.items.map((w) => (
             <option key={w.id} value={w.id}>
@@ -106,31 +125,27 @@ export function Inventory() {
             </option>
           ))}
         </select>
-        <input
-          type="search"
+        <SearchInput
           aria-label="Search products"
           placeholder="Search by name or id"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="w-64 rounded-lg border border-line bg-white px-3 py-2 text-sm"
         />
-        <label className="flex items-center gap-2 text-sm font-semibold">
-          <input
-            type="checkbox"
-            checked={lowOnly}
-            onChange={(event) => setLowOnly(event.target.checked)}
-          />
-          Low stock only ({lowCount})
-        </label>
-        <div className="ml-auto">
-          <Button
-            variant="primary"
-            disabled={!warehouseId}
-            onClick={() => setDialog({ kind: "receive" })}
-          >
-            Receive stock
-          </Button>
-        </div>
+        <Toggle
+          label={
+            <>
+              Low stock only{" "}
+              <span className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900 tabular-nums">
+                {lowCount}
+              </span>
+            </>
+          }
+          checked={lowOnly}
+          onChange={setLowOnly}
+        />
+        <span className="ml-auto text-sm text-ink-500 tabular-nums">
+          {stock.data ? `${rows.length} of ${stock.data.length} products` : ""}
+        </span>
       </Toolbar>
 
       {notice ? (
@@ -138,8 +153,16 @@ export function Inventory() {
           <Alert tone="success">{notice}</Alert>
         </div>
       ) : null}
-      {warehouses.isError ? <Alert>{errorMessage(warehouses.error)}</Alert> : null}
-      {stock.isError ? <Alert>{errorMessage(stock.error)}</Alert> : null}
+      {warehouses.isError ? (
+        <div className="mb-4">
+          <Alert>{errorMessage(warehouses.error)}</Alert>
+        </div>
+      ) : null}
+      {stock.isError ? (
+        <div className="mb-4">
+          <Alert>{errorMessage(stock.error)}</Alert>
+        </div>
+      ) : null}
       {names.isError ? (
         <div className="mb-4">
           <Alert tone="info">Product names could not be loaded, so ids are shown instead.</Alert>
@@ -147,21 +170,25 @@ export function Inventory() {
       ) : null}
 
       <TableShell>
-        <table className="w-full">
-          <thead className="border-b border-line">
+        <table>
+          <thead>
             <tr>
-              {["Product", "On hand", "Held", "Free", "Order limit", ""].map((h, i) => (
-                <th key={h || i} className={`${th} ${i >= 1 && i <= 3 ? "text-right" : ""}`}>
-                  {h}
-                </th>
-              ))}
+              <th className={th}>Product</th>
+              <th className={thNum}>On hand</th>
+              <th className={thNum}>Held</th>
+              <th className={thNum}>Free</th>
+              <th className={`${th} hidden xl:table-cell`}>Status</th>
+              <th className={`${thNum} hidden xl:table-cell`}>Order limit</th>
+              <th className={th}>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {stock.isPending && warehouseId ? (
-              <LoadingRows colSpan={6} />
+            {warehouses.isPending || (stock.isPending && warehouseId) ? (
+              <LoadingRows colSpan={7} rows={8} />
             ) : rows.length === 0 ? (
-              <EmptyRow colSpan={6}>
+              <EmptyRow colSpan={7}>
                 {(stock.data ?? []).length === 0
                   ? `No stock at ${warehouse?.name ?? "this warehouse"} yet. Use Receive stock to add some.`
                   : "No products match."}
@@ -171,55 +198,71 @@ export function Inventory() {
                 const product = label(row.productId);
                 const low = row.available <= LOW_STOCK;
                 return (
-                  <tr
-                    key={row.productId}
-                    className="border-b border-line last:border-0 hover:bg-brand-50/40"
-                  >
+                  <tr key={row.productId}>
                     <td className={`${td} min-w-56`}>
-                      <div className="font-bold">
-                        {product ? `${product.emoji} ${product.name}` : row.productId}
-                      </div>
-                      <div className="text-xs text-ink-500">
-                        {product ? `${product.unit} · ` : ""}
-                        {row.productId}
-                        {row.rackLocation ? ` · Rack ${row.rackLocation}` : ""}
+                      <div className="flex items-center gap-3">
+                        <Thumb
+                          imageUrl={product?.imageUrl ?? null}
+                          emoji={product?.emoji ?? ""}
+                          fit={product?.imageFit ?? "contain"}
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">
+                            {product?.name ?? row.productId}
+                          </div>
+                          <div className="text-xs text-ink-500">
+                            {product ? `${product.unit} · ` : ""}
+                            {row.productId}
+                            {row.rackLocation ? ` · Rack ${row.rackLocation}` : ""}
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className={`${td} text-right tabular-nums`}>{row.onHand}</td>
-                    <td className={`${td} text-right tabular-nums text-ink-500`}>{row.reserved}</td>
-                    <td className={`${td} text-right tabular-nums`}>
-                      <span className="font-bold">{row.available}</span>{" "}
+                    <td className={tdNum}>{row.onHand}</td>
+                    <td className={`${tdNum} text-ink-500`}>{row.reserved}</td>
+                    <td
+                      className={`${tdNum} font-semibold ${
+                        row.available === 0 ? "text-red-700" : low ? "text-amber-700" : ""
+                      }`}
+                    >
+                      {row.available}
+                    </td>
+                    <td className={`${td} hidden xl:table-cell`}>
                       {row.available === 0 ? (
-                        <Badge tone="red">Out</Badge>
+                        <Badge tone="red">Out of stock</Badge>
                       ) : low ? (
                         <Badge tone="amber">Low</Badge>
-                      ) : null}
+                      ) : (
+                        <Badge tone="green">In stock</Badge>
+                      )}
                     </td>
-                    <td className={`${td} whitespace-nowrap tabular-nums`}>
+                    <td
+                      className={`${tdNum} hidden xl:table-cell ${row.maxPerOrder ? "" : "text-ink-300"}`}
+                    >
                       {row.maxPerOrder ?? "None"}
                     </td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
-                      <Button
-                        small
-                        variant="ghost"
+                    <td className={tdActions}>
+                      <button
+                        type="button"
+                        className={rowAction}
                         onClick={() => setDialog({ kind: "adjust", row })}
                       >
                         Adjust
-                      </Button>
-                      <Button
-                        small
-                        variant="ghost"
+                      </button>
+                      <button
+                        type="button"
+                        className={rowAction}
                         onClick={() => setDialog({ kind: "edit", row })}
                       >
                         Edit
-                      </Button>
-                      <Button
-                        small
-                        variant="ghost"
+                      </button>
+                      <button
+                        type="button"
+                        className={rowAction}
                         onClick={() => setDialog({ kind: "ledger", row })}
                       >
                         History
-                      </Button>
+                      </button>
                     </td>
                   </tr>
                 );

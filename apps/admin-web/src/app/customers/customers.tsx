@@ -13,6 +13,10 @@ import {
   th,
   td,
   Toolbar,
+  tdActions,
+  selectCls,
+  SearchInput,
+  PersonCell,
 } from "../../components/ui";
 import { joinedDate } from "../../lib/dates";
 import { errorMessage } from "../../lib/gw";
@@ -30,21 +34,19 @@ export function Customers() {
   return (
     <>
       <Toolbar>
-        <input
-          type="search"
+        <SearchInput
           aria-label="Search customers"
           placeholder="Search by name or phone"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="w-72 rounded-lg border border-line bg-white px-3 py-2 text-sm"
         />
         <select
           aria-label="Status"
           value={status}
           onChange={(event) => setStatus(event.target.value)}
-          className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
+          className={selectCls}
         >
-          <option value="">All</option>
+          <option value="">All statuses</option>
           <option value="active">Active</option>
           <option value="blocked">Blocked</option>
         </select>
@@ -77,7 +79,9 @@ export function Customers() {
             ) : (
               customers.map((c) => (
                 <tr key={c.id} className="border-b border-line last:border-0 hover:bg-brand-50/40">
-                  <td className={`${td} font-bold`}>{c.name || "No name"}</td>
+                  <td className={td}>
+                    <PersonCell name={c.name || "No name"} />
+                  </td>
                   <td className={`${td} tabular-nums`}>{c.phone ?? ""}</td>
                   <td className={td}>
                     <Badge tone={c.status === "blocked" ? "red" : "green"}>
@@ -85,8 +89,8 @@ export function Customers() {
                     </Badge>
                   </td>
                   <td className={`${td} text-ink-500`}>{joinedDate(c.createdAt)}</td>
-                  <td className={`${td} text-right`}>
-                    <Button small variant="ghost" onClick={() => setBlocking(c)}>
+                  <td className={tdActions}>
+                    <Button small variant="dangerGhost" onClick={() => setBlocking(c)}>
                       {c.status === "blocked" ? "Unblock" : "Block"}
                     </Button>
                   </td>

@@ -32,7 +32,19 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
       // keep the default
     }
   }, []);
-  if (!data) return null;
+  if (!data) {
+    // A quiet frame while we read who is signed in, so the screen does not flash empty
+    return (
+      <div className="min-h-screen" aria-busy="true">
+        <div className="h-16 border-b border-line bg-white" />
+        <div className="mx-auto grid max-w-[1440px] gap-3 px-4 py-6 md:grid-cols-4 lg:px-6">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-20 animate-pulse rounded-xl bg-line/70" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   const isAdmin = data.role === "admin";
   const warehouseId = isAdmin ? picked : (data.warehouseId ?? picked);
   return (

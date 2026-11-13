@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Modal as BaseModal } from "./dialogs";
+import { Alert, buttonClass, inputCls, dialogFooter } from "./ui";
 import { AdminApiError } from "../lib/catalog-admin";
 
-export const fieldClass = "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm";
-export const primaryButton =
-  "rounded-lg bg-brand-600 px-5 py-2 text-sm font-extrabold text-ink-900 disabled:opacity-50";
-export const secondaryButton =
-  "rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold hover:bg-surface disabled:opacity-50";
-export const dangerButton =
-  "rounded-lg bg-red-600 px-5 py-2 text-sm font-extrabold text-white disabled:opacity-50";
+export const fieldClass = inputCls;
+export const primaryButton = buttonClass("primary");
+export const secondaryButton = buttonClass("secondary");
+export const dangerButton = buttonClass("danger");
 
-/** A modal built on the native dialog element: focus trap, Escape and backdrop come for free. */
+/** The shared dialog, with the catalog screens' vertical rhythm inside it. */
 export function Modal({
   title,
   onClose,
@@ -23,24 +22,10 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      aria-labelledby="modal-title"
-      className={`m-auto w-full ${wide ? "max-w-2xl" : "max-w-lg"} rounded-2xl p-0 shadow-xl backdrop:bg-black/40`}
-    >
-      <div className="space-y-4 p-6">
-        <h2 id="modal-title" className="text-lg font-extrabold">
-          {title}
-        </h2>
-        {children}
-      </div>
-    </dialog>
+    <BaseModal title={title} onClose={onClose} wide={wide}>
+      <div className="space-y-4">{children}</div>
+    </BaseModal>
   );
 }
 
@@ -56,11 +41,7 @@ export function ErrorBanner({ error }: { error: unknown }) {
   if (!error) return null;
   const message =
     error instanceof AdminApiError ? error.message : "Something went wrong. Try again.";
-  return (
-    <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
-      {message}
-    </p>
-  );
+  return <Alert>{message}</Alert>;
 }
 
 export function Toast({ message }: { message: string | null }) {
@@ -68,7 +49,7 @@ export function Toast({ message }: { message: string | null }) {
   return (
     <p
       role="status"
-      className="fixed bottom-6 right-6 z-50 rounded-lg bg-ink-900 px-4 py-3 text-sm font-semibold text-white shadow-lg"
+      className="fixed bottom-6 right-6 z-50 rounded-lg bg-ink-900 px-4 py-3 text-sm font-medium text-white shadow-dialog"
     >
       {message}
     </p>
@@ -99,7 +80,7 @@ export function ConfirmModal({
     <Modal title={title} onClose={onClose}>
       <div className="text-sm text-ink-700">{body}</div>
       <ErrorBanner error={error} />
-      <div className="flex justify-end gap-3 pt-2">
+      <div className={dialogFooter}>
         <button type="button" onClick={onClose} className={secondaryButton}>
           Cancel
         </button>

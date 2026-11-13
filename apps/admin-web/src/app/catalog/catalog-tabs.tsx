@@ -13,7 +13,7 @@ export function CatalogTabs() {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("products");
   return (
     <>
-      <div role="tablist" aria-label="Catalog" className="mb-5 flex gap-1 border-b border-line">
+      <div role="tablist" aria-label="Catalog" className="mb-5 flex gap-6 border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -21,7 +21,7 @@ export function CatalogTabs() {
             type="button"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-bold ${
+            className={`-mb-px border-b-2 px-1 pb-2.5 pt-1 text-sm font-semibold transition-colors ${
               tab === t.id
                 ? "border-brand-600 text-ink-900"
                 : "border-transparent text-ink-500 hover:text-ink-900"

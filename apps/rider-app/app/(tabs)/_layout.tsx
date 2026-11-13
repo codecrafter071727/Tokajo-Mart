@@ -31,8 +31,14 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.brand[700],
         tabBarInactiveTintColor: colors.ink[500],
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "700" },
-        tabBarStyle: { height: 64, paddingTop: 6 },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: "800" },
+        tabBarStyle: {
+          height: 68,
+          paddingTop: 8,
+          paddingBottom: 8,
+          borderTopColor: colors.line[300],
+          backgroundColor: colors.surface[0],
+        },
       }}
     >
       <Tabs.Screen name="index" options={tab("Jobs", "bicycle-outline", "bicycle")} />

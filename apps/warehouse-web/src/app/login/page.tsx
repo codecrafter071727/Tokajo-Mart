@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { Button, Icon, inputClass } from "../../components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -21,7 +23,7 @@ export default function LoginPage() {
     }).catch(() => null);
     const json = await res?.json().catch(() => null);
     if (!res?.ok) {
-      setError(json?.error?.message ?? "Cannot reach the server.");
+      setError(json?.error?.message ?? "Cannot reach the server. Check the connection.");
       setBusy(false);
       return;
     }
@@ -30,58 +32,98 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center p-6">
-      <form
-        onSubmit={submit}
-        className="w-full max-w-sm rounded-2xl border border-line bg-white p-8 shadow-sm"
-      >
-        <div className="mb-6 flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-brand-600 text-lg font-extrabold text-ink-900">
+    <main className="grid min-h-screen lg:grid-cols-2">
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-brand-600 p-12 text-ink-900 lg:flex">
+        <div className="relative z-10 flex items-center gap-3">
+          <span className="grid size-11 place-items-center rounded-xl bg-ink-900 text-xl font-extrabold text-brand-500">
             Q
           </span>
-          <div>
-            <h1 className="text-xl font-extrabold">QC Warehouse</h1>
-            <p className="text-sm text-ink-500">Sign in to pack orders</p>
-          </div>
+          <span className="text-xl font-extrabold">Tokajo Warehouse</span>
         </div>
-        {error ? (
-          <p
-            role="alert"
-            className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-800"
-          >
-            {error}
+        <div className="relative z-10">
+          <p className="max-w-md text-[30px] font-extrabold leading-tight">
+            Pick fast. Pack right. Hand over in seconds.
           </p>
-        ) : null}
-        <label className="mb-4 block text-sm font-semibold">
-          Email
-          <input
-            type="email"
-            required
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line px-3 py-2.5 text-base outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-200"
-          />
-        </label>
-        <label className="mb-6 block text-sm font-semibold">
-          Password
-          <input
-            type="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line px-3 py-2.5 text-base outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-200"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-xl bg-brand-600 py-3 text-base font-extrabold text-ink-900 transition hover:bg-brand-500 disabled:opacity-60"
-        >
-          {busy ? "Signing in..." : "Sign in"}
-        </button>
-      </form>
+          <ul className="mt-6 space-y-3 text-lg font-semibold text-ink-900/80">
+            {[
+              "Live queue with late orders on top",
+              "Tap to tick every item",
+              "Big handover codes for riders",
+            ].map((line) => (
+              <li key={line} className="flex items-center gap-3">
+                <span className="grid size-7 place-items-center rounded-full bg-ink-900 text-brand-500">
+                  <Icon name="check" size={16} strokeWidth={3} />
+                </span>
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-24 -right-24 size-96 rounded-full bg-brand-500/50"
+        />
+      </section>
+
+      <section className="grid place-items-center p-6">
+        <form onSubmit={submit} className="w-full max-w-sm">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <span className="grid size-10 place-items-center rounded-xl bg-brand-600 text-lg font-extrabold text-ink-900">
+              Q
+            </span>
+            <span className="text-lg font-extrabold">Tokajo Warehouse</span>
+          </div>
+          <h1 className="text-[30px] font-extrabold leading-9">Sign in</h1>
+          <p className="mt-1 text-base text-ink-700">Use the account your manager gave you.</p>
+
+          {error ? (
+            <p
+              role="alert"
+              className="mt-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-800"
+            >
+              <Icon name="alert" size={18} className="shrink-0" />
+              {error}
+            </p>
+          ) : null}
+
+          <label className="mt-6 block text-sm font-bold text-ink-700">
+            Email
+            <input
+              type="email"
+              required
+              autoComplete="username"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`${inputClass} mt-1 h-12`}
+            />
+          </label>
+          <label className="mt-4 block text-sm font-bold text-ink-700">
+            Password
+            <span className="relative mt-1 block">
+              <input
+                type={show ? "text" : "password"}
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${inputClass} h-12 pr-12`}
+              />
+              <button
+                type="button"
+                onClick={() => setShow((v) => !v)}
+                aria-label={show ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-md text-ink-500 hover:text-ink-900"
+              >
+                <Icon name={show ? "eyeOff" : "eye"} />
+              </button>
+            </span>
+          </label>
+          <Button type="submit" size="lg" className="mt-6 w-full" disabled={busy}>
+            {busy ? "Signing in..." : "Sign in"}
+          </Button>
+        </form>
+      </section>
     </main>
   );
 }

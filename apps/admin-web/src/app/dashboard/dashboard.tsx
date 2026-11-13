@@ -2,8 +2,19 @@
 
 import type { AdminWarehouse, OrderSummary } from "@qc/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Alert, Badge, TableShell, th, td, Toolbar } from "../../components/ui";
+import { useEffect, useRef, useState } from "react";
+import { Icon, type IconName } from "../../components/icons";
+import {
+  Alert,
+  Panel,
+  Segmented,
+  selectCls,
+  td,
+  tdNum,
+  th,
+  thNum,
+  Toolbar,
+} from "../../components/ui";
 import { rupees } from "../../lib/api";
 import { rangeFor, RANGES, shortDate, type RangeKey } from "../../lib/dates";
 import { errorMessage, gw, qs } from "../../lib/gw";
@@ -40,28 +51,17 @@ export function Dashboard() {
   return (
     <>
       <Toolbar>
-        <div role="group" aria-label="Date range" className="flex gap-2">
-          {RANGES.map((r) => (
-            <button
-              key={r.key}
-              type="button"
-              aria-pressed={range === r.key}
-              onClick={() => setRange(r.key)}
-              className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${
-                range === r.key
-                  ? "border-brand-600 bg-brand-100 text-brand-900"
-                  : "border-line bg-white text-ink-700"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Date range"
+          options={RANGES.map((r) => ({ value: r.key, label: r.label }))}
+          value={range}
+          onChange={setRange}
+        />
         <select
           aria-label="Warehouse"
           value={warehouseId}
           onChange={(event) => setWarehouseId(event.target.value)}
-          className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
+          className={selectCls}
         >
           <option value="">All warehouses</option>
           {warehouses.data?.items.map((w) => (
@@ -70,8 +70,9 @@ export function Dashboard() {
             </option>
           ))}
         </select>
-        <span className="text-xs text-ink-500">
+        <span className="ml-auto text-sm text-ink-500 tabular-nums">
           {shortDate(from)} to {shortDate(to)}
+          {summary.isFetching && !summary.isPending ? " · updating" : ""}
         </span>
       </Toolbar>
 
@@ -88,26 +89,59 @@ export function Dashboard() {
 
 function Skeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading the report">
+    <div className="space-y-6" aria-busy="true" aria-label="Loading the report">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded-xl bg-white" />
+          <div key={i} className="h-[118px] animate-pulse rounded-xl border border-line bg-white" />
         ))}
       </div>
-      <div className="h-64 animate-pulse rounded-xl bg-white" />
+      <div className="h-80 animate-pulse rounded-xl border border-line bg-white" />
     </div>
   );
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Kpi({
+  label,
+  value,
+  hint,
+  icon,
+  tone = "brand",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  icon: IconName;
+  tone?: "brand" | "amber" | "red" | "blue";
+}) {
+  const tones = {
+    brand: "bg-brand-50 text-brand-700",
+    amber: "bg-amber-50 text-amber-700",
+    red: "bg-red-50 text-red-700",
+    blue: "bg-blue-50 text-blue-700",
+  } as const;
   return (
-    <div className="rounded-xl border border-line bg-white p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-ink-500">{label}</p>
-      <p className="mt-2 text-2xl font-extrabold tabular-nums">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-ink-500">{hint}</p> : null}
+    <div className="rounded-xl border border-line bg-white p-4 shadow-card">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-ink-500">{label}</p>
+        <span className={`grid size-8 place-items-center rounded-lg ${tones[tone]}`}>
+          <Icon name={icon} size={16} />
+        </span>
+      </div>
+      <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">{value}</p>
+      {hint ? <p className="mt-0.5 text-xs text-ink-500">{hint}</p> : null}
     </div>
   );
 }
+
+const STATUS_TONE: Record<string, { bar: string; dot: string }> = {
+  confirmed: { bar: "bg-blue-500", dot: "bg-blue-500" },
+  delivered: { bar: "bg-brand-600", dot: "bg-brand-600" },
+  cancelled: { bar: "bg-red-500", dot: "bg-red-500" },
+  payment_failed: { bar: "bg-red-500", dot: "bg-red-500" },
+  expired: { bar: "bg-ink-300", dot: "bg-ink-300" },
+  pending_payment: { bar: "bg-ink-300", dot: "bg-ink-300" },
+};
+const inProgress = { bar: "bg-amber-500", dot: "bg-amber-500" };
 
 function Report({
   data,
@@ -123,20 +157,46 @@ function Report({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Orders" value={String(t.orders)} hint={`${t.active} in progress`} />
-        <Kpi label="Delivered sales" value={rupees(t.gmvPaise)} hint={`${t.delivered} delivered`} />
-        <Kpi label="Average order" value={t.delivered ? rupees(t.averageOrderPaise) : "None yet"} />
         <Kpi
+          icon="orders"
+          label="Orders"
+          value={String(t.orders)}
+          hint={`${t.active} in progress`}
+        />
+        <Kpi
+          icon="check"
+          label="Delivered sales"
+          value={rupees(t.gmvPaise)}
+          hint={`${t.delivered} delivered`}
+        />
+        <Kpi
+          icon="catalog"
+          label="Average order"
+          value={t.delivered ? rupees(t.averageOrderPaise) : "None yet"}
+          tone="blue"
+        />
+        <Kpi
+          icon="alert"
           label="Cancel rate"
           value={`${t.cancelRatePercent}%`}
           hint={`${t.cancelled} cancelled`}
+          tone={t.cancelRatePercent > 5 ? "red" : "amber"}
         />
         <Kpi
+          icon="riders"
           label="Average delivery"
-          value={t.averageDeliveryMins === null ? "None yet" : `${t.averageDeliveryMins} min`}
+          value={
+            t.averageDeliveryMins === null
+              ? "None yet"
+              : t.averageDeliveryMins < 1
+                ? "Under 1 min"
+                : `${t.averageDeliveryMins} min`
+          }
           hint="Placed to delivered"
+          tone="blue"
         />
         <Kpi
+          icon="dashboard"
           label="On time"
           value={t.onTimePercent === null ? "None yet" : `${t.onTimePercent}%`}
           hint="Within the promised time"
@@ -146,106 +206,96 @@ function Report({
       <DailyChart daily={data.daily} />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section aria-labelledby="by-status">
-          <h2 id="by-status" className="mb-2 text-sm font-extrabold">
-            Orders by status
-          </h2>
-          <TableShell>
-            <table className="w-full">
-              <tbody>
-                {statuses.length === 0 ? (
-                  <tr>
-                    <td className={`${td} py-8 text-center text-ink-500`}>
-                      No orders in this range.
-                    </td>
-                  </tr>
-                ) : (
-                  statuses.map(([status, count]) => (
-                    <tr key={status} className="border-b border-line last:border-0">
-                      <td className={td}>
-                        <Badge
-                          tone={
-                            status === "delivered"
-                              ? "green"
-                              : status === "cancelled" || status === "payment_failed"
-                                ? "red"
-                                : "amber"
-                          }
-                        >
-                          {STATUS_LABEL[status] ?? status}
-                        </Badge>
-                      </td>
-                      <td className={`${td} text-right font-bold tabular-nums`}>{count}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </TableShell>
-        </section>
+        <Panel title="Orders by status">
+          {statuses.length === 0 ? (
+            <p className="py-6 text-center text-sm text-ink-500">No orders in this range.</p>
+          ) : (
+            <ul className="space-y-3">
+              {statuses.map(([status, count]) => {
+                const tone = STATUS_TONE[status] ?? inProgress;
+                const share = t.orders ? Math.round((count / t.orders) * 100) : 0;
+                return (
+                  <li key={status}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 font-medium">
+                        <span className={`size-2 rounded-full ${tone.dot}`} aria-hidden="true" />
+                        {STATUS_LABEL[status] ?? status}
+                      </span>
+                      <span className="tabular-nums text-ink-500">
+                        <span className="font-semibold text-ink-900">{count}</span> · {share}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-surface">
+                      <div
+                        className={`h-full rounded-full ${tone.bar}`}
+                        style={{ width: `${Math.max(share, 2)}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Panel>
 
         {data.byWarehouse.length > 0 ? (
-          <section aria-labelledby="by-wh">
-            <h2 id="by-wh" className="mb-2 text-sm font-extrabold">
-              By warehouse
-            </h2>
-            <TableShell>
-              <table className="w-full">
-                <thead className="border-b border-line">
+          <Panel title="By warehouse" flush>
+            <div className="data-table">
+              <table>
+                <thead>
                   <tr>
                     <th className={th}>Warehouse</th>
-                    <th className={`${th} text-right`}>Orders</th>
-                    <th className={`${th} text-right`}>Delivered sales</th>
+                    <th className={thNum}>Orders</th>
+                    <th className={thNum}>Delivered sales</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.byWarehouse.map((w) => (
-                    <tr key={w.warehouseId} className="border-b border-line last:border-0">
-                      <td className={`${td} font-bold`}>{nameOf(w.warehouseId)}</td>
-                      <td className={`${td} text-right tabular-nums`}>{w.orders}</td>
-                      <td className={`${td} text-right tabular-nums`}>{rupees(w.gmvPaise)}</td>
+                    <tr key={w.warehouseId}>
+                      <td className={`${td} font-medium`}>{nameOf(w.warehouseId)}</td>
+                      <td className={tdNum}>{w.orders}</td>
+                      <td className={`${tdNum} font-semibold`}>{rupees(w.gmvPaise)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </TableShell>
-          </section>
+            </div>
+          </Panel>
         ) : null}
       </div>
 
-      <section aria-labelledby="top">
-        <h2 id="top" className="mb-2 text-sm font-extrabold">
-          Top products by revenue
-        </h2>
-        <TableShell>
-          <table className="w-full">
-            <thead className="border-b border-line">
+      <Panel title="Top products by revenue" flush>
+        <div className="data-table">
+          <table>
+            <thead>
               <tr>
+                <th className={`${th} w-12`}>#</th>
                 <th className={th}>Product</th>
-                <th className={`${th} text-right`}>Units</th>
-                <th className={`${th} text-right`}>Revenue</th>
+                <th className={thNum}>Units</th>
+                <th className={thNum}>Revenue</th>
               </tr>
             </thead>
             <tbody>
               {data.topProducts.length === 0 ? (
                 <tr>
-                  <td className={`${td} py-8 text-center text-ink-500`} colSpan={3}>
+                  <td className={`${td} py-10 text-center text-ink-500`} colSpan={4}>
                     Nothing sold in this range.
                   </td>
                 </tr>
               ) : (
-                data.topProducts.map((p) => (
-                  <tr key={p.productId} className="border-b border-line last:border-0">
-                    <td className={`${td} font-bold`}>{p.name}</td>
-                    <td className={`${td} text-right tabular-nums`}>{p.quantity}</td>
-                    <td className={`${td} text-right tabular-nums`}>{rupees(p.revenuePaise)}</td>
+                data.topProducts.map((p, i) => (
+                  <tr key={p.productId}>
+                    <td className={`${td} tabular-nums text-ink-500`}>{i + 1}</td>
+                    <td className={`${td} font-medium`}>{p.name}</td>
+                    <td className={tdNum}>{p.quantity}</td>
+                    <td className={`${tdNum} font-semibold`}>{rupees(p.revenuePaise)}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
-        </TableShell>
-      </section>
+        </div>
+      </Panel>
     </div>
   );
 }
@@ -257,8 +307,19 @@ function DailyChart({ daily }: { daily: OrderSummary["daily"] }) {
   const value = (d: OrderSummary["daily"][number]) =>
     metric === "orders" ? d.orders : d.gmvPaise / 100;
   const max = Math.max(1, ...daily.map(value));
-  const W = 720;
-  const H = 200;
+  // Draw at the real pixel width so labels stay 11px however wide the card is
+  const box = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(960);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setW(Math.max(320, Math.round(entry.contentRect.width)));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [table]);
+  const H = 220;
   const slot = W / Math.max(1, daily.length);
   const barW = Math.min(48, slot * 0.6);
   // Label every day on short ranges, every few days on long ones
@@ -266,121 +327,116 @@ function DailyChart({ daily }: { daily: OrderSummary["daily"] }) {
   const format = (n: number) => (metric === "orders" ? String(n) : rupees(n * 100));
 
   return (
-    <section aria-labelledby="daily" className="rounded-xl border border-line bg-white p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 id="daily" className="text-sm font-extrabold">
-          {metric === "orders" ? "Orders per day" : "Delivered sales per day"}
-        </h2>
+    <Panel
+      title={metric === "orders" ? "Orders per day" : "Delivered sales per day"}
+      actions={
         <div className="flex items-center gap-2">
-          <div role="group" aria-label="Chart metric" className="flex gap-1">
-            {(["orders", "gmv"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={metric === m}
-                onClick={() => setMetric(m)}
-                className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                  metric === m
-                    ? "border-brand-600 bg-brand-100 text-brand-900"
-                    : "border-line text-ink-700"
-                }`}
-              >
-                {m === "orders" ? "Orders" : "Sales"}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            aria-pressed={table}
-            onClick={() => setTable((v) => !v)}
-            className="rounded-full border border-line px-3 py-1 text-xs font-bold text-ink-700"
-          >
-            {table ? "Show chart" : "Show table"}
-          </button>
+          <Segmented
+            label="Chart metric"
+            options={[
+              { value: "orders", label: "Orders" },
+              { value: "gmv", label: "Sales" },
+            ]}
+            value={metric}
+            onChange={setMetric}
+          />
+          <Segmented
+            label="View"
+            options={[
+              { value: "chart", label: "Chart" },
+              { value: "table", label: "Table" },
+            ]}
+            value={table ? "table" : "chart"}
+            onChange={(v) => setTable(v === "table")}
+          />
         </div>
-      </div>
-
+      }
+    >
       {table ? (
-        <table className="w-full">
-          <thead className="border-b border-line">
-            <tr>
-              <th className={th}>Day</th>
-              <th className={`${th} text-right`}>Orders</th>
-              <th className={`${th} text-right`}>Delivered sales</th>
-            </tr>
-          </thead>
-          <tbody>
-            {daily.map((d) => (
-              <tr key={d.date} className="border-b border-line last:border-0">
-                <td className={td}>{shortDate(d.date)}</td>
-                <td className={`${td} text-right tabular-nums`}>{d.orders}</td>
-                <td className={`${td} text-right tabular-nums`}>{rupees(d.gmvPaise)}</td>
+        <div className="data-table -mx-5 -my-5">
+          <table>
+            <thead>
+              <tr>
+                <th className={th}>Day</th>
+                <th className={thNum}>Orders</th>
+                <th className={thNum}>Delivered sales</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {daily.map((d) => (
+                <tr key={d.date}>
+                  <td className={td}>{shortDate(d.date)}</td>
+                  <td className={tdNum}>{d.orders}</td>
+                  <td className={tdNum}>{rupees(d.gmvPaise)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
-        <svg
-          viewBox={`0 0 ${W} ${H + 28}`}
-          role="img"
-          aria-label={`${metric === "orders" ? "Orders" : "Delivered sales"} for each day, highest ${format(max)}`}
-          className="h-auto w-full"
-        >
-          {[0.25, 0.5, 0.75, 1].map((f) => (
-            <line
-              key={f}
-              x1={0}
-              x2={W}
-              y1={H - H * f}
-              y2={H - H * f}
-              stroke="#dde5e3"
-              strokeDasharray="3 4"
-            />
-          ))}
-          {daily.map((d, i) => {
-            const v = value(d);
-            const h = (v / max) * (H - 20);
-            const x = i * slot + (slot - barW) / 2;
-            return (
-              <g key={d.date}>
-                <title>{`${shortDate(d.date)}: ${format(v)}`}</title>
-                <rect
-                  x={x}
-                  y={H - h}
-                  width={barW}
-                  height={Math.max(h, v > 0 ? 2 : 0)}
-                  rx={4}
-                  fill="#42c86e"
-                />
-                {v > 0 ? (
-                  <text
-                    x={x + barW / 2}
-                    y={H - h - 5}
-                    textAnchor="middle"
-                    fontSize="11"
-                    fontWeight="700"
-                    fill="#3b4a47"
-                  >
-                    {format(v)}
-                  </text>
-                ) : null}
-                {i % step === 0 ? (
-                  <text
-                    x={x + barW / 2}
-                    y={H + 18}
-                    textAnchor="middle"
-                    fontSize="11"
-                    fill="#6b7a77"
-                  >
-                    {shortDate(d.date)}
-                  </text>
-                ) : null}
-              </g>
-            );
-          })}
-          <line x1={0} x2={W} y1={H} y2={H} stroke="#dde5e3" />
-        </svg>
+        <div ref={box}>
+          <svg
+            viewBox={`0 0 ${W} ${H + 28}`}
+            role="img"
+            aria-label={`${metric === "orders" ? "Orders" : "Delivered sales"} for each day, highest ${format(max)}`}
+            className="h-auto w-full"
+          >
+            {[0.25, 0.5, 0.75, 1].map((f) => (
+              <line
+                key={f}
+                x1={0}
+                x2={W}
+                y1={H - H * f}
+                y2={H - H * f}
+                stroke="#e3e9e7"
+                strokeDasharray="3 4"
+              />
+            ))}
+            {daily.map((d, i) => {
+              const v = value(d);
+              const h = (v / max) * (H - 20);
+              const x = i * slot + (slot - barW) / 2;
+              return (
+                <g key={d.date}>
+                  <title>{`${shortDate(d.date)}: ${format(v)}`}</title>
+                  <rect
+                    x={x}
+                    y={H - h}
+                    width={barW}
+                    height={Math.max(h, v > 0 ? 2 : 0)}
+                    rx={4}
+                    fill="#42c86e"
+                  />
+                  {v > 0 ? (
+                    <text
+                      x={x + barW / 2}
+                      y={H - h - 5}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fontWeight="700"
+                      fill="#3b4a47"
+                    >
+                      {format(v)}
+                    </text>
+                  ) : null}
+                  {i % step === 0 ? (
+                    <text
+                      x={x + barW / 2}
+                      y={H + 18}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fill="#6b7a77"
+                    >
+                      {shortDate(d.date)}
+                    </text>
+                  ) : null}
+                </g>
+              );
+            })}
+            <line x1={0} x2={W} y1={H} y2={H} stroke="#cfd9d6" />
+          </svg>
+        </div>
       )}
-    </section>
+    </Panel>
   );
 }

@@ -1,6 +1,6 @@
 // Copied from apps/customer-app/src/theme/tokens.ts (DESIGN.md says the token file is shared).
 // Move both into a shared package when a third consumer appears.
-// Design tokens — sole place hex values live (see DESIGN.md §14)
+// Design tokens: the only place hex values live (see DESIGN.md section 14)
 
 export const colors = {
   brand: {
@@ -10,6 +10,7 @@ export const colors = {
     500: "#5BD686",
     600: "#42C86E",
     700: "#238A47",
+    800: "#17642F",
     900: "#0C3D1D",
   },
   accent: {
@@ -21,6 +22,7 @@ export const colors = {
     900: "#14201E",
     700: "#3B4A47",
     500: "#6B7A77",
+    300: "#A9B5B2",
   },
   line: {
     300: "#DDE5E3",
@@ -29,6 +31,12 @@ export const colors = {
     0: "#FFFFFF",
     100: "#F3F6F5",
   },
+  /** The night side of the app: offline state and the active delivery header */
+  night: {
+    900: "#0F1A17",
+    700: "#22302C",
+  },
+  dangerTint: "#FDECEC",
   success: "#15803D",
   warning: "#B45309",
   danger: "#C62828",
@@ -55,6 +63,7 @@ export const radius = {
 } as const;
 
 export const typography = {
+  hero: { fontSize: 44, lineHeight: 50, fontWeight: "800" as const },
   display: { fontSize: 28, lineHeight: 34, fontWeight: "800" as const },
   titleLg: { fontSize: 22, lineHeight: 28, fontWeight: "700" as const },
   title: { fontSize: 18, lineHeight: 24, fontWeight: "700" as const },

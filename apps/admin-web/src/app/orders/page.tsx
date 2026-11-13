@@ -2,7 +2,20 @@ import type { AdminOrder, OrderStatus } from "@qc/contracts";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, PageHeader, TableShell, td, th } from "../../components/ui";
+import { AutoSubmitSelect } from "../../components/auto-submit-select";
+import {
+  Alert,
+  Badge,
+  chipClass,
+  EmptyRow,
+  PageHeader,
+  TableShell,
+  td,
+  tdNum,
+  th,
+  thNum,
+  Toolbar,
+} from "../../components/ui";
 import { rupees } from "../../lib/api";
 import { ACCESS_COOKIE, GATEWAY_URL } from "../../lib/session";
 
@@ -92,108 +105,91 @@ export default async function OrdersPage({
   const [orders, warehouses] = await Promise.all([load(status, warehouseId), loadWarehouses()]);
   if (orders === "expired") redirect("/session/refresh?next=/orders");
 
+  const count = orders === "failed" ? null : orders.length;
   return (
     <>
-      <PageHeader title="Orders" subtitle="Everything placed across the network, newest first." />
-      {warehouses.length > 1 ? (
-        <form method="get" className="mb-3 flex items-center gap-2">
-          {status ? <input type="hidden" name="status" value={status} /> : null}
-          <select
-            name="warehouseId"
-            aria-label="Warehouse"
-            defaultValue={warehouseId ?? ""}
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
-          >
-            <option value="">All warehouses</option>
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold"
-          >
-            Apply
-          </button>
-        </form>
-      ) : null}
-      <nav className="mb-4 flex flex-wrap gap-2" aria-label="Filter by status">
-        {FILTERS.map((f) => {
-          const active = (status ?? "all") === f.value;
-          return (
-            <Link
-              key={f.value}
-              href={href(f.value, warehouseId)}
-              aria-current={active ? "page" : undefined}
-              className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${
-                active
-                  ? "border-brand-600 bg-brand-100 text-brand-900"
-                  : "border-line bg-white text-ink-700"
-              }`}
-            >
-              {f.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <PageHeader
+        title="Orders"
+        subtitle={
+          count === null
+            ? "Everything placed across the network, newest first."
+            : `${count} ${count === 1 ? "order" : "orders"}, newest first.`
+        }
+      />
+      <Toolbar>
+        <nav className="flex flex-wrap gap-1.5" aria-label="Filter by status">
+          {FILTERS.map((f) => {
+            const active = (status ?? "all") === f.value;
+            return (
+              <Link
+                key={f.value}
+                href={href(f.value, warehouseId)}
+                aria-current={active ? "page" : undefined}
+                className={chipClass(active)}
+              >
+                {f.label}
+              </Link>
+            );
+          })}
+        </nav>
+        {warehouses.length > 1 ? (
+          <form method="get" className="ml-auto">
+            {status ? <input type="hidden" name="status" value={status} /> : null}
+            <AutoSubmitSelect name="warehouseId" label="Warehouse" defaultValue={warehouseId ?? ""}>
+              <option value="">All warehouses</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </AutoSubmitSelect>
+            <noscript>
+              <button type="submit">Apply</button>
+            </noscript>
+          </form>
+        ) : null}
+      </Toolbar>
 
       {orders === "failed" ? (
-        <p
-          role="alert"
-          className="rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-800"
-        >
-          Could not load orders. Check that the order service is running, then reload.
-        </p>
+        <Alert>Could not load orders. Check that the order service is running, then reload.</Alert>
       ) : (
         <TableShell>
-          <table className="w-full">
-            <thead className="border-b border-line">
+          <table>
+            <thead>
               <tr>
-                {[
-                  "Order",
-                  "Customer",
-                  "Items",
-                  "Total",
-                  "Payment",
-                  "Status",
-                  "Rider",
-                  "Placed",
-                ].map((h) => (
-                  <th key={h} className={th}>
-                    {h}
-                  </th>
-                ))}
+                <th className={th}>Order</th>
+                <th className={th}>Customer</th>
+                <th className={`${thNum} hidden xl:table-cell`}>Items</th>
+                <th className={thNum}>Total</th>
+                <th className={`${th} hidden xl:table-cell`}>Payment</th>
+                <th className={th}>Status</th>
+                <th className={th}>Rider</th>
+                <th className={thNum}>Placed</th>
               </tr>
             </thead>
             <tbody>
               {orders.map((o) => (
-                <tr key={o.id} className="border-b border-line last:border-0 hover:bg-brand-50/40">
-                  <td className={`${td} font-bold`}>{o.number}</td>
-                  <td className={td}>{o.customerName || "Customer"}</td>
-                  <td className={`${td} tabular-nums`}>
+                <tr key={o.id}>
+                  <td className={`${td} whitespace-nowrap font-semibold tabular-nums`}>
+                    {o.number}
+                  </td>
+                  <td className={`${td} whitespace-nowrap`}>{o.customerName || "Customer"}</td>
+                  <td className={`${tdNum} hidden xl:table-cell`}>
                     {o.items.reduce((n, i) => n + i.quantity, 0)}
                   </td>
-                  <td className={`${td} font-bold tabular-nums`}>{rupees(o.totalPaise)}</td>
-                  <td className={td}>
-                    <Badge tone="amber">COD</Badge>
-                  </td>
+                  <td className={`${tdNum} font-semibold`}>{rupees(o.totalPaise)}</td>
+                  <td className={`${td} hidden text-ink-500 xl:table-cell`}>Cash</td>
                   <td className={td}>
                     <Badge tone={STATUS[o.status].tone}>{STATUS[o.status].label}</Badge>
                   </td>
-                  <td className={`${td} ${o.rider ? "" : "text-ink-500"}`}>
+                  <td className={`${td} whitespace-nowrap ${o.rider ? "" : "text-ink-300"}`}>
                     {o.rider?.name ?? "Not assigned"}
                   </td>
-                  <td className={`${td} tabular-nums text-ink-500`}>{time(o.placedAt)}</td>
+                  <td className={`${tdNum} whitespace-nowrap text-ink-500`}>{time(o.placedAt)}</td>
                 </tr>
               ))}
               {orders.length === 0 ? (
-                <tr>
-                  <td className={`${td} py-10 text-center text-ink-500`} colSpan={8}>
-                    No orders here yet.
-                  </td>
-                </tr>
+                <EmptyRow colSpan={8}>No orders with this status yet.</EmptyRow>
               ) : null}
             </tbody>
           </table>
