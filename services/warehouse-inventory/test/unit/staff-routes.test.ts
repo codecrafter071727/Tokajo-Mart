@@ -188,6 +188,36 @@ describe("receiving and adjusting over HTTP", () => {
   });
 });
 
+describe("one product across warehouses", () => {
+  it("shows an admin every warehouse's stock of a product with totals", async () => {
+    const res = await call("GET", "/v1/inventory/stock/by-product/p1", admin);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.productId).toBe("p1");
+    expect(body.items.length).toBeGreaterThanOrEqual(1);
+    expect(body.items.every((r: { productId: string }) => r.productId === "p1")).toBe(true);
+    const onHand = body.items.reduce((n: number, r: { onHand: number }) => n + r.onHand, 0);
+    expect(body.totals.onHand).toBe(onHand);
+    expect(body.totals.available).toBe(body.totals.onHand - body.totals.reserved);
+  });
+
+  it("answers an empty list for a product nobody stocks", async () => {
+    const res = await call("GET", "/v1/inventory/stock/by-product/nothing-here", admin);
+    expect(res.json()).toEqual({
+      productId: "nothing-here",
+      items: [],
+      totals: { onHand: 0, reserved: 0, available: 0 },
+    });
+  });
+
+  it("is for admins only", async () => {
+    expect((await call("GET", "/v1/inventory/stock/by-product/p1")).statusCode).toBe(401);
+    for (const who of [customer, staff, manager]) {
+      expect((await call("GET", "/v1/inventory/stock/by-product/p1", who)).statusCode).toBe(403);
+    }
+  });
+});
+
 describe("warehouses", () => {
   it("lists all for admins and only their own for staff", async () => {
     expect(

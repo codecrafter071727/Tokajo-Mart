@@ -1,5 +1,10 @@
 import {
+  adminPaymentDetailSchema,
+  adminPaymentsQuerySchema,
+  adminPaymentsResponseSchema,
+  adminRefundBodySchema,
   checkoutResponseSchema,
+  paymentBatchItemSchema,
   paymentOrderParamsSchema,
   paymentSchema,
   verifyPaymentBodySchema,
@@ -61,6 +66,91 @@ export function registerPaymentRoutes(app: ServiceApp, payments: PaymentService)
       },
     },
     async (request) => payments.status(requireIdentity(request), request.params.orderId),
+  );
+
+  // --- Admin ---------------------------------------------------------------------------------
+  app.get(
+    "/v1/payments/admin",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Payments, newest first, with totals for the filtered range",
+        querystring: adminPaymentsQuerySchema,
+        response: { 200: adminPaymentsResponseSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      return payments.adminList(request.query);
+    },
+  );
+
+  app.get(
+    "/v1/payments/admin/:orderId",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "One order's payment with its refunds",
+        params: paymentOrderParamsSchema,
+        response: { 200: adminPaymentDetailSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      return payments.adminDetail(request.params.orderId);
+    },
+  );
+
+  app.post(
+    "/v1/payments/admin/orders/:orderId/refund",
+    {
+      // The role is checked before the body, so a stranger never learns what a valid body is
+      preValidation: async (request) => {
+        requireRole(request, "admin");
+      },
+      schema: {
+        tags: ["admin"],
+        summary: "Refund all or part of a payment (needs an Idempotency-Key header)",
+        params: paymentOrderParamsSchema,
+        body: adminRefundBodySchema,
+        response: { 200: adminPaymentDetailSchema },
+      },
+    },
+    async (request) => {
+      const key = request.headers["idempotency-key"];
+      return payments.adminRefund(
+        requireRole(request, "admin"),
+        request.params.orderId,
+        request.body,
+        typeof key === "string" ? key : undefined,
+      );
+    },
+  );
+
+  app.get(
+    "/internal/payments/batch",
+    {
+      schema: {
+        tags: ["internal"],
+        summary: "Payment status of several orders",
+        querystring: z.object({
+          orderIds: z
+            .string()
+            .min(1)
+            .transform((value) => [
+              ...new Set(
+                value
+                  .split(",")
+                  .map((id) => id.trim())
+                  .filter(Boolean),
+              ),
+            ])
+            .pipe(z.array(z.uuid()).max(200)),
+        }),
+        response: { 200: z.object({ items: z.array(paymentBatchItemSchema) }) },
+      },
+    },
+    async (request) => ({ items: await payments.batch(request.query.orderIds) }),
   );
 
   app.post(

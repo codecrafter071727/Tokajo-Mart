@@ -43,6 +43,8 @@ export interface CatalogRepository {
   listAdminProducts(
     filter: ProductFilter,
   ): Promise<{ items: AdminProduct[]; nextOffset: number | null }>;
+  /** One product including an archived one, flagged, for the admin detail page. */
+  getAdminProduct(id: string): Promise<AdminProduct | null>;
   createProduct(body: NewProduct): Promise<Product>;
   /** Takes a product off sale. False when it does not exist or is already archived. */
   archiveProduct(id: string): Promise<boolean>;
@@ -151,6 +153,11 @@ export function createInMemoryCatalogRepository(
         items: page.items.map((p) => ({ ...p, archived: archived.has(p.id) })),
         nextOffset: page.nextOffset,
       };
+    },
+
+    async getAdminProduct(id) {
+      const product = products.find((p) => p.id === id);
+      return product ? { ...product, archived: archived.has(id) } : null;
     },
 
     async getProduct(id) {

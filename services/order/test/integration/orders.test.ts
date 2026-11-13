@@ -78,7 +78,13 @@ function fakeServices() {
       }
       return { id: "r", status: "ok" };
     }),
-    payment: make("payment", () => ({ ok: true })),
+    payment: make("payment", (_m, path) => {
+      if (path.startsWith("/internal/payments/batch")) {
+        const ids = new URL(path, "http://x").searchParams.get("orderIds")?.split(",") ?? [];
+        return { items: ids.map((orderId) => ({ orderId, status: "captured", refundedPaise: 0 })) };
+      }
+      return { ok: true };
+    }),
     delivery: make("delivery", () => {
       if (state.deliveryDown) throw new InternalCallError("down", 0, "SERVICE_UNAVAILABLE");
       return { ok: true };
@@ -354,6 +360,99 @@ suite("order service", async () => {
       expect((await get("/v1/orders/admin", other)).json().items).toEqual([]);
       expect((await get("/v1/orders/admin", staff)).statusCode).toBe(403);
       expect((await get("/v1/orders/admin", alice)).statusCode).toBe(403);
+    });
+  });
+
+  describe("admin order views", () => {
+    const manager = as(ADMIN, "warehouse_manager", "wh-noida-62");
+    const otherManager = as(ADMIN, "warehouse_manager", "wh-indiranagar");
+    const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10);
+
+    it("filters by customer, order number, payment method and day", async () => {
+      const a = (await place(alice)).json();
+      const b = (
+        await place(bob, [{ productId: "p1", quantity: 1 }], { payment: "online" })
+      ).json();
+      const ids = (qs: string) =>
+        get(`/v1/orders/admin${qs}`, admin).then((r) =>
+          r.json().items.map((o: { id: string }) => o.id),
+        );
+      expect(await ids(`?userId=${ALICE}`)).toContain(a.id);
+      expect(await ids(`?userId=${ALICE}`)).not.toContain(b.id);
+      expect(await ids(`?q=${a.number.slice(-5)}`)).toContain(a.id);
+      expect(await ids(`?q=${a.number.toLowerCase()}`)).toEqual([a.id]);
+      expect(await ids(`?q=%25`)).toEqual([]);
+      const online = await ids("?paymentMethod=online");
+      expect(online).toContain(b.id);
+      expect(online).not.toContain(a.id);
+      expect(await ids(`?from=${today}&to=${today}`)).toEqual(expect.arrayContaining([a.id, b.id]));
+      expect(await ids("?from=2020-01-01&to=2020-01-02")).toEqual([]);
+      expect((await get("/v1/orders/admin?from=2026-11-13&to=2026-11-01", admin)).statusCode).toBe(
+        400,
+      );
+    });
+
+    it("shows customer contact and payment status in the list, never the delivery code", async () => {
+      const a = (await place(alice)).json();
+      const b = (
+        await place(bob, [{ productId: "p1", quantity: 1 }], { payment: "online" })
+      ).json();
+      const items = (await get("/v1/orders/admin", admin)).json().items;
+      const cod = items.find((o: { id: string }) => o.id === a.id);
+      const paid = items.find((o: { id: string }) => o.id === b.id);
+      expect(cod).toMatchObject({
+        userId: ALICE,
+        customerName: "Alice",
+        customerPhone: "+919999000001",
+        paymentStatus: null,
+      });
+      expect(paid).toMatchObject({ paymentMethod: "online", paymentStatus: "captured" });
+      expect(cod).not.toHaveProperty("deliveryCode");
+    });
+
+    it("gives one order's full detail to an admin or its manager only", async () => {
+      const a = (await place(alice, undefined, {}, undefined)).json();
+      const detail = await get(`/v1/orders/admin/${a.id}`, admin);
+      expect(detail.statusCode).toBe(200);
+      expect(detail.json()).toMatchObject({
+        id: a.id,
+        addressLat: ADDRESS.lat,
+        addressLng: ADDRESS.lng,
+        customerName: "Alice",
+        outForDeliveryAt: null,
+      });
+      expect(detail.json()).not.toHaveProperty("deliveryCode");
+      expect((await get(`/v1/orders/admin/${a.id}`, manager)).statusCode).toBe(200);
+      expect((await get(`/v1/orders/admin/${a.id}`, otherManager)).statusCode).toBe(404);
+      expect((await get(`/v1/orders/admin/${a.id}`, staff)).statusCode).toBe(403);
+      expect((await get(`/v1/orders/admin/${a.id}`, alice)).statusCode).toBe(403);
+      expect((await get("/v1/orders/admin/summary", admin)).statusCode).toBe(200);
+    });
+
+    it("lists every status change with who made it, oldest first", async () => {
+      const a = (await place(alice)).json();
+      await post(`/v1/orders/${a.id}/start-packing`, staff);
+      await post(`/v1/orders/${a.id}/cancel`, admin, { reason: "Out of stock at the shelf" });
+      const res = await get(`/v1/orders/${a.id}/history`, admin);
+      expect(res.statusCode).toBe(200);
+      const items = res.json().items;
+      expect(items.map((h: { toStatus: string }) => h.toStatus)).toEqual([
+        "confirmed",
+        "packing",
+        "cancelled",
+      ]);
+      expect(items[0]).toMatchObject({ fromStatus: null, actorRole: "customer", actorId: ALICE });
+      expect(items[1].actorRole).toBe("warehouse_staff");
+      expect(items[2]).toMatchObject({
+        fromStatus: "packing",
+        actorRole: "admin",
+        note: "Out of stock at the shelf",
+      });
+      expect(Date.parse(items[0].at)).toBeLessThanOrEqual(Date.parse(items[2].at));
+      expect((await get(`/v1/orders/${a.id}/history`, manager)).statusCode).toBe(200);
+      expect((await get(`/v1/orders/${a.id}/history`, otherManager)).statusCode).toBe(404);
+      expect((await get(`/v1/orders/${a.id}/history`, alice)).statusCode).toBe(403);
+      expect((await get(`/v1/orders/${a.id}/history`, staff)).statusCode).toBe(403);
     });
   });
 

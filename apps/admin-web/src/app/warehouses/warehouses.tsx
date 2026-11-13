@@ -7,6 +7,7 @@ import {
   type AdminWarehouse,
 } from "@qc/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { ConfirmDialog, Modal } from "../../components/dialogs";
 import {
@@ -42,16 +43,6 @@ export function Warehouses() {
   const [toggling, setToggling] = useState<AdminWarehouse | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const toggle = useMutation({
-    mutationFn: (w: AdminWarehouse) =>
-      gw("PATCH", `/v1/inventory/warehouses/${w.id}`, { open: !w.open }),
-    onSuccess: async (_data, w) => {
-      setToggling(null);
-      setNotice(`${w.name} is now ${w.open ? "closed" : "open"}.`);
-      await client.invalidateQueries({ queryKey: ["warehouses"] });
-    },
-  });
-
   return (
     <>
       <PageActions>
@@ -85,7 +76,14 @@ export function Warehouses() {
             ) : (
               list.data?.items.map((w) => (
                 <tr key={w.id} className="border-b border-line last:border-0 hover:bg-surface-2">
-                  <td className={`${td} font-medium`}>{w.name}</td>
+                  <td className={`${td} font-medium`}>
+                    <Link
+                      href={`/warehouses/${encodeURIComponent(w.id)}`}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {w.name}
+                    </Link>
+                  </td>
                   <td className={`${td} text-muted`}>{w.id}</td>
                   <td className={`${td} tabular-nums`}>
                     {w.lat.toFixed(4)}, {w.lng.toFixed(4)}
@@ -121,26 +119,57 @@ export function Warehouses() {
         />
       ) : null}
       {toggling ? (
-        <ConfirmDialog
-          title={toggling.open ? `Close ${toggling.name}?` : `Open ${toggling.name}?`}
-          message={
-            toggling.open
-              ? "Customers in this area will see that we are closed and cannot place orders until it opens again. Orders already placed carry on."
-              : "Customers in this area can order again straight away."
-          }
-          confirmLabel={toggling.open ? "Close warehouse" : "Open warehouse"}
-          danger={toggling.open}
-          busy={toggle.isPending}
-          error={toggle.isError ? errorMessage(toggle.error) : null}
-          onConfirm={() => toggle.mutate(toggling)}
+        <OpenCloseDialog
+          warehouse={toggling}
           onClose={() => setToggling(null)}
+          onDone={(message) => {
+            setToggling(null);
+            setNotice(message);
+          }}
         />
       ) : null}
     </>
   );
 }
 
-function WarehouseDialog({
+/** Asks before opening or closing a warehouse, because closing stops new orders in its area. */
+export function OpenCloseDialog({
+  warehouse,
+  onClose,
+  onDone,
+}: {
+  warehouse: AdminWarehouse;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const client = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: () =>
+      gw("PATCH", `/v1/inventory/warehouses/${warehouse.id}`, { open: !warehouse.open }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["warehouses"] });
+      onDone(`${warehouse.name} is now ${warehouse.open ? "closed" : "open"}.`);
+    },
+  });
+  return (
+    <ConfirmDialog
+      title={warehouse.open ? `Close ${warehouse.name}?` : `Open ${warehouse.name}?`}
+      message={
+        warehouse.open
+          ? "Customers in this area will see that we are closed and cannot place orders until it opens again. Orders already placed carry on."
+          : "Customers in this area can order again straight away."
+      }
+      confirmLabel={warehouse.open ? "Close warehouse" : "Open warehouse"}
+      danger={warehouse.open}
+      busy={toggle.isPending}
+      error={toggle.isError ? errorMessage(toggle.error) : null}
+      onConfirm={() => toggle.mutate()}
+      onClose={onClose}
+    />
+  );
+}
+
+export function WarehouseDialog({
   warehouse,
   onClose,
   onDone,

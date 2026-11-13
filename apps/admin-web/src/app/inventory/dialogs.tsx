@@ -41,11 +41,18 @@ export function ReceiveDialog({
   warehouseId,
   warehouseName,
   products,
+  initialProductId,
   onClose,
   onDone,
-}: DialogProps<{ warehouseId: string; warehouseName: string; products: ProductName[] }>) {
+}: DialogProps<{
+  warehouseId: string;
+  warehouseName: string;
+  products: ProductName[];
+  /** Starts the first line on this product, for receiving from a product page */
+  initialProductId?: string;
+}>) {
   const [reference, setReference] = useState("");
-  const [lines, setLines] = useState<Line[]>([{ productId: "", quantity: "" }]);
+  const [lines, setLines] = useState<Line[]>([{ productId: initialProductId ?? "", quantity: "" }]);
   const [problem, setProblem] = useState<string | null>(null);
 
   const save = useMutation({

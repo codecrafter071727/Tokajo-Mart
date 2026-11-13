@@ -85,6 +85,8 @@ export interface InventoryRepository {
   restock(reference: string): Promise<Reservation | null>;
   /** Stock rows of one warehouse, by product id. */
   listStock(filter: StockListFilter): Promise<StockPage>;
+  /** One product's stock row in every warehouse that holds it, by warehouse id */
+  stockByProduct(productId: string): Promise<StockRow[]>;
   /** Add received stock for every line or none. Creates a stock row for a new product. */
   receiveStock(input: ReceiveInput): Promise<StockRow[]>;
   /** Correct, write off or expire stock. Never goes below zero or below what is held. */
@@ -387,6 +389,13 @@ export function createInMemoryInventoryRepository(
         .sort((a, b) => a.productId.localeCompare(b.productId, "en", { numeric: true }));
       const page = all.slice(offset, offset + limit);
       return { items: page, nextOffset: offset + limit < all.length ? offset + limit : null };
+    },
+
+    async stockByProduct(productId) {
+      return [...items]
+        .filter(([k]) => k.split("/")[1] === productId)
+        .map(([k, s]) => row(k.split("/")[0]!, productId, s))
+        .sort((a, b) => a.warehouseId.localeCompare(b.warehouseId));
     },
 
     async receiveStock({ warehouseId, reference, items: lines, actorId }) {

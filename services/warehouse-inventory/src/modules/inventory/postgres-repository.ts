@@ -316,6 +316,16 @@ export function createPostgresInventoryRepository(db: Kysely<DB>): InventoryRepo
       };
     },
 
+    async stockByProduct(productId) {
+      const rows = await db
+        .selectFrom("inventory.stockItems")
+        .select([...STOCK_COLUMNS])
+        .where("productId", "=", productId)
+        .orderBy("warehouseId")
+        .execute();
+      return rows.map(toStockRow);
+    },
+
     async receiveStock({ warehouseId, reference, items, actorId }) {
       const lines = mergeLines(items);
       return db.transaction().execute(async (trx) => {

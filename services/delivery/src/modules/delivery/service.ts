@@ -1,19 +1,35 @@
 import { randomInt } from "node:crypto";
 import type {
+  AdminDelivery,
   AdminRider,
+  AdminRiderDetail,
+  RiderStats,
   CreateDeliveryBody,
   Handover,
   RiderAction,
   RiderDelivery,
   RiderState,
 } from "@qc/contracts";
-import { InternalCallError, type InternalClient, type Kysely } from "@qc/service-kit";
+import {
+  InternalCallError,
+  type Identity,
+  type InternalClient,
+  type Kysely,
+} from "@qc/service-kit";
 import { sql, type Selectable } from "kysely";
 import type { DB, DeliveryDeliveries } from "../../db/types.generated";
 import { DeliveryError, HttpError } from "./errors";
 
 type Row = Selectable<DeliveryDeliveries>;
 type Item = { id: string; name: string; quantity: number; emoji: string };
+type IdentityRider = {
+  id: string;
+  name: string;
+  phone: string | null;
+  vehicle: string;
+  rating: number;
+  warehouseId: string | null;
+};
 
 /** How long a rider has to answer an offer before it moves on to someone else. */
 export const OFFER_SECONDS = 25;
@@ -106,6 +122,8 @@ export class DeliveryService {
         codPaise: body.codPaise,
         handoverCode: code(),
         deliveryCode: body.deliveryCode,
+        // The service clock, so times taken line up with delivered_at
+        createdAt: this.now(),
       })
       .onConflict((oc) => oc.column("orderId").doNothing())
       .returningAll()
@@ -442,19 +460,16 @@ export class DeliveryService {
     const path = warehouseId
       ? `/internal/riders?warehouseId=${encodeURIComponent(warehouseId)}`
       : "/internal/riders";
-    let riders: {
-      id: string;
-      name: string;
-      phone: string | null;
-      vehicle: string;
-      rating: number;
-      warehouseId: string | null;
-    }[];
+    let riders: IdentityRider[];
     try {
-      riders = (await this.clients.identity.get<{ items: typeof riders }>(path)).items;
+      riders = (await this.clients.identity.get<{ items: IdentityRider[] }>(path)).items;
     } catch {
       throw new HttpError(503, "Could not load riders right now.");
     }
+    return this.withLiveStatus(riders);
+  }
+
+  private async withLiveStatus(riders: IdentityRider[]): Promise<AdminRider[]> {
     if (riders.length === 0) return [];
     const ids = riders.map((r) => r.id);
     const [states, busy, done] = await Promise.all([
@@ -491,6 +506,173 @@ export class DeliveryService {
       deliveriesToday: counts.get(r.id) ?? 0,
       warehouseId: r.warehouseId ?? "",
     }));
+  }
+
+  // -------------------------------------------------------------------------------------
+  // Admin: one rider, their deliveries, and what is on the road now
+  // -------------------------------------------------------------------------------------
+
+  private async riderNames(ids: string[]): Promise<Map<string, IdentityRider>> {
+    const map = new Map<string, IdentityRider>();
+    if (ids.length === 0) return map;
+    try {
+      const { items } = await this.clients.identity.get<{ items: IdentityRider[] }>(
+        `/internal/riders/batch?ids=${[...new Set(ids)].join(",")}`,
+      );
+      for (const r of items) map.set(r.id, r);
+    } catch {
+      // the list still shows, without names
+    }
+    return map;
+  }
+
+  private toAdminDelivery(row: Row, riders: Map<string, IdentityRider>): AdminDelivery {
+    const riderId = row.riderId ?? row.offeredTo;
+    const rider = riderId ? riders.get(riderId) : undefined;
+    const end = row.deliveredAt ?? this.now();
+    return {
+      id: row.id,
+      orderId: row.orderId,
+      orderNumber: row.orderNumber,
+      warehouseId: row.warehouseId,
+      status: row.status as AdminDelivery["status"],
+      rider: riderId && rider ? { id: riderId, name: rider.name, phone: rider.phone } : null,
+      customerName: row.customerName,
+      customerAddress: row.customerAddress,
+      itemCount: (row.items as Item[]).reduce((n, i) => n + i.quantity, 0),
+      distanceKm: Number(row.distanceKm),
+      payoutPaise: row.payoutPaise,
+      tipPaise: row.tipPaise,
+      codPaise: row.codPaise,
+      createdAt: row.createdAt.toISOString(),
+      deliveredAt: row.deliveredAt ? row.deliveredAt.toISOString() : null,
+      minutes: Math.max(0, Math.round((end.getTime() - row.createdAt.getTime()) / 60_000)),
+    };
+  }
+
+  /** The rider, if this caller may see them: admins any, a manager only their own warehouse's. */
+  private async visibleRider(identity: Identity, riderId: string): Promise<IdentityRider> {
+    const rider = (await this.riderNames([riderId])).get(riderId);
+    const allowed =
+      rider &&
+      (identity.role === "admin" ||
+        (identity.role === "warehouse_manager" && rider.warehouseId === identity.warehouseId));
+    if (!allowed) throw new HttpError(404, "Rider not found.");
+    return rider;
+  }
+
+  private async statsSince(riderId: string, since: Date): Promise<RiderStats> {
+    const row = await sql<{
+      deliveries: string;
+      earnings: string | null;
+      avgMins: string | null;
+      wrongCodes: string | null;
+    }>`
+      select count(*) as deliveries,
+             coalesce(sum(payout_paise + tip_paise), 0) as earnings,
+             avg(extract(epoch from (delivered_at - created_at)) / 60) as "avgMins",
+             coalesce(sum(code_attempts), 0) as "wrongCodes"
+      from delivery.deliveries
+      where rider_id = ${riderId}::uuid and status = 'delivered' and delivered_at >= ${since}
+    `.execute(this.db);
+    const r = row.rows[0];
+    return {
+      deliveries: Number(r?.deliveries ?? 0),
+      earningsPaise: Number(r?.earnings ?? 0),
+      averageMins: r?.avgMins == null ? null : Math.round(Number(r.avgMins) * 10) / 10,
+      wrongCodes: Number(r?.wrongCodes ?? 0),
+    };
+  }
+
+  async adminRiderDetail(identity: Identity, riderId: string): Promise<AdminRiderDetail> {
+    const rider = await this.visibleRider(identity, riderId);
+    const now = this.now();
+    const [[withStatus], today, last30Days, active] = await Promise.all([
+      this.withLiveStatus([rider]),
+      this.statsSince(riderId, startOfIndiaDay(now)),
+      this.statsSince(riderId, new Date(now.getTime() - 30 * 86_400_000)),
+      this.db
+        .selectFrom("delivery.deliveries")
+        .selectAll()
+        .where("riderId", "=", riderId)
+        .where("status", "in", ["assigned", "at_store", "picked_up", "at_customer"])
+        .orderBy("createdAt", "desc")
+        .executeTakeFirst(),
+    ]);
+    const names = new Map([[riderId, rider]]);
+    return {
+      rider: withStatus as AdminRider,
+      today,
+      last30Days,
+      current: active ? this.toAdminDelivery(active, names) : null,
+    };
+  }
+
+  async adminRiderDeliveries(
+    identity: Identity,
+    riderId: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<{ items: AdminDelivery[]; nextCursor: string | null }> {
+    const rider = await this.visibleRider(identity, riderId);
+    let query = this.db
+      .selectFrom("delivery.deliveries")
+      .selectAll()
+      .where("riderId", "=", riderId);
+    if (cursor) {
+      const [at, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+      const when = at ? new Date(at) : null;
+      if (!when || Number.isNaN(when.getTime()) || !id || !/^[0-9a-f-]{36}$/.test(id)) {
+        throw new HttpError(400, "Invalid cursor.");
+      }
+      query = query.where((eb) =>
+        eb.or([
+          eb("createdAt", "<", when),
+          eb.and([eb("createdAt", "=", when), eb("id", "<", id)]),
+        ]),
+      );
+    }
+    const rows = await query
+      .orderBy("createdAt", "desc")
+      .orderBy("id", "desc")
+      .limit(limit + 1)
+      .execute();
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    const names = new Map([[riderId, rider]]);
+    return {
+      items: page.map((r) => this.toAdminDelivery(r, names)),
+      nextCursor:
+        rows.length > limit && last
+          ? Buffer.from(`${last.createdAt.toISOString()}|${last.id}`, "utf8").toString("base64url")
+          : null,
+    };
+  }
+
+  /** Deliveries not yet finished, oldest first: what the ops team watches. */
+  async live(identity: Identity, requestedWarehouse?: string): Promise<AdminDelivery[]> {
+    const warehouseId =
+      identity.role === "admin" ? requestedWarehouse : (identity.warehouseId ?? undefined);
+    if (identity.role !== "admin" && !warehouseId) {
+      throw new HttpError(403, "You are not assigned to a warehouse.");
+    }
+    let query = this.db
+      .selectFrom("delivery.deliveries")
+      .selectAll()
+      .where("status", "in", [
+        "unassigned",
+        "offered",
+        "assigned",
+        "at_store",
+        "picked_up",
+        "at_customer",
+      ]);
+    if (warehouseId) query = query.where("warehouseId", "=", warehouseId);
+    const rows = await query.orderBy("createdAt").limit(200).execute();
+    const names = await this.riderNames(
+      rows.map((r) => r.riderId ?? r.offeredTo).filter((id): id is string => !!id),
+    );
+    return rows.map((r) => this.toAdminDelivery(r, names));
   }
 }
 

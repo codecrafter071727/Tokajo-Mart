@@ -380,4 +380,252 @@ suite("payment service", async () => {
       expect(results.map((r) => r.json().refunded).sort()).toEqual([false, true]);
     });
   });
+
+  describe("admin", () => {
+    const ADMIN = "dddd0000-0000-4000-8000-0000000000d1";
+    const admin = signIdentityHeaders(
+      { userId: ADMIN, role: "admin", warehouseId: null },
+      DEV_INTERNAL_KEY,
+    );
+    const manager = signIdentityHeaders(
+      { userId: ADMIN, role: "warehouse_manager", warehouseId: "wh-noida-62" },
+      DEV_INTERNAL_KEY,
+    );
+    const paid = async (overrides: Partial<FakeOrder> = {}) => {
+      const order = newOrder(overrides);
+      const { razorpayOrderId } = (await checkout(order.id)).json();
+      await webhook(captured(razorpayOrderId, `pay_${order.id.slice(0, 8)}`));
+      return order;
+    };
+    let keyN = 0;
+    const refund = (
+      orderId: string,
+      body: object,
+      opts: { headers?: object; key?: string | null } = {},
+    ) =>
+      app.inject({
+        method: "POST",
+        url: `/v1/payments/admin/orders/${orderId}/refund`,
+        headers: {
+          ...(opts.headers ?? admin),
+          ...(opts.key === null
+            ? {}
+            : { "idempotency-key": opts.key ?? `refund-key-${++keyN}-${Date.now()}` }),
+        },
+        payload: body,
+      });
+
+    it("lists payments for admins only, with totals, search and paging", async () => {
+      const a = await paid();
+      await paid();
+      newOrder(); // never paid, no payment row
+      const pending = newOrder();
+      await checkout(pending.id);
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/v1/payments/admin?limit=2",
+        headers: admin,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.items).toHaveLength(2);
+      expect(body.nextCursor).toBeTruthy();
+      expect(body.items[0]).toMatchObject({ customerName: "Alice", amountPaise: 25_900 });
+      expect(body.items[0].orderNumber).toMatch(/^QC-T-/);
+      expect(body.stats).toMatchObject({
+        capturedCount: 2,
+        capturedPaise: 51_800,
+        pendingCount: 1,
+      });
+
+      const next = await app.inject({
+        method: "GET",
+        url: `/v1/payments/admin?limit=2&cursor=${body.nextCursor}`,
+        headers: admin,
+      });
+      const ids = [...body.items, ...next.json().items].map((p: { orderId: string }) => p.orderId);
+      expect(new Set(ids).size).toBe(3);
+
+      const search = await app.inject({
+        method: "GET",
+        url: `/v1/payments/admin?q=${encodeURIComponent(a.number)}`,
+        headers: admin,
+      });
+      expect(search.json().items.map((p: { orderId: string }) => p.orderId)).toEqual([a.id]);
+      const onlyPending = await app.inject({
+        method: "GET",
+        url: "/v1/payments/admin?status=created",
+        headers: admin,
+      });
+      expect(onlyPending.json().items.map((p: { orderId: string }) => p.orderId)).toEqual([
+        pending.id,
+      ]);
+
+      for (const headers of [alice, manager]) {
+        expect(
+          (await app.inject({ method: "GET", url: "/v1/payments/admin", headers })).statusCode,
+        ).toBe(403);
+      }
+      expect((await app.inject({ method: "GET", url: "/v1/payments/admin" })).statusCode).toBe(401);
+    });
+
+    it("shows one payment with its refunds and what is left to refund", async () => {
+      const order = await paid();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payments/admin/${order.id}`,
+        headers: admin,
+      });
+      expect(res.json()).toMatchObject({
+        status: "captured",
+        refundablePaise: 25_900,
+        refunds: [],
+      });
+      expect(
+        (
+          await app.inject({
+            method: "GET",
+            url: `/v1/payments/admin/${randomUUID()}`,
+            headers: admin,
+          })
+        ).statusCode,
+      ).toBe(404);
+      expect(
+        (await app.inject({ method: "GET", url: `/v1/payments/admin/${order.id}`, headers: alice }))
+          .statusCode,
+      ).toBe(403);
+    });
+
+    it("refunds part, then the rest, never more than was paid, with the reason and who", async () => {
+      const order = await paid();
+      const part = await refund(order.id, { amountPaise: 5_000, reason: "Milk was missing" });
+      expect(part.statusCode).toBe(200);
+      expect(part.json()).toMatchObject({
+        status: "partially_refunded",
+        refundedPaise: 5_000,
+        refundablePaise: 20_900,
+      });
+      expect(part.json().refunds[0]).toMatchObject({
+        amountPaise: 5_000,
+        reason: "Milk was missing",
+        actorId: ADMIN,
+        status: "processed",
+      });
+
+      const tooMuch = await refund(order.id, { amountPaise: 20_901, reason: "Too much" });
+      expect(tooMuch.statusCode).toBe(409);
+      expect(tooMuch.json().error.message).toMatch(/209/);
+
+      const rest = await refund(order.id, { reason: "Customer unhappy" });
+      expect(rest.json()).toMatchObject({
+        status: "refunded",
+        refundedPaise: 25_900,
+        refundablePaise: 0,
+      });
+      expect((await refund(order.id, { reason: "Again" })).statusCode).toBe(409);
+      // A cancellation afterwards has nothing left to refund
+      expect(
+        (
+          await app.inject({ method: "POST", url: `/internal/payments/orders/${order.id}/refund` })
+        ).json(),
+      ).toEqual({ refunded: false });
+    });
+
+    it("returns the same refund for a repeated Idempotency-Key, even when sent at once", async () => {
+      const order = await paid();
+      const first = await refund(
+        order.id,
+        { amountPaise: 1_000, reason: "Late delivery" },
+        { key: "same-key-123456" },
+      );
+      const again = await refund(
+        order.id,
+        { amountPaise: 1_000, reason: "Late delivery" },
+        { key: "same-key-123456" },
+      );
+      expect(again.json().refundedPaise).toBe(1_000);
+      expect(first.json().refunds).toHaveLength(1);
+
+      const other = await paid();
+      const both = await Promise.all([
+        refund(
+          other.id,
+          { amountPaise: 2_000, reason: "Damaged item" },
+          { key: "race-key-123456" },
+        ),
+        refund(
+          other.id,
+          { amountPaise: 2_000, reason: "Damaged item" },
+          { key: "race-key-123456" },
+        ),
+      ]);
+      expect(both.every((r) => r.statusCode === 200)).toBe(true);
+      const detail = await app.inject({
+        method: "GET",
+        url: `/v1/payments/admin/${other.id}`,
+        headers: admin,
+      });
+      expect(detail.json().refundedPaise).toBe(2_000);
+      expect(
+        razorpay.refunds.filter((r) => r.payment_id === `pay_${other.id.slice(0, 8)}`),
+      ).toHaveLength(1);
+    });
+
+    it("gives the amount back when Razorpay fails, and a retry with the same key tries again", async () => {
+      const order = await paid();
+      razorpay.state.failRefunds = true;
+      const failed = await refund(
+        order.id,
+        { amountPaise: 3_000, reason: "Wrong item" },
+        { key: "retry-key-12345" },
+      );
+      expect(failed.statusCode).toBe(502);
+      const after = await app.inject({
+        method: "GET",
+        url: `/v1/payments/admin/${order.id}`,
+        headers: admin,
+      });
+      expect(after.json()).toMatchObject({ status: "captured", refundedPaise: 0 });
+      expect(after.json().refunds[0].status).toBe("failed");
+      razorpay.state.failRefunds = false;
+      const retry = await refund(
+        order.id,
+        { amountPaise: 3_000, reason: "Wrong item" },
+        { key: "retry-key-12345" },
+      );
+      expect(retry.json().refundedPaise).toBe(3_000);
+    });
+
+    it("needs an admin, an Idempotency-Key, a reason and a taken payment", async () => {
+      const order = await paid();
+      expect((await refund(order.id, { reason: "Nope" }, { headers: alice })).statusCode).toBe(403);
+      expect((await refund(order.id, { reason: "Nope" }, { headers: manager })).statusCode).toBe(
+        403,
+      );
+      expect((await refund(order.id, {}, { headers: alice })).statusCode).toBe(403);
+      expect((await refund(order.id, { reason: "No key here" }, { key: null })).statusCode).toBe(
+        400,
+      );
+      expect((await refund(order.id, { reason: "" })).statusCode).toBe(400);
+      const unpaid = newOrder();
+      await checkout(unpaid.id);
+      expect((await refund(unpaid.id, { reason: "Not paid yet" })).statusCode).toBe(409);
+      expect((await refund(randomUUID(), { reason: "No such order" })).statusCode).toBe(404);
+    });
+
+    it("gives the order service payment status for several orders", async () => {
+      const a = await paid();
+      const b = newOrder();
+      await checkout(b.id);
+      const res = await app.inject({
+        method: "GET",
+        url: `/internal/payments/batch?orderIds=${a.id},${b.id},${randomUUID()}`,
+      });
+      const byId = Object.fromEntries(
+        res.json().items.map((p: { orderId: string; status: string }) => [p.orderId, p.status]),
+      );
+      expect(byId).toEqual({ [a.id]: "captured", [b.id]: "created" });
+    });
+  });
 });

@@ -477,6 +477,38 @@ suite("identity: sign in and sessions", async () => {
       expect((await list("?role=admin")).json().items[0].email).toBe("admin@tokajo.dev");
     });
 
+    it("gives one user to an admin, and 404 for an unknown id", async () => {
+      const riders = (await list("?role=rider&q=ravi")).json().items;
+      const one = await call("GET", `/v1/identity/admin/users/${riders[0].id}`, undefined, asAdmin);
+      expect(one.statusCode).toBe(200);
+      expect(one.json()).toMatchObject({
+        name: "Ravi Kumar",
+        role: "rider",
+        warehouseId: "wh-noida-62",
+      });
+      expect(one.json()).not.toHaveProperty("passwordHash");
+      expect(
+        (
+          await call(
+            "GET",
+            "/v1/identity/admin/users/00000000-0000-4000-8000-0000000000ff",
+            undefined,
+            asAdmin,
+          )
+        ).statusCode,
+      ).toBe(404);
+      expect(
+        (
+          await call(
+            "GET",
+            `/v1/identity/admin/users/${riders[0].id}`,
+            undefined,
+            customerHeaders(),
+          )
+        ).statusCode,
+      ).toBe(403);
+    });
+
     it("pages with a cursor without repeating or skipping anyone", async () => {
       const all = (await list("?limit=100")).json().items.map((u: { id: string }) => u.id);
       const seen: string[] = [];

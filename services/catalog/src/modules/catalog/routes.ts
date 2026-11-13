@@ -6,6 +6,7 @@ import {
   createBannerBodySchema,
   createCategoryBodySchema,
   createProductBodySchema,
+  adminProductSchema,
   listAdminProductsResponseSchema,
   listBannersResponseSchema,
   listCategoriesResponseSchema,
@@ -148,6 +149,25 @@ export function registerCatalogRoutes(app: ServiceApp, repository: CatalogReposi
         items: page.items,
         nextCursor: page.nextOffset === null ? null : encodeCursor(page.nextOffset),
       };
+    },
+  );
+
+  app.get(
+    "/v1/catalog/admin/products/:id",
+    {
+      preValidation: adminOnly,
+      schema: {
+        tags: ["admin"],
+        summary: "One product, archived or not (admin)",
+        params: productParamsSchema,
+        response: { 200: adminProductSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      const product = await repository.getAdminProduct(request.params.id);
+      if (!product) throw app.httpErrors.notFound("Product not found.");
+      return product;
     },
   );
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paymentStatusSchema } from "./payment";
 
 export const orderStatusSchema = z.enum([
   "pending_payment",
@@ -128,16 +129,53 @@ export type QueueResponse = z.infer<typeof queueResponseSchema>;
 
 // --- Admin and manager overview ---------------------------------------------------------------
 
-export const adminOrderSchema = queueOrderSchema.extend({ customerName: z.string() });
+export const adminOrderSchema = queueOrderSchema.extend({
+  customerName: z.string(),
+  customerPhone: z.string(),
+  userId: z.uuid(),
+  /** Null for cash on delivery, or when the payment service could not be reached */
+  paymentStatus: paymentStatusSchema.nullable(),
+});
 export type AdminOrder = z.infer<typeof adminOrderSchema>;
+
+const adminDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-13");
 
 export const adminOrdersQuerySchema = z.object({
   status: orderStatusSchema.optional(),
   warehouseId: z.string().min(1).optional(),
+  userId: z.uuid().optional(),
+  paymentMethod: paymentMethodSchema.optional(),
+  /** Part of an order number, for example 00042 or QC-261113 */
+  q: z.string().trim().min(1).max(40).optional(),
+  /** India local days, both ends included */
+  from: adminDay.optional(),
+  to: adminDay.optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
+export type AdminOrdersQuery = z.input<typeof adminOrdersQuerySchema>;
 export const adminOrdersResponseSchema = z.object({ items: z.array(adminOrderSchema) });
 export type AdminOrdersResponse = z.infer<typeof adminOrdersResponseSchema>;
+
+/** One order for the admin detail page: everything in the list row plus the full address. */
+export const adminOrderDetailSchema = adminOrderSchema.extend({
+  addressLat: z.number().nullable(),
+  addressLng: z.number().nullable(),
+  instructions: z.string().nullable(),
+  outForDeliveryAt: z.string().nullable(),
+});
+export type AdminOrderDetail = z.infer<typeof adminOrderDetailSchema>;
+
+export const orderHistoryEntrySchema = z.object({
+  fromStatus: orderStatusSchema.nullable(),
+  toStatus: orderStatusSchema,
+  actorRole: z.string().nullable(),
+  actorId: z.uuid().nullable(),
+  note: z.string().nullable(),
+  at: z.string(),
+});
+export type OrderHistoryEntry = z.infer<typeof orderHistoryEntrySchema>;
+export const orderHistoryResponseSchema = z.object({ items: z.array(orderHistoryEntrySchema) });
+export type OrderHistoryResponse = z.infer<typeof orderHistoryResponseSchema>;
 
 // --- Reports ----------------------------------------------------------------------------------
 

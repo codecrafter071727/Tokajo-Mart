@@ -1,4 +1,10 @@
 import {
+  adminDeliveriesResponseSchema,
+  adminLiveQuerySchema,
+  adminLiveResponseSchema,
+  adminRiderDeliveriesQuerySchema,
+  adminRiderDetailSchema,
+  adminRiderParamsSchema,
   adminRidersResponseSchema,
   createDeliveryBodySchema,
   deliveryParamsSchema,
@@ -100,6 +106,61 @@ export function registerDeliveryRoutes(app: ServiceApp, delivery: DeliveryServic
         staff.role === "admin" ? request.query.warehouseId : (staff.warehouseId ?? undefined);
       return { items: await delivery.adminRiders(warehouseId) };
     },
+  );
+
+  app.get(
+    "/v1/delivery/admin/riders/:id",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "One rider with today's and 30 day stats and the current delivery",
+        params: adminRiderParamsSchema,
+        response: { 200: adminRiderDetailSchema },
+      },
+    },
+    async (request) =>
+      delivery.adminRiderDetail(
+        requireRole(request, "admin", "warehouse_manager"),
+        request.params.id,
+      ),
+  );
+
+  app.get(
+    "/v1/delivery/admin/riders/:id/deliveries",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "A rider's deliveries, newest first",
+        params: adminRiderParamsSchema,
+        querystring: adminRiderDeliveriesQuerySchema,
+        response: { 200: adminDeliveriesResponseSchema },
+      },
+    },
+    async (request) =>
+      delivery.adminRiderDeliveries(
+        requireRole(request, "admin", "warehouse_manager"),
+        request.params.id,
+        request.query.limit,
+        request.query.cursor,
+      ),
+  );
+
+  app.get(
+    "/v1/delivery/admin/live",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Deliveries on the way right now, oldest first",
+        querystring: adminLiveQuerySchema,
+        response: { 200: adminLiveResponseSchema },
+      },
+    },
+    async (request) => ({
+      items: await delivery.live(
+        requireRole(request, "admin", "warehouse_manager"),
+        request.query.warehouseId,
+      ),
+    }),
   );
 
   // --- Internal ------------------------------------------------------------------------------

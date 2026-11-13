@@ -192,6 +192,18 @@ export const updateStockBodySchema = z
 export type UpdateStockBody = z.input<typeof updateStockBodySchema>;
 export const stockProductParamsSchema = z.object({ productId: z.string().min(1) });
 
+/** One product across every warehouse that stocks it (admin) */
+export const productStockResponseSchema = z.object({
+  productId: z.string(),
+  items: z.array(stockRowSchema),
+  totals: z.object({
+    onHand: z.number().int().nonnegative(),
+    reserved: z.number().int().nonnegative(),
+    available: z.number().int().nonnegative(),
+  }),
+});
+export type ProductStockResponse = z.infer<typeof productStockResponseSchema>;
+
 export const stockMovementTypeSchema = z.enum([
   "grn",
   "sale",

@@ -106,6 +106,73 @@ export const adminRiderSchema = z.object({
 export type AdminRider = z.infer<typeof adminRiderSchema>;
 export const adminRidersResponseSchema = z.object({ items: z.array(adminRiderSchema) });
 
+export const riderStatsSchema = z.object({
+  deliveries: z.number().int().nonnegative(),
+  /** Payout plus tips for delivered orders */
+  earningsPaise: z.number().int().nonnegative(),
+  /** Minutes from the order being packed to delivered, null when nothing was delivered */
+  averageMins: z.number().nullable(),
+  /** Wrong customer codes typed at the door */
+  wrongCodes: z.number().int().nonnegative(),
+});
+export type RiderStats = z.infer<typeof riderStatsSchema>;
+
+export const adminDeliveryStatusSchema = z.enum([
+  "unassigned",
+  "offered",
+  "assigned",
+  "at_store",
+  "picked_up",
+  "at_customer",
+  "delivered",
+  "cancelled",
+]);
+
+/** One delivery as an admin sees it. Never carries the handover or customer codes. */
+export const adminDeliverySchema = z.object({
+  id: z.uuid(),
+  orderId: z.uuid(),
+  orderNumber: z.string(),
+  warehouseId: z.string(),
+  status: adminDeliveryStatusSchema,
+  rider: z.object({ id: z.uuid(), name: z.string(), phone: z.string().nullable() }).nullable(),
+  customerName: z.string(),
+  customerAddress: z.string(),
+  itemCount: z.number().int(),
+  distanceKm: z.number(),
+  payoutPaise: z.number().int(),
+  tipPaise: z.number().int(),
+  codPaise: z.number().int().nullable(),
+  createdAt: z.string(),
+  deliveredAt: z.string().nullable(),
+  /** Minutes since the delivery was created (active) or that it took (delivered) */
+  minutes: z.number().int().nonnegative(),
+});
+export type AdminDelivery = z.infer<typeof adminDeliverySchema>;
+
+export const adminRiderDetailSchema = z.object({
+  rider: adminRiderSchema,
+  today: riderStatsSchema,
+  last30Days: riderStatsSchema,
+  current: adminDeliverySchema.nullable(),
+});
+export type AdminRiderDetail = z.infer<typeof adminRiderDetailSchema>;
+
+export const adminRiderParamsSchema = z.object({ id: z.uuid() });
+export const adminRiderDeliveriesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().min(1).optional(),
+});
+export const adminDeliveriesResponseSchema = z.object({
+  items: z.array(adminDeliverySchema),
+  nextCursor: z.string().nullable(),
+});
+export type AdminDeliveriesResponse = z.infer<typeof adminDeliveriesResponseSchema>;
+
+export const adminLiveQuerySchema = z.object({ warehouseId: z.string().min(1).optional() });
+export const adminLiveResponseSchema = z.object({ items: z.array(adminDeliverySchema) });
+export type AdminLiveResponse = z.infer<typeof adminLiveResponseSchema>;
+
 // --- Internal ---------------------------------------------------------------------------------
 
 export const createDeliveryBodySchema = z.object({

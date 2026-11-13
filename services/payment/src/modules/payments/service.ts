@@ -1,17 +1,29 @@
-import type { CheckoutResponse, Payment, PaymentStatus, VerifyPaymentBody } from "@qc/contracts";
+import type {
+  AdminPayment,
+  AdminPaymentDetail,
+  AdminPaymentsResponse,
+  AdminRefundBody,
+  CheckoutResponse,
+  Payment,
+  PaymentBatchItem,
+  PaymentStatus,
+  Refund,
+  VerifyPaymentBody,
+} from "@qc/contracts";
 import {
   InternalCallError,
   type Identity,
   type InternalClient,
   type Kysely,
 } from "@qc/service-kit";
-import type { Selectable } from "kysely";
-import type { DB, PaymentsPayments } from "../../db/types.generated";
+import { sql, type Selectable } from "kysely";
+import type { DB, PaymentsPayments, PaymentsRefunds } from "../../db/types.generated";
 import { PaymentError } from "./errors";
 import { RazorpayError, type RazorpayClient } from "./razorpay";
 import { isValidCheckoutSignature, isValidWebhookSignature } from "./signatures";
 
 type Row = Selectable<PaymentsPayments>;
+type RefundRow = Selectable<PaymentsRefunds>;
 
 type OrderInfo = {
   id: string;
@@ -142,6 +154,9 @@ export class PaymentService {
           userId: order.userId,
           amountPaise: order.totalPaise,
           razorpayOrderId: created.id,
+          orderNumber: order.number,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
         })
         .onConflict((oc) => oc.column("orderId").doNothing())
         .execute();
@@ -244,7 +259,8 @@ export class PaymentService {
   /** Full refund of a captured payment. Idempotent: a second call does nothing. */
   async refund(orderId: string): Promise<{ refunded: boolean }> {
     const row = await this.rowByOrder(orderId);
-    if (!row || row.status !== "captured" || !row.razorpayPaymentId) return { refunded: false };
+    const refundable = row && (row.status === "captured" || row.status === "partially_refunded");
+    if (!row || !refundable || !row.razorpayPaymentId) return { refunded: false };
     if (!this.cfg.razorpay) throw new PaymentError(503, "Online payments are not configured.");
 
     // Claim it first, so two cancels at once cannot refund twice
@@ -252,7 +268,8 @@ export class PaymentService {
       .updateTable("payments.payments")
       .set({ status: "refunded", refundedPaise: row.amountPaise })
       .where("id", "=", row.id)
-      .where("status", "=", "captured")
+      .where("status", "=", row.status)
+      .where("refundedPaise", "=", row.refundedPaise)
       .returning("id")
       .executeTakeFirst();
     if (!claimed) return { refunded: false };
@@ -267,6 +284,7 @@ export class PaymentService {
           razorpayRefundId: refund.id,
           amountPaise: refund.amount,
           status: refund.status === "processed" ? "processed" : "pending",
+          reason: "Order cancelled",
         })
         .onConflict((oc) => oc.column("razorpayRefundId").doNothing())
         .execute();
@@ -274,7 +292,7 @@ export class PaymentService {
       // Put it back so the next cancel (or an admin) can try again
       await this.db
         .updateTable("payments.payments")
-        .set({ status: "captured", refundedPaise: row.refundedPaise })
+        .set({ status: row.status, refundedPaise: row.refundedPaise })
         .where("id", "=", row.id)
         .execute();
       throw new PaymentError(502, "Razorpay could not start the refund. Try again.");
@@ -343,5 +361,311 @@ export class PaymentService {
       throw error;
     }
     return { handled: true, duplicate: false };
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Admin
+  // -------------------------------------------------------------------------------------------
+
+  /** For the order service's admin views: payment status of several orders. */
+  async batch(orderIds: string[]): Promise<PaymentBatchItem[]> {
+    if (orderIds.length === 0) return [];
+    const rows = await this.db
+      .selectFrom("payments.payments")
+      .select(["orderId", "status", "refundedPaise"])
+      .where("orderId", "in", orderIds)
+      .execute();
+    return rows.map((r) => ({
+      orderId: r.orderId,
+      status: r.status as PaymentStatus,
+      refundedPaise: r.refundedPaise,
+    }));
+  }
+
+  private toAdmin(row: Row): AdminPayment {
+    return {
+      orderId: row.orderId,
+      orderNumber: row.orderNumber,
+      userId: row.userId,
+      customerName: row.customerName,
+      customerPhone: row.customerPhone,
+      status: row.status as PaymentStatus,
+      amountPaise: row.amountPaise,
+      refundedPaise: row.refundedPaise,
+      method: row.method,
+      razorpayOrderId: row.razorpayOrderId,
+      razorpayPaymentId: row.razorpayPaymentId,
+      errorCode: row.errorCode,
+      errorDescription: row.errorDescription,
+      createdAt: row.createdAt.toISOString(),
+      capturedAt: row.capturedAt ? row.capturedAt.toISOString() : null,
+    };
+  }
+
+  /** Payments made before the order number was kept on the row get it filled in once. */
+  private async backfill(rows: Row[]): Promise<Row[]> {
+    return Promise.all(
+      rows.map(async (row) => {
+        if (row.orderNumber) return row;
+        try {
+          const info = await this.order.get<OrderInfo>(
+            `/internal/orders/${row.orderId}/payment-info`,
+          );
+          const patch = {
+            orderNumber: info.number,
+            customerName: info.customerName,
+            customerPhone: info.customerPhone,
+          };
+          await this.db
+            .updateTable("payments.payments")
+            .set(patch)
+            .where("id", "=", row.id)
+            .execute();
+          return { ...row, ...patch };
+        } catch {
+          return row;
+        }
+      }),
+    );
+  }
+
+  async adminList(filter: {
+    status?: PaymentStatus;
+    from?: string;
+    to?: string;
+    q?: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<AdminPaymentsResponse> {
+    const start = filter.from ? new Date(`${filter.from}T00:00:00+05:30`) : null;
+    const end = filter.to
+      ? new Date(new Date(`${filter.to}T00:00:00+05:30`).getTime() + 86_400_000)
+      : null;
+    if (start && end && start >= end) {
+      throw new PaymentError(400, "The start date must not be after the end date.");
+    }
+    const needle = filter.q ? `%${filter.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+
+    let base = this.db.selectFrom("payments.payments");
+    if (filter.status) base = base.where("status", "=", filter.status);
+    if (start) base = base.where("createdAt", ">=", start);
+    if (end) base = base.where("createdAt", "<", end);
+    if (needle) {
+      base = base.where((eb) =>
+        eb.or([
+          eb("orderNumber", "ilike", needle),
+          eb("razorpayOrderId", "ilike", needle),
+          eb("razorpayPaymentId", "ilike", needle),
+          eb("customerName", "ilike", needle),
+          eb("customerPhone", "ilike", needle),
+        ]),
+      );
+    }
+
+    let page = base.selectAll();
+    if (filter.cursor) {
+      const [at, id] = Buffer.from(filter.cursor, "base64url").toString("utf8").split("|");
+      const when = new Date(at ?? "");
+      if (!id || Number.isNaN(when.getTime())) throw new PaymentError(400, "Invalid cursor.");
+      page = page.where((eb) =>
+        eb.or([
+          eb("createdAt", "<", when),
+          eb.and([eb("createdAt", "=", when), eb("id", "<", id)]),
+        ]),
+      );
+    }
+    const [rows, totals] = await Promise.all([
+      page
+        .orderBy("createdAt", "desc")
+        .orderBy("id", "desc")
+        .limit(filter.limit + 1)
+        .execute(),
+      base
+        .select((eb) => [
+          sql<string>`coalesce(sum(amount_paise) filter (where status in ('captured', 'partially_refunded', 'refunded')), 0)`.as(
+            "capturedPaise",
+          ),
+          sql<string>`count(*) filter (where status in ('captured', 'partially_refunded', 'refunded'))`.as(
+            "capturedCount",
+          ),
+          eb.fn.coalesce(eb.fn.sum<string>("refundedPaise"), sql<string>`0`).as("refundedPaise"),
+          sql<string>`count(*) filter (where status = 'failed')`.as("failedCount"),
+          // Checkouts still inside the 15 minute payment window; older ones were abandoned
+          sql<string>`count(*) filter (where status = 'created' and created_at > now() - interval '15 minutes')`.as(
+            "pendingCount",
+          ),
+        ])
+        .executeTakeFirstOrThrow(),
+    ]);
+    const more = rows.length > filter.limit;
+    const shown = await this.backfill(rows.slice(0, filter.limit));
+    const last = shown.at(-1);
+    return {
+      items: shown.map((r) => this.toAdmin(r)),
+      nextCursor:
+        more && last
+          ? Buffer.from(`${last.createdAt.toISOString()}|${last.id}`, "utf8").toString("base64url")
+          : null,
+      stats: {
+        capturedPaise: Number(totals.capturedPaise),
+        capturedCount: Number(totals.capturedCount),
+        refundedPaise: Number(totals.refundedPaise),
+        failedCount: Number(totals.failedCount),
+        pendingCount: Number(totals.pendingCount),
+      },
+    };
+  }
+
+  private toRefund(row: RefundRow): Refund {
+    return {
+      id: row.id,
+      razorpayRefundId: row.razorpayRefundId,
+      amountPaise: row.amountPaise,
+      status: row.status as Refund["status"],
+      reason: row.reason,
+      actorId: row.actorId,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  async adminDetail(orderId: string): Promise<AdminPaymentDetail> {
+    const found = await this.rowByOrder(orderId);
+    if (!found) throw new PaymentError(404, "This order has no online payment.");
+    const [row] = await this.backfill([found]);
+    const refunds = await this.db
+      .selectFrom("payments.refunds")
+      .selectAll()
+      .where("paymentId", "=", found.id)
+      .orderBy("createdAt", "desc")
+      .execute();
+    const payment = row as Row;
+    const capturable = payment.status === "captured" || payment.status === "partially_refunded";
+    return {
+      ...this.toAdmin(payment),
+      refunds: refunds.map((r) => this.toRefund(r)),
+      refundablePaise: capturable ? payment.amountPaise - payment.refundedPaise : 0,
+    };
+  }
+
+  /**
+   * An admin refund, full or partial. The amount is claimed on the payment row with one conditional
+   * update first, so two admins (or an admin and a cancellation) can never refund more than was
+   * paid. The Idempotency-Key makes a retried request return the same refund.
+   */
+  async adminRefund(
+    identity: Identity,
+    orderId: string,
+    body: AdminRefundBody,
+    idempotencyKey: string | undefined,
+  ): Promise<AdminPaymentDetail> {
+    if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 100) {
+      throw new PaymentError(400, "Send an Idempotency-Key header of 8 to 100 characters.");
+    }
+    const row = await this.rowByOrder(orderId);
+    if (!row) throw new PaymentError(404, "This order has no online payment.");
+
+    const seen = await this.db
+      .selectFrom("payments.refunds")
+      .select(["id", "paymentId", "status"])
+      .where("idempotencyKey", "=", idempotencyKey)
+      .executeTakeFirst();
+    if (seen) {
+      if (seen.paymentId !== row.id) {
+        throw new PaymentError(409, "That Idempotency-Key was used for another refund.");
+      }
+      // A failed try gave its amount back, so retrying it with the same key is a fresh attempt
+      if (seen.status !== "failed") return this.adminDetail(orderId);
+      await this.db
+        .updateTable("payments.refunds")
+        .set({ idempotencyKey: null })
+        .where("id", "=", seen.id)
+        .execute();
+    }
+
+    if (row.status !== "captured" && row.status !== "partially_refunded") {
+      throw new PaymentError(409, "Only a payment that was taken can be refunded.");
+    }
+    if (!row.razorpayPaymentId) throw new PaymentError(409, "This payment has no Razorpay id yet.");
+    if (!this.cfg.razorpay) throw new PaymentError(503, "Online payments are not configured.");
+
+    const remaining = row.amountPaise - row.refundedPaise;
+    const amount = body.amountPaise ?? remaining;
+    if (amount <= 0 || amount > remaining) {
+      throw new PaymentError(
+        409,
+        `Only ₹${(remaining / 100).toFixed(2).replace(/\.00$/, "")} can still be refunded.`,
+      );
+    }
+
+    const claimed = await sql<{ id: string }>`
+      update payments.payments
+      set refunded_paise = refunded_paise + ${amount},
+          status = case when refunded_paise + ${amount} = amount_paise
+                        then 'refunded' else 'partially_refunded' end
+      where id = ${row.id}::uuid
+        and status in ('captured', 'partially_refunded')
+        and refunded_paise + ${amount} <= amount_paise
+      returning id
+    `.execute(this.db);
+    if (claimed.rows.length === 0) {
+      throw new PaymentError(
+        409,
+        "Another refund just changed this payment. Refresh and try again.",
+      );
+    }
+    const giveBack = async () => {
+      await sql`
+        update payments.payments
+        set refunded_paise = refunded_paise - ${amount},
+            status = case when refunded_paise - ${amount} = 0
+                          then 'captured' else 'partially_refunded' end
+        where id = ${row.id}::uuid
+      `.execute(this.db);
+    };
+
+    let refundRow: { id: string } | undefined;
+    try {
+      refundRow = await this.db
+        .insertInto("payments.refunds")
+        .values({
+          paymentId: row.id,
+          amountPaise: amount,
+          status: "pending",
+          reason: body.reason,
+          actorId: identity.userId,
+          idempotencyKey,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+    } catch (error) {
+      await giveBack();
+      // The same request arrived twice at once and the other one won
+      if ((error as { code?: string }).code === "23505") return this.adminDetail(orderId);
+      throw error;
+    }
+
+    try {
+      const refund = await this.cfg.razorpay.refund(row.razorpayPaymentId, amount, {
+        orderId,
+        reason: body.reason,
+      });
+      await this.db
+        .updateTable("payments.refunds")
+        .set({
+          razorpayRefundId: refund.id,
+          status: refund.status === "processed" ? "processed" : "pending",
+        })
+        .where("id", "=", refundRow.id)
+        .execute();
+    } catch {
+      await giveBack();
+      await this.db
+        .updateTable("payments.refunds")
+        .set({ status: "failed" })
+        .where("id", "=", refundRow.id)
+        .execute();
+      throw new PaymentError(502, "Razorpay could not start the refund. Nothing was refunded.");
+    }
+    return this.adminDetail(orderId);
   }
 }

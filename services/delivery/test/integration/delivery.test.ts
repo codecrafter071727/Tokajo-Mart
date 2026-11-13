@@ -405,6 +405,122 @@ suite("delivery service", async () => {
     });
   });
 
+  describe("admin rider detail and live view", () => {
+    const manager = as(STAFF_ID, "warehouse_manager", "wh-noida-62");
+    const otherManager = as(STAFF_ID, "warehouse_manager", "wh-indiranagar");
+    const get = (url: string, headers: Record<string, string>) =>
+      app.inject({ method: "GET", url, headers });
+
+    const deliverAll = async (d: { id: string; handoverCode: string }, wrongAtDoor = 0) => {
+      await act(R1, d.id, { type: "arrive_store" });
+      await act(R1, d.id, {
+        type: "pick_up",
+        checkedItemIds: ["p1", "p2"],
+        handoverCode: d.handoverCode,
+      });
+      await act(R1, d.id, { type: "arrive_customer" });
+      for (let i = 0; i < wrongAtDoor; i += 1)
+        await act(R1, d.id, { type: "deliver", code: "0000" });
+      clock = new Date(clock.getTime() + 12 * 60_000);
+      await act(R1, d.id, { type: "deliver", code: "4321" });
+    };
+
+    it("shows a rider with live status, today and 30 day stats, and the current delivery", async () => {
+      const d = await toAssigned(R1);
+      let detail = (await get(`/v1/delivery/admin/riders/${R1}`, admin)).json();
+      expect(detail.rider).toMatchObject({ id: R1, name: "Ravi Kumar", status: "on_delivery" });
+      expect(detail.current).toMatchObject({ id: d.id, status: "assigned", orderNumber: "QC-1" });
+      expect(detail.current.rider).toMatchObject({ id: R1, name: "Ravi Kumar" });
+      expect(JSON.stringify(detail)).not.toContain("4321");
+      expect(JSON.stringify(detail)).not.toContain(d.handoverCode);
+
+      await deliverAll(d, 1);
+      detail = (await get(`/v1/delivery/admin/riders/${R1}`, admin)).json();
+      expect(detail.current).toBeNull();
+      expect(detail.today).toEqual({
+        deliveries: 1,
+        earningsPaise: 4200 + 2000,
+        averageMins: 12,
+        wrongCodes: 1,
+      });
+      expect(detail.last30Days.deliveries).toBeGreaterThanOrEqual(1);
+    });
+
+    it("pages a rider's deliveries newest first", async () => {
+      const first = await toAssigned(R1);
+      await deliverAll(first);
+      clock = new Date(clock.getTime() + 60_000);
+      await create(order(ORDER_B, "QC-2"));
+      const second = await db
+        .selectFrom("delivery.deliveries")
+        .select("id")
+        .where("orderId", "=", ORDER_B)
+        .executeTakeFirstOrThrow();
+      await state(R1);
+      await act(R1, second.id, { type: "accept" });
+
+      const page1 = (await get(`/v1/delivery/admin/riders/${R1}/deliveries?limit=1`, admin)).json();
+      expect(page1.items).toHaveLength(1);
+      expect(page1.items[0].orderNumber).toBe("QC-2");
+      expect(page1.nextCursor).toBeTruthy();
+      const page2 = (
+        await get(
+          `/v1/delivery/admin/riders/${R1}/deliveries?limit=1&cursor=${page1.nextCursor}`,
+          admin,
+        )
+      ).json();
+      expect(page2.items.map((x: { orderNumber: string }) => x.orderNumber)).toEqual(["QC-1"]);
+      expect(page2.items[0]).toMatchObject({ status: "delivered", minutes: 12 });
+      expect(page2.nextCursor).toBeNull();
+      expect(
+        (await get(`/v1/delivery/admin/riders/${R1}/deliveries?cursor=bad`, admin)).statusCode,
+      ).toBe(400);
+    });
+
+    it("lists what is on the road, scoped for a manager, with no codes", async () => {
+      await toAssigned(R1);
+      await create(order(ORDER_B, "QC-2", "wh-indiranagar"));
+      const all = (await get("/v1/delivery/admin/live", admin)).json().items;
+      expect(all.map((x: { orderNumber: string }) => x.orderNumber).sort()).toEqual([
+        "QC-1",
+        "QC-2",
+      ]);
+      const noida = (await get("/v1/delivery/admin/live?warehouseId=wh-noida-62", admin)).json()
+        .items;
+      expect(noida.map((x: { orderNumber: string }) => x.orderNumber)).toEqual(["QC-1"]);
+      expect(noida[0]).toMatchObject({
+        status: "assigned",
+        rider: { name: "Ravi Kumar" },
+        itemCount: 3,
+      });
+      // A manager always sees their own warehouse, whatever they ask for
+      const mine = (await get("/v1/delivery/admin/live?warehouseId=wh-indiranagar", manager)).json()
+        .items;
+      expect(mine.map((x: { orderNumber: string }) => x.orderNumber)).toEqual(["QC-1"]);
+      expect(JSON.stringify(all)).not.toContain("4321");
+    });
+
+    it("keeps riders of other warehouses from a manager and everything from staff and riders", async () => {
+      expect((await get(`/v1/delivery/admin/riders/${R1}`, manager)).statusCode).toBe(200);
+      expect((await get(`/v1/delivery/admin/riders/${R1}`, otherManager)).statusCode).toBe(404);
+      expect((await get(`/v1/delivery/admin/riders/${R3}`, otherManager)).statusCode).toBe(200);
+      expect(
+        (await get(`/v1/delivery/admin/riders/${R1}/deliveries`, otherManager)).statusCode,
+      ).toBe(404);
+      for (const who of [staff, rider(R1)]) {
+        expect((await get(`/v1/delivery/admin/riders/${R1}`, who)).statusCode).toBe(403);
+        expect((await get("/v1/delivery/admin/live", who)).statusCode).toBe(403);
+      }
+      expect((await app.inject({ method: "GET", url: "/v1/delivery/admin/live" })).statusCode).toBe(
+        401,
+      );
+      expect(
+        (await get("/v1/delivery/admin/riders/99999999-0000-4000-8000-000000000099", admin))
+          .statusCode,
+      ).toBe(404);
+    });
+  });
+
   describe("access", () => {
     it("keeps rider routes for riders", async () => {
       for (const headers of [staff, admin]) {

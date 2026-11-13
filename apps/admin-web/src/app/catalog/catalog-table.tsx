@@ -2,6 +2,7 @@
 
 import type { AdminProduct } from "@qc/contracts";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmModal, Thumb, Toast } from "../../components/catalog-ui";
 import { PageActions } from "../../components/page-actions";
@@ -157,7 +158,12 @@ export function CatalogTable() {
                     <div className="flex items-center gap-3">
                       <Thumb imageUrl={p.imageUrl} emoji={p.emoji} fit={p.imageFit} />
                       <div>
-                        <div className="font-medium text-ink">{p.name}</div>
+                        <Link
+                          href={`/catalog/products/${encodeURIComponent(p.id)}`}
+                          className="font-medium text-ink hover:text-accent hover:underline"
+                        >
+                          {p.name}
+                        </Link>
                         <div className="text-xs text-muted">{p.unit}</div>
                       </div>
                     </div>

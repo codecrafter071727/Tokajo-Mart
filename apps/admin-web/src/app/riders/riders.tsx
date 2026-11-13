@@ -3,6 +3,7 @@
 import { PageActions } from "../../components/page-actions";
 import { phoneSchema, type AdminRider, type AdminUser } from "@qc/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Modal } from "../../components/dialogs";
 import { BlockDialog } from "../../components/user-actions";
@@ -24,7 +25,10 @@ import {
 import { errorMessage, gw } from "../../lib/gw";
 import { useUserList, useWarehouses } from "../../lib/users";
 
-const LIVE: Record<AdminRider["status"], { label: string; tone: "green" | "amber" | "gray" }> = {
+export const LIVE: Record<
+  AdminRider["status"],
+  { label: string; tone: "green" | "amber" | "gray" }
+> = {
   online: { label: "Online", tone: "green" },
   on_delivery: { label: "On a delivery", tone: "amber" },
   offline: { label: "Offline", tone: "gray" },
@@ -114,15 +118,20 @@ export function Riders() {
                 return (
                   <tr key={r.id} className="border-b border-line last:border-0 hover:bg-surface-2">
                     <td className={td}>
-                      <PersonCell
-                        name={r.name}
-                        detail={
-                          <span className="tabular-nums">
-                            {r.phone ?? ""}
-                            {r.rating ? ` · ${r.rating.toFixed(1)} rating` : ""}
-                          </span>
-                        }
-                      />
+                      <Link
+                        href={`/riders/${r.id}`}
+                        className="block rounded-lg hover:[&_.font-medium]:text-accent hover:[&_.font-medium]:underline"
+                      >
+                        <PersonCell
+                          name={r.name}
+                          detail={
+                            <span className="tabular-nums">
+                              {r.phone ?? ""}
+                              {r.rating ? ` · ${r.rating.toFixed(1)} rating` : ""}
+                            </span>
+                          }
+                        />
+                      </Link>
                     </td>
                     <td className={`${td} max-w-40`}>{r.vehicle}</td>
                     <td className={td}>
@@ -183,7 +192,7 @@ export function Riders() {
   );
 }
 
-function RiderDialog({
+export function RiderDialog({
   rider,
   onClose,
   onDone,

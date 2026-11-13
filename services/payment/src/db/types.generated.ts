@@ -5,9 +5,10 @@
 
 import type { ColumnType } from "kysely";
 
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
@@ -16,11 +17,14 @@ export interface PaymentsPayments {
   capturedAt: Timestamp | null;
   createdAt: Generated<Timestamp>;
   currency: Generated<string>;
+  customerName: string | null;
+  customerPhone: string | null;
   errorCode: string | null;
   errorDescription: string | null;
   id: Generated<string>;
   method: string | null;
   orderId: string;
+  orderNumber: string | null;
   razorpayOrderId: string;
   razorpayPaymentId: string | null;
   refundedPaise: Generated<number>;
@@ -30,11 +34,14 @@ export interface PaymentsPayments {
 }
 
 export interface PaymentsRefunds {
+  actorId: string | null;
   amountPaise: number;
   createdAt: Generated<Timestamp>;
   id: Generated<string>;
+  idempotencyKey: string | null;
   paymentId: string;
-  razorpayRefundId: string;
+  razorpayRefundId: string | null;
+  reason: string | null;
   status: Generated<string>;
   updatedAt: Generated<Timestamp>;
 }

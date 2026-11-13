@@ -1,6 +1,8 @@
 import {
+  adminOrderDetailSchema,
   adminOrdersQuerySchema,
   adminOrdersResponseSchema,
+  orderHistoryResponseSchema,
   cancelOrderBodySchema,
   listOrdersQuerySchema,
   orderSummaryQuerySchema,
@@ -110,6 +112,38 @@ export function registerOrderRoutes(app: ServiceApp, orders: OrderService): void
     },
     async (request) =>
       orders.summary(requireRole(request, "admin", "warehouse_manager"), request.query),
+  );
+
+  app.get(
+    "/v1/orders/admin/:id",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "One order for the admin detail page",
+        params: orderParamsSchema,
+        response: { 200: adminOrderDetailSchema },
+      },
+    },
+    async (request) =>
+      orders.adminGet(requireRole(request, "admin", "warehouse_manager"), request.params.id),
+  );
+
+  app.get(
+    "/v1/orders/:id/history",
+    {
+      schema: {
+        tags: ["admin"],
+        summary: "Every status change of an order, with who made it",
+        params: orderParamsSchema,
+        response: { 200: orderHistoryResponseSchema },
+      },
+    },
+    async (request) => ({
+      items: await orders.historyFor(
+        requireRole(request, "admin", "warehouse_manager"),
+        request.params.id,
+      ),
+    }),
   );
 
   app.get(

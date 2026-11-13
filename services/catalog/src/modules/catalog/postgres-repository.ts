@@ -176,6 +176,15 @@ export function createPostgresCatalogRepository(db: Kysely<DB>): CatalogReposito
       return search(filter, true);
     },
 
+    async getAdminProduct(id) {
+      const row = await db
+        .selectFrom("catalog.products as p")
+        .select([...productColumns, sql<boolean>`p.deleted_at is not null`.as("archived")])
+        .where("p.id", "=", id)
+        .executeTakeFirst();
+      return row ? { ...toProduct(row as ProductRow), archived: row.archived } : null;
+    },
+
     async getProduct(id) {
       const row = await db
         .selectFrom("catalog.products as p")

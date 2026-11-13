@@ -165,6 +165,7 @@ describe("PATCH /v1/catalog/products/:id", () => {
 describe("admin routes are closed to everyone but admins", () => {
   const cases: ["GET" | "POST" | "PATCH" | "DELETE", string, object?][] = [
     ["GET", "/v1/catalog/admin/products"],
+    ["GET", "/v1/catalog/admin/products/p1"],
     ["GET", "/v1/catalog/admin/banners"],
     ["POST", "/v1/catalog/products", {}],
     ["PATCH", "/v1/catalog/products/p1", { name: "x" }],
@@ -232,6 +233,12 @@ describe("admin: products", () => {
 
     const adminList = await get("/v1/catalog/admin/products?q=HTTP%20Test", admin);
     expect(adminList.json().items).toMatchObject([{ id: product.id, archived: true }]);
+    // The admin detail still opens an archived product
+    expect((await get(`/v1/catalog/admin/products/${product.id}`, admin)).json()).toMatchObject({
+      id: product.id,
+      archived: true,
+    });
+    expect((await get("/v1/catalog/admin/products/no-such-product", admin)).statusCode).toBe(404);
 
     expect((await send("POST", `/v1/catalog/products/${product.id}/restore`)).statusCode).toBe(200);
     expect((await get(`/v1/catalog/products/${product.id}`)).statusCode).toBe(200);

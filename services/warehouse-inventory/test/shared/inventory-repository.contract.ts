@@ -196,6 +196,21 @@ export function inventoryRepositoryContract(
         ).toBe(true);
       });
 
+      it("shows one product in every warehouse that stocks it, and nothing else", async () => {
+        const repo = await make();
+        await reserve(repo, "by-product-1", [{ productId: "p1", quantity: 1 }]);
+        const rows = await repo.stockByProduct("p1");
+        expect(rows.length).toBeGreaterThanOrEqual(1);
+        expect(rows.every((r) => r.productId === "p1")).toBe(true);
+        expect(new Set(rows.map((r) => r.warehouseId)).size).toBe(rows.length);
+        const here = rows.find((r) => r.warehouseId === WH)!;
+        expect(here.reserved).toBeGreaterThanOrEqual(1);
+        expect(here.available).toBe(here.onHand - here.reserved);
+        // p1 must not match p10 or p11
+        expect(await repo.stockByProduct("p")).toEqual([]);
+        expect(await repo.stockByProduct("unknown")).toEqual([]);
+      });
+
       it("receives stock for several lines, creating a row for a new product, and logs each line", async () => {
         const repo = await make();
         const before = await available(repo, "p1");

@@ -2,6 +2,7 @@
 
 import type { AdminWarehouse, StockRow } from "@qc/contracts";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Thumb } from "../../components/catalog-ui";
 import { PageActions } from "../../components/page-actions";
@@ -13,6 +14,7 @@ import {
   LoadingRows,
   rowAction,
   SearchInput,
+  Segmented,
   selectCls,
   TableShell,
   th,
@@ -20,7 +22,6 @@ import {
   tdActions,
   tdNum,
   thNum,
-  Toggle,
   Toolbar,
 } from "../../components/kit";
 import { useWarehouse } from "../../components/shell/warehouse-context";
@@ -30,6 +31,46 @@ import { AdjustDialog, EditStockDialog, ReceiveDialog } from "./dialogs";
 import { LedgerDrawer } from "./ledger";
 
 const LOW_STOCK = 5;
+
+type StockFilter = "all" | "low" | "out";
+type SortKey = "name" | "onHand" | "reserved" | "available";
+type Sort = { key: SortKey; dir: "asc" | "desc" };
+
+/** A column header that sorts the table. Click again to flip the order. */
+function SortHeader({
+  label,
+  column,
+  sort,
+  onSort,
+  numeric,
+  className,
+}: {
+  label: string;
+  column: SortKey;
+  sort: Sort;
+  onSort: (key: SortKey) => void;
+  numeric?: boolean;
+  className?: string;
+}) {
+  const active = sort.key === column;
+  return (
+    <th
+      className={`${numeric ? thNum : th} ${className ?? ""}`}
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={`inline-flex items-center gap-1 rounded hover:text-ink ${active ? "text-ink" : ""}`}
+      >
+        {label}
+        <span aria-hidden className={`text-[10px] ${active ? "opacity-100" : "opacity-30"}`}>
+          {active && sort.dir === "desc" ? "▼" : "▲"}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 export function Inventory() {
   const warehouses = useQuery({
@@ -68,7 +109,18 @@ export function Inventory() {
     const q = new URLSearchParams(window.location.search).get("q");
     if (q) setSearch(q);
   }, []);
-  const [lowOnly, setLowOnly] = useState(false);
+  const [filter, setFilter] = useState<StockFilter>("all");
+  const [sort, setSort] = useState<Sort>({ key: "name", dir: "asc" });
+  const onSort = (key: SortKey) =>
+    setSort((current) =>
+      current.key === key
+        ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "name" ? "asc" : "desc" },
+    );
+  useEffect(() => {
+    const f = new URLSearchParams(window.location.search).get("filter");
+    if (f === "low" || f === "out") setFilter(f);
+  }, []);
   const [dialog, setDialog] = useState<
     | { kind: "receive" }
     | { kind: "adjust"; row: StockRow }
@@ -83,7 +135,8 @@ export function Inventory() {
     const needle = search.trim().toLowerCase();
     return (stock.data ?? [])
       .filter((row) => {
-        if (lowOnly && row.available > LOW_STOCK) return false;
+        if (filter === "out" && row.available > 0) return false;
+        if (filter === "low" && (row.available === 0 || row.available > LOW_STOCK)) return false;
         if (!needle) return true;
         const product = names.data?.get(row.productId);
         return (
@@ -91,16 +144,20 @@ export function Inventory() {
           (product?.name.toLowerCase().includes(needle) ?? false)
         );
       })
-      .sort((a, b) =>
-        (label(a.productId)?.name ?? a.productId).localeCompare(
+      .sort((a, b) => {
+        const byName = (label(a.productId)?.name ?? a.productId).localeCompare(
           label(b.productId)?.name ?? b.productId,
-        ),
-      );
+        );
+        const diff = sort.key === "name" ? byName : a[sort.key] - b[sort.key] || byName;
+        return sort.dir === "asc" ? diff : -diff;
+      });
     // label reads names.data, which is already a dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stock.data, names.data, search, lowOnly]);
+  }, [stock.data, names.data, search, filter, sort]);
 
-  const lowCount = (stock.data ?? []).filter((r) => r.available <= LOW_STOCK).length;
+  const all = stock.data ?? [];
+  const lowCount = all.filter((r) => r.available > 0 && r.available <= LOW_STOCK).length;
+  const outCount = all.filter((r) => r.available === 0).length;
   const warehouse = warehouses.data?.items.find((w) => w.id === warehouseId);
 
   const done = (message: string) => {
@@ -140,17 +197,15 @@ export function Inventory() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <Toggle
-          label={
-            <>
-              Low stock only{" "}
-              <span className="rounded-full bg-warn-soft px-1.5 text-xs font-semibold text-warn tabular-nums">
-                {lowCount}
-              </span>
-            </>
-          }
-          checked={lowOnly}
-          onChange={setLowOnly}
+        <Segmented
+          label="Show"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "all", label: `All ${all.length}` },
+            { value: "low", label: `Low ${lowCount}` },
+            { value: "out", label: `Out ${outCount}` },
+          ]}
         />
         <span className="ml-auto text-sm text-muted tabular-nums">
           {stock.data ? `${rows.length} of ${stock.data.length} products` : ""}
@@ -182,10 +237,10 @@ export function Inventory() {
         <table>
           <thead>
             <tr>
-              <th className={th}>Product</th>
-              <th className={thNum}>On hand</th>
-              <th className={thNum}>Held</th>
-              <th className={thNum}>Free</th>
+              <SortHeader label="Product" column="name" sort={sort} onSort={onSort} />
+              <SortHeader label="On hand" column="onHand" sort={sort} onSort={onSort} numeric />
+              <SortHeader label="Held" column="reserved" sort={sort} onSort={onSort} numeric />
+              <SortHeader label="Free" column="available" sort={sort} onSort={onSort} numeric />
               <th className={`${th} hidden xl:table-cell`}>Status</th>
               <th className={`${thNum} hidden xl:table-cell`}>Order limit</th>
               <th className={th}>
@@ -200,7 +255,11 @@ export function Inventory() {
               <EmptyRow colSpan={7}>
                 {(stock.data ?? []).length === 0
                   ? `No stock at ${warehouse?.name ?? "this warehouse"} yet. Use Receive stock to add some.`
-                  : "No products match."}
+                  : filter === "out"
+                    ? "Nothing is out of stock here."
+                    : filter === "low"
+                      ? "Nothing is running low here."
+                      : "No products match."}
               </EmptyRow>
             ) : (
               rows.map((row) => {
@@ -216,9 +275,12 @@ export function Inventory() {
                           fit={product?.imageFit ?? "contain"}
                         />
                         <div className="min-w-0">
-                          <div className="truncate font-medium">
+                          <Link
+                            href={`/catalog/products/${encodeURIComponent(row.productId)}`}
+                            className="block truncate font-medium hover:text-accent hover:underline"
+                          >
                             {product?.name ?? row.productId}
-                          </div>
+                          </Link>
                           <div className="text-xs text-muted">
                             {product ? `${product.unit} · ` : ""}
                             {row.productId}

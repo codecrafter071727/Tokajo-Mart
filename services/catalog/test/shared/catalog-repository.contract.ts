@@ -188,10 +188,16 @@ export function catalogRepositoryContract(
         const admin = await repo.listAdminProducts({ q: created.name, limit: 10, offset: 0 });
         expect(admin.items).toHaveLength(1);
         expect(admin.items[0]).toMatchObject({ id: created.id, archived: true });
+        expect(await repo.getAdminProduct(created.id)).toMatchObject({
+          id: created.id,
+          archived: true,
+        });
+        expect(await repo.getAdminProduct("no-such-product")).toBeNull();
 
         expect((await repo.restoreProduct(created.id))?.id).toBe(created.id);
         expect(await repo.restoreProduct(created.id)).toBeNull(); // not archived any more
         expect((await repo.getProduct(created.id))?.id).toBe(created.id);
+        expect((await repo.getAdminProduct(created.id))?.archived).toBe(false);
         expect(
           (await repo.listAdminProducts({ q: created.name, limit: 10, offset: 0 })).items[0]
             ?.archived,

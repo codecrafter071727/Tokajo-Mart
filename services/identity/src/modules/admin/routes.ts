@@ -1,4 +1,5 @@
 import {
+  adminUserSchema,
   adminUsersQuerySchema,
   adminUsersResponseSchema,
   phoneSchema,
@@ -188,6 +189,51 @@ export function registerAdminRoutes(app: ServiceApp, db: Kysely<DB>): void {
         })),
         nextCursor:
           rows.length > limit && last ? encodeCursor({ at: last.createdAtRaw, id: last.id }) : null,
+      };
+    },
+  );
+
+  app.get(
+    "/v1/identity/admin/users/:id",
+    {
+      schema: {
+        tags: ["identity-admin"],
+        summary: "One user, for the admin detail pages",
+        params: idParams,
+        response: { 200: adminUserSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      const u = await db
+        .selectFrom("identity.users as u")
+        .leftJoin("identity.riderProfiles as r", "r.userId", "u.id")
+        .select([
+          "u.id",
+          "u.role",
+          "u.name",
+          "u.phone",
+          "u.email",
+          "u.status",
+          "u.createdAt",
+          "r.vehicle",
+          "r.rating",
+          (eb) => eb.fn.coalesce("r.warehouseId", "u.warehouseId").as("warehouseId"),
+        ])
+        .where("u.id", "=", request.params.id)
+        .executeTakeFirst();
+      if (!u) throw app.httpErrors.notFound("User not found.");
+      return {
+        id: u.id,
+        role: u.role as AdminUser["role"],
+        name: u.name,
+        phone: u.phone,
+        email: u.email,
+        status: u.status as AdminUser["status"],
+        warehouseId: u.warehouseId,
+        createdAt: u.createdAt.toISOString(),
+        vehicle: u.vehicle,
+        rating: u.rating === null ? null : Number(u.rating),
       };
     },
   );

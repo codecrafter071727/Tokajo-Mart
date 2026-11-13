@@ -15,6 +15,8 @@ import {
  */
 async function forward(request: NextRequest, path: string[]) {
   const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.text();
+  // Lets a retried refund or order return the first result instead of acting twice
+  const idempotencyKey = request.headers.get("idempotency-key");
   const call = (token: string | undefined) =>
     fetch(`${GATEWAY_URL}/${path.join("/")}${request.nextUrl.search}`, {
       method: request.method,
@@ -22,6 +24,7 @@ async function forward(request: NextRequest, path: string[]) {
         accept: "application/json",
         ...(body ? { "content-type": "application/json" } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
       },
       body,
     });

@@ -3,8 +3,13 @@ import {
   CUSTOMER_CANCELLABLE,
   ORDER_TRANSITIONS,
   priceCart,
+  type AdminOrder,
+  type AdminOrderDetail,
+  type AdminOrdersQuery,
   type Order,
+  type OrderHistoryEntry,
   type OrderItem,
+  type PaymentBatchItem,
   type OrderStatus,
   type OrderSummary,
   type PlaceOrderBody,
@@ -622,25 +627,103 @@ export class OrderService {
     return orders.map(({ deliveryCode: _code, ...rest }) => rest);
   }
 
+  /** Payment status per online order. A failure hides the status, never the orders. */
+  private async paymentStatuses(rows: OrderRow[]): Promise<Map<string, PaymentBatchItem>> {
+    const ids = rows.filter((r) => r.paymentMethod === "online").map((r) => r.id);
+    const map = new Map<string, PaymentBatchItem>();
+    if (ids.length === 0) return map;
+    try {
+      const { items } = await this.clients.payment.get<{ items: PaymentBatchItem[] }>(
+        `/internal/payments/batch?orderIds=${ids.join(",")}`,
+      );
+      for (const item of items) map.set(item.orderId, item);
+    } catch {
+      // keep going without payment status
+    }
+    return map;
+  }
+
+  /** Admins see every warehouse; a manager only theirs, whatever they ask for. */
+  private adminScope(identity: Identity, requested?: string): string | undefined {
+    if (identity.role === "admin") return requested;
+    if (!identity.warehouseId) throw forbidden("You are not assigned to a warehouse.");
+    return identity.warehouseId;
+  }
+
+  private async toAdminOrders(rows: OrderRow[]): Promise<AdminOrder[]> {
+    const [orders, payments] = await Promise.all([
+      this.hydrate(rows, () => false),
+      this.paymentStatuses(rows),
+    ]);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return orders.map(({ deliveryCode: _code, ...rest }) => {
+      const row = byId.get(rest.id) as OrderRow;
+      return {
+        ...rest,
+        customerName: row.customerName,
+        customerPhone: row.customerPhone,
+        userId: row.userId,
+        paymentStatus: payments.get(rest.id)?.status ?? null,
+      };
+    });
+  }
+
   /** Every order, newest first, for admins and (for their own warehouse) managers. */
   async listAll(
     identity: Identity,
-    filter: { status?: OrderStatus; warehouseId?: string; limit: number },
-  ): Promise<(QueueOrder & { customerName: string })[]> {
+    filter: Omit<AdminOrdersQuery, "limit"> & { limit: number },
+  ): Promise<AdminOrder[]> {
     let query = this.db.selectFrom("orders.orders").selectAll();
-    if (identity.role === "admin") {
-      if (filter.warehouseId) query = query.where("warehouseId", "=", filter.warehouseId);
-    } else {
-      if (!identity.warehouseId) throw forbidden("You are not assigned to a warehouse.");
-      query = query.where("warehouseId", "=", identity.warehouseId);
-    }
+    const warehouseId = this.adminScope(identity, filter.warehouseId);
+    if (warehouseId) query = query.where("warehouseId", "=", warehouseId);
     if (filter.status) query = query.where("status", "=", filter.status);
+    if (filter.userId) query = query.where("userId", "=", filter.userId);
+    if (filter.paymentMethod) query = query.where("paymentMethod", "=", filter.paymentMethod);
+    if (filter.q) {
+      const needle = filter.q.replace(/[\\%_]/g, (c) => `\\${c}`).toUpperCase();
+      query = query.where("number", "like", `%${needle}%`);
+    }
+    if (filter.from)
+      query = query.where("placedAt", ">=", new Date(`${filter.from}T00:00:00+05:30`));
+    if (filter.to) {
+      const end = new Date(new Date(`${filter.to}T00:00:00+05:30`).getTime() + 86_400_000);
+      query = query.where("placedAt", "<", end);
+    }
+    if (filter.from && filter.to && filter.from > filter.to) {
+      throw badRequest("The start date must not be after the end date.");
+    }
     const rows = await query.orderBy("placedAt", "desc").limit(filter.limit).execute();
-    const orders = await this.hydrate(rows, () => false);
-    const names = new Map(rows.map((r) => [r.id, r.customerName]));
-    return orders.map(({ deliveryCode: _code, ...rest }) => ({
-      ...rest,
-      customerName: names.get(rest.id) ?? "",
+    return this.toAdminOrders(rows);
+  }
+
+  /** One order with everything the admin detail page shows. */
+  async adminGet(identity: Identity, id: string): Promise<AdminOrderDetail> {
+    const row = await this.rowById(id);
+    const scope = this.adminScope(identity);
+    if (scope && scope !== row.warehouseId) throw notFound();
+    const [order] = await this.toAdminOrders([row]);
+    return {
+      ...(order as AdminOrder),
+      addressLat: row.addressLat,
+      addressLng: row.addressLng,
+      instructions: row.instructions,
+      outForDeliveryAt: row.outForDeliveryAt ? row.outForDeliveryAt.toISOString() : null,
+    };
+  }
+
+  /** Every status change with who made it, oldest first. Admins, and managers of its warehouse. */
+  async historyFor(identity: Identity, id: string): Promise<OrderHistoryEntry[]> {
+    const row = await this.rowById(id);
+    const scope = this.adminScope(identity);
+    if (scope && scope !== row.warehouseId) throw notFound();
+    const entries = await this.history(id);
+    return entries.map((h) => ({
+      fromStatus: (h.fromStatus as OrderStatus | null) ?? null,
+      toStatus: h.toStatus as OrderStatus,
+      actorRole: h.actorRole,
+      actorId: h.actorId,
+      note: h.note,
+      at: h.createdAt.toISOString(),
     }));
   }
 

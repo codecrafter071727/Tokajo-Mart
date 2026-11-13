@@ -3,6 +3,7 @@ import {
   adminWarehouseSchema,
   adminWarehousesResponseSchema,
   createWarehouseBodySchema,
+  productStockResponseSchema,
   receiveStockBodySchema,
   receiveStockResponseSchema,
   stockListQuerySchema,
@@ -78,6 +79,33 @@ export function registerStaffRoutes(app: ServiceApp, repository: InventoryReposi
       return {
         items: page.items,
         nextCursor: page.nextOffset === null ? null : encode(page.nextOffset),
+      };
+    },
+  );
+
+  app.get(
+    "/v1/inventory/stock/by-product/:productId",
+    {
+      schema: {
+        tags: ["inventory"],
+        summary: "One product's stock in every warehouse (admin)",
+        params: stockProductParamsSchema,
+        response: { 200: productStockResponseSchema },
+      },
+    },
+    async (request) => {
+      requireRole(request, "admin");
+      const items = await repository.stockByProduct(request.params.productId);
+      const sum = (pick: (r: (typeof items)[number]) => number) =>
+        items.reduce((n, r) => n + pick(r), 0);
+      return {
+        productId: request.params.productId,
+        items,
+        totals: {
+          onHand: sum((r) => r.onHand),
+          reserved: sum((r) => r.reserved),
+          available: sum((r) => r.available),
+        },
       };
     },
   );

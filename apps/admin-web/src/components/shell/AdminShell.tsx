@@ -7,18 +7,17 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { Avatar, Logo } from "@/components/ui/brand";
 import { cn } from "@/components/ui/core";
 import {
-  Bell,
   Bike,
   Boxes,
   Check,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   Megaphone,
   Menu,
-  Search,
   ShieldCheck,
   ShoppingBag,
   Tag,
@@ -28,6 +27,8 @@ import {
   type IconComponent,
 } from "@/components/ui/icons";
 import { useAttention } from "../../lib/attention";
+import { AlertsBell } from "./AlertsBell";
+import { CommandPalette, SearchTrigger, useCommandPalette } from "./CommandPalette";
 import { NavProgress } from "./NavProgress";
 import { ThemeToggle } from "./ThemeToggle";
 import { useWarehouse, WarehouseProvider } from "./warehouse-context";
@@ -43,6 +44,10 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
       { href: "/orders", label: "Live orders", icon: ShoppingBag },
       { href: "/customers", label: "Customers", icon: Users },
     ],
+  },
+  {
+    label: "Money",
+    items: [{ href: "/payments", label: "Payments", icon: CreditCard }],
   },
   {
     label: "Storefront",
@@ -106,6 +111,7 @@ function Frame({ children }: { children: ReactNode }) {
     },
   });
   const attention = useAttention();
+  const palette = useCommandPalette();
 
   useEffect(() => {
     try {
@@ -285,33 +291,9 @@ function Frame({ children }: { children: ReactNode }) {
             <WarehouseLabel />
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <form
-              action="/orders"
-              method="get"
-              role="search"
-              className="relative hidden items-center sm:flex"
-            >
-              <Search className="pointer-events-none absolute left-3 size-4 text-muted" />
-              <input
-                name="q"
-                type="search"
-                placeholder="Search orders…"
-                aria-label="Search orders by number or customer"
-                className="h-9 w-48 rounded-lg border border-line bg-surface-2 pr-3 pl-9 text-sm text-ink transition-all duration-300 placeholder:text-muted focus:w-64 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none"
-              />
-            </form>
+            <SearchTrigger onOpen={() => palette.setOpen(true)} />
             <ThemeToggle />
-            <Link
-              href="/dashboard#attention"
-              aria-label={alerts ? `${alerts} things need attention` : "Nothing needs attention"}
-              title={alerts ? `${alerts} things need attention` : "Nothing needs attention"}
-              className="relative flex size-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-            >
-              <Bell className="size-[18px]" />
-              {alerts > 0 && (
-                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-bad ring-2 ring-canvas" />
-              )}
-            </Link>
+            <AlertsBell />
             <Avatar name={name} size={36} title={`${name} (${role})`} />
           </div>
         </header>
@@ -340,6 +322,7 @@ function Frame({ children }: { children: ReactNode }) {
         <main className="mx-auto w-full max-w-[1320px] min-w-0 flex-1 px-4 py-6 sm:px-6">
           {children}
         </main>
+        {palette.open ? <CommandPalette onClose={() => palette.setOpen(false)} /> : null}
       </div>
     </div>
   );

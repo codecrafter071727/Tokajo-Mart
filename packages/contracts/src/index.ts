@@ -92,6 +92,8 @@ export {
   type ServiceabilityQuery,
   type ServiceabilityResponse,
   type StockStatus,
+  productStockResponseSchema,
+  type ProductStockResponse,
 } from "./inventory";
 export * from "./pricing";
 export * from "./identity";
