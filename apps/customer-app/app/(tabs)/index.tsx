@@ -46,8 +46,8 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setStatusBarStyle("light");
-      return () => setStatusBarStyle("dark");
+      // The header is light green with dark text, so the status bar stays dark
+      setStatusBarStyle("dark");
     }, []),
   );
 
@@ -99,7 +99,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.root}>
       <LinearGradient
-        colors={[colors.brand[700], colors.brand[600]]}
+        colors={[colors.brand[600], colors.brand[500]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: insets.top + Spacing[8] }]}
@@ -110,7 +110,7 @@ export default function HomeScreen() {
               style={styles.etaChip}
               accessibilityLabel={`Delivery in ${eta?.etaMins ?? "--"} minutes`}
             >
-              <Ionicons name="flash" size={13} color={colors.accent[500]} />
+              <Ionicons name="flash" size={13} color={Colors.onBrand} />
               <Text style={styles.etaChipText}>
                 {eta?.serviceable ? `${eta.etaMins} min` : "--"}
               </Text>
@@ -139,7 +139,7 @@ export default function HomeScreen() {
             <View style={styles.headerRow}>
               <View style={styles.headerLeft}>
                 <View style={styles.etaLabelRow}>
-                  <Ionicons name="flash" size={12} color={colors.accent[500]} />
+                  <Ionicons name="flash" size={12} color={Colors.onBrand} />
                   <Text style={styles.etaLabel}>Delivery in</Text>
                 </View>
                 {serviceability.isPending ? (
@@ -162,7 +162,7 @@ export default function HomeScreen() {
                       ? "We do not deliver to this area yet"
                       : addressChip(selectedAddress)}
                   </Text>
-                  <Ionicons name="chevron-down" size={14} color={Colors.brandTint} />
+                  <Ionicons name="chevron-down" size={14} color={Colors.onBrand} />
                 </Pressable>
               </View>
               <Pressable
@@ -373,12 +373,13 @@ const styles = StyleSheet.create({
   },
   etaLabel: {
     ...typography.caption,
-    color: Colors.brandTint,
+    fontWeight: "700",
+    color: Colors.onBrandMuted,
   },
   etaValue: {
     ...typography.display,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
   addressRow: {
     flexDirection: "row",
@@ -388,7 +389,7 @@ const styles = StyleSheet.create({
   },
   addressText: {
     ...typography.bodyStrong,
-    color: Colors.brandTint,
+    color: Colors.onBrand,
     flexShrink: 1,
   },
   avatarBtn: {
@@ -436,12 +437,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.45)",
     borderRadius: Radius.pill,
     paddingHorizontal: Spacing[10],
     height: 40,
   },
-  etaChipText: { ...typography.bodyStrong, fontWeight: "800", color: Colors.surface },
+  etaChipText: { ...typography.bodyStrong, fontWeight: "800", color: Colors.onBrand },
   searchBarCompact: { flex: 1, height: 40 },
   avatarBtnSmall: { width: 36, height: 36, borderRadius: 18 },
   section: {

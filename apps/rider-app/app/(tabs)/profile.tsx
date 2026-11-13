@@ -57,10 +57,12 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{rider.name}</Text>
           <Text style={styles.phone}>{prettyPhone(rider.phone)}</Text>
           <View style={styles.badges}>
-            <View style={styles.badge}>
-              <Ionicons name="star" size={12} color={colors.accent[900]} />
-              <Text style={styles.badgeText}>{rider.rating.toFixed(1)}</Text>
-            </View>
+            {rider.rating !== null ? (
+              <View style={styles.badge}>
+                <Ionicons name="star" size={12} color={colors.accent[900]} />
+                <Text style={styles.badgeText}>{rider.rating.toFixed(1)}</Text>
+              </View>
+            ) : null}
             <View style={[styles.badge, online ? styles.badgeOn : styles.badgeOff]}>
               <View style={[styles.dot, online ? styles.dotOn : styles.dotOff]} />
               <Text style={[styles.badgeText, online ? styles.badgeTextOn : styles.badgeTextOff]}>
@@ -82,11 +84,19 @@ export default function ProfileScreen() {
       </Card>
 
       <Card title="Your details">
-        <Line icon="bicycle" label="Vehicle" value={rider.vehicle} />
-        <View style={styles.sep} />
+        {rider.vehicle ? (
+          <>
+            <Line icon="bicycle" label="Vehicle" value={rider.vehicle} />
+            <View style={styles.sep} />
+          </>
+        ) : null}
         <Line icon="call" label="Phone" value={prettyPhone(rider.phone)} />
-        <View style={styles.sep} />
-        <Line icon="star" label="Rating" value={`${rider.rating.toFixed(1)} of 5`} />
+        {rider.rating !== null ? (
+          <>
+            <View style={styles.sep} />
+            <Line icon="star" label="Rating" value={`${rider.rating.toFixed(1)} of 5`} />
+          </>
+        ) : null}
       </Card>
 
       <View style={styles.signOut}>

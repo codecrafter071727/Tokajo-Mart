@@ -12,7 +12,7 @@ export default function TabsLayout() {
   return (
     <View style={styles.root}>
       <NativeTabs
-        tintColor={colors.brand[600]}
+        tintColor={colors.brand[700]}
         minimizeBehavior="onScrollDown"
         labelStyle={{
           fontSize: 10,

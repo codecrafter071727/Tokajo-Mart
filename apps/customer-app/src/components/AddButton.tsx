@@ -130,7 +130,7 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
         accessibilityRole="button"
         accessibilityLabel="Decrease quantity"
       >
-        <Ionicons name="remove" size={iconSize} color={Colors.surface} />
+        <Ionicons name="remove" size={iconSize} color={Colors.onBrand} />
       </Pressable>
       <Text
         style={[styles.stepCount, big && styles.stepCountMd]}
@@ -157,7 +157,7 @@ export function AddButton({ productId, productData, size = "sm", optionsCount }:
         <Ionicons
           name="add"
           size={iconSize}
-          color={Colors.surface}
+          color={Colors.onBrand}
           style={outOfStock || atLimit ? { opacity: 0.4 } : undefined}
         />
       </Pressable>
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   addTextLg: {
     fontSize: 16,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
   notifyBtn: {
     alignItems: "center",
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   stepCount: {
     fontSize: 14,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
     minWidth: 18,
     textAlign: "center",
     fontVariant: ["tabular-nums"],

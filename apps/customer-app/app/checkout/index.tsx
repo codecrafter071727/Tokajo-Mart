@@ -431,11 +431,11 @@ export default function CheckoutScreen() {
             <Text style={styles.bottomSub}>PAY ON DELIVERY</Text>
           </View>
           {placeOrder.isPending ? (
-            <ActivityIndicator color={Colors.surface} />
+            <ActivityIndicator color={Colors.onBrand} />
           ) : (
             <View style={styles.placeRight}>
               <Text style={styles.placeOrderText}>Place order</Text>
-              <Ionicons name="caret-forward" size={14} color={Colors.surface} />
+              <Ionicons name="caret-forward" size={14} color={Colors.onBrand} />
             </View>
           )}
         </Pressable>
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
   placeOrderBtnDisabled: {
     backgroundColor: "#C9D3D1",
   },
-  placeOrderPressed: { backgroundColor: Colors.brandPressed },
+  placeOrderPressed: { backgroundColor: Colors.brandFillPressed },
   placeRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   root: {
     flex: 1,
@@ -691,14 +691,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
     fontVariant: ["tabular-nums"],
   },
   bottomSub: {
     fontSize: 10,
     lineHeight: 12,
     fontWeight: "800",
-    color: "rgba(255,255,255,0.8)",
+    color: Colors.onBrandMuted,
   },
   placeOrderBtn: {
     backgroundColor: Colors.brandGreen,
@@ -712,6 +712,6 @@ const styles = StyleSheet.create({
   placeOrderText: {
     fontSize: 16,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
 });

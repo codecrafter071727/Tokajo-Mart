@@ -34,6 +34,14 @@ export const Colors = {
   brandText: colors.brand[700],
   brandTint: colors.brand[100],
   brandActive: colors.brand[500],
+  /**
+   * Text and icons on a solid #42C86E surface. White on it is 2.2:1 and fails; ink is 7.7:1.
+   * Rule: dark on green, never white on green.
+   */
+  onBrand: colors.ink[900],
+  onBrandMuted: "rgba(20,32,30,0.7)",
+  /** Pressed state for green buttons: lighter, so dark text keeps its contrast */
+  brandFillPressed: colors.brand[500],
 } as const;
 
 export const Fonts = {

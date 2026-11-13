@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
 
   // List
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   trackBtnText: {
     fontSize: FontSize.caption,
     fontWeight: "700",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
   reorderBtn: {
     borderWidth: 1,

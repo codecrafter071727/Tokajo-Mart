@@ -67,8 +67,8 @@ export default function OrderTrackingScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      setStatusBarStyle("light");
-      return () => setStatusBarStyle("dark");
+      // The hero is light (green or grey) with dark text, so the status bar stays dark
+      setStatusBarStyle("dark");
     }, []),
   );
 
@@ -85,12 +85,12 @@ export default function OrderTrackingScreen() {
     return (
       <View style={styles.root}>
         <LinearGradient
-          colors={[colors.brand[700], colors.brand[600]]}
+          colors={[colors.brand[600], colors.brand[500]]}
           style={[styles.hero, { paddingTop: insets.top + Spacing[4] }]}
         >
           <View style={styles.topRow}>
             <Pressable style={styles.iconBtn} onPress={back} accessibilityLabel="Back">
-              <Ionicons name="arrow-back" size={22} color={Colors.surface} />
+              <Ionicons name="arrow-back" size={22} color={Colors.onBrand} />
             </Pressable>
           </View>
           {orderQuery.isPending ? (
@@ -119,8 +119,8 @@ export default function OrderTrackingScreen() {
   const itemCount = order.items.reduce((n, i) => n + i.quantity, 0);
 
   const heroColors: [string, string] = cancelled
-    ? ["#5B6B68", "#7A8986"]
-    : [colors.brand[700], colors.brand[600]];
+    ? [colors.line[300], colors.surface[100]]
+    : [colors.brand[600], colors.brand[500]];
 
   return (
     <View style={styles.root}>
@@ -132,7 +132,7 @@ export default function OrderTrackingScreen() {
       >
         <View style={styles.topRow}>
           <Pressable style={styles.iconBtn} onPress={back} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={22} color={Colors.surface} />
+            <Ionicons name="arrow-back" size={22} color={Colors.onBrand} />
           </Pressable>
           <Text style={styles.orderNo} numberOfLines={1}>
             Order #{order.server?.number ?? order.id.slice(0, 8).toUpperCase()}
@@ -350,16 +350,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
     ...typography.caption,
     fontWeight: "700",
-    color: "rgba(255,255,255,0.85)",
+    color: Colors.onBrandMuted,
   },
-  heroTitle: { ...typography.display, fontWeight: "900", color: Colors.surface },
-  heroSub: { ...typography.body, color: "rgba(255,255,255,0.9)", marginTop: 2 },
+  heroTitle: { ...typography.display, fontWeight: "900", color: Colors.onBrand },
+  heroSub: { ...typography.body, color: Colors.onBrandMuted, marginTop: 2 },
   steps: { flexDirection: "row", gap: 6, marginTop: Spacing[16] },
   step: { flex: 1, gap: 6 },
-  stepBar: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.3)" },
-  stepBarDone: { backgroundColor: Colors.surface },
-  stepLabel: { fontSize: 10, lineHeight: 12, fontWeight: "700", color: "rgba(255,255,255,0.65)" },
-  stepLabelDone: { color: Colors.surface },
+  stepBar: { height: 4, borderRadius: 2, backgroundColor: "rgba(20,32,30,0.15)" },
+  stepBarDone: { backgroundColor: Colors.onBrand },
+  stepLabel: { fontSize: 10, lineHeight: 12, fontWeight: "700", color: Colors.onBrandMuted },
+  stepLabelDone: { color: Colors.onBrand },
 
   scroll: { flex: 1 },
   content: { padding: Spacing[12], gap: Spacing[12] },
@@ -489,5 +489,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  primaryText: { fontSize: 16, fontWeight: "800", color: Colors.surface },
+  primaryText: { fontSize: 16, fontWeight: "800", color: Colors.onBrand },
 });

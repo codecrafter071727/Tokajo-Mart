@@ -88,7 +88,7 @@ export function CartBar({ bottomOffset = 0 }: CartBarProps) {
         accessibilityLabel={`${totalItems} items, ${totalPrice} rupees. View cart`}
       >
         <LinearGradient
-          colors={[colors.brand[600], colors.brand[700]]}
+          colors={[colors.brand[600], colors.brand[500]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.bar}
@@ -119,7 +119,7 @@ export function CartBar({ bottomOffset = 0 }: CartBarProps) {
           </View>
           <View style={styles.right}>
             <Text style={styles.viewCart}>View cart</Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.surface} />
+            <Ionicons name="chevron-forward" size={18} color={Colors.onBrand} />
           </View>
         </LinearGradient>
       </Pressable>
@@ -199,12 +199,12 @@ const styles = StyleSheet.create({
   },
   summaryTop: {
     ...typography.caption,
-    color: Colors.brandTint,
+    color: Colors.onBrandMuted,
   },
   summaryBottom: {
     ...typography.subtitle,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
     fontVariant: ["tabular-nums"],
   },
   right: {
@@ -215,6 +215,6 @@ const styles = StyleSheet.create({
   viewCart: {
     ...typography.subtitle,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
 });

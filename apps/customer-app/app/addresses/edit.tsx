@@ -164,7 +164,7 @@ export default function EditAddressScreen() {
                 <View style={styles.areaTop}>
                   <Text style={styles.areaName}>{area.name}</Text>
                   {active ? (
-                    <Ionicons name="checkmark-circle" size={18} color={Colors.brandGreen} />
+                    <Ionicons name="checkmark-circle" size={18} color={Colors.brandText} />
                   ) : null}
                 </View>
                 <Text style={styles.areaCity}>
@@ -310,5 +310,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  saveText: { fontSize: FontSize.body, fontWeight: "700", color: Colors.surface },
+  saveText: { fontSize: FontSize.body, fontWeight: "700", color: Colors.onBrand },
 });

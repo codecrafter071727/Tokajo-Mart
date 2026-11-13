@@ -101,6 +101,7 @@ export default function OnboardingScreen() {
   };
 
   const activeSlide = (SLIDES[activeIdx] ?? SLIDES[0])!;
+  const ctaOnGreen = activeSlide.accent === Colors.brandText;
 
   return (
     <View style={[styles.root, { backgroundColor: activeSlide.bg }]}>
@@ -168,15 +169,18 @@ export default function OnboardingScreen() {
         ))}
       </AnimatedView>
 
-      {/* CTA */}
+      {/* CTA: green slides get the brand green with dark text (white on green fails contrast) */}
       <AnimatedView
         style={[styles.ctaWrapper, { paddingBottom: insets.bottom + Spacing[24] }, contentStyle]}
       >
         <Pressable
-          style={[styles.ctaBtn, { backgroundColor: activeSlide.accent }]}
+          style={[
+            styles.ctaBtn,
+            { backgroundColor: ctaOnGreen ? Colors.brandGreen : activeSlide.accent },
+          ]}
           onPress={handleNext}
         >
-          <Text style={styles.ctaBtnText}>
+          <Text style={[styles.ctaBtnText, ctaOnGreen && { color: Colors.onBrand }]}>
             {activeIdx < SLIDES.length - 1 ? "Next" : "Get started"}
           </Text>
         </Pressable>

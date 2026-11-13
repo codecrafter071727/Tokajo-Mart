@@ -90,7 +90,7 @@ export default function AddressesScreen() {
           onPress={() => router.push("/addresses/edit")}
           accessibilityRole="button"
         >
-          <Ionicons name="add" size={20} color={Colors.surface} />
+          <Ionicons name="add" size={20} color={Colors.onBrand} />
           <Text style={styles.addText}>Add a new address</Text>
         </Pressable>
       </View>
@@ -169,5 +169,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     backgroundColor: Colors.brandGreen,
   },
-  addText: { fontSize: FontSize.body, fontWeight: "700", color: Colors.surface },
+  addText: { fontSize: FontSize.body, fontWeight: "700", color: Colors.onBrand },
 });

@@ -2,7 +2,7 @@ import React from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { colors, radius, space, TOUCH, typography } from "../theme";
+import { colors, onBrand, radius, space, TOUCH, typography } from "../theme";
 
 type Props = {
   label: string;
@@ -18,7 +18,7 @@ type Props = {
 };
 
 const PALETTE = {
-  primary: { bg: colors.brand[600], fg: colors.ink[900], border: colors.brand[600] },
+  primary: { bg: colors.brand[600], fg: onBrand, border: colors.brand[600] },
   secondary: { bg: colors.surface[0], fg: colors.ink[900], border: colors.line[300] },
   danger: { bg: colors.surface[0], fg: colors.danger, border: colors.danger },
   dark: { bg: colors.night[900], fg: colors.surface[0], border: colors.night[900] },

@@ -44,7 +44,7 @@ export function ErrorState({
         accessibilityRole="button"
         accessibilityLabel="Try again"
       >
-        <Ionicons name="refresh" size={16} color={Colors.surface} />
+        <Ionicons name="refresh" size={16} color={Colors.onBrand} />
         <Text style={styles.retryText}>Try again</Text>
       </Pressable>
     </View>
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   retryText: {
     ...typography.bodyStrong,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
   rail: {
     marginBottom: Spacing[20],

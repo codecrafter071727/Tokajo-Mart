@@ -9,8 +9,9 @@ export type Rider = {
   id: string;
   name: string;
   phone: string;
-  vehicle: string;
-  rating: number;
+  /** Null when the server has not told us (sign in does not return it), so nothing is made up */
+  vehicle: string | null;
+  rating: number | null;
 };
 
 /** Demo mode (no server) accepts this code for any phone number. */
@@ -72,8 +73,8 @@ const fromServer = (user: AuthResponse["user"]): Rider => ({
   id: user.id,
   name: user.name,
   phone: user.phone ?? "",
-  vehicle: "Bike",
-  rating: 4.8,
+  vehicle: null,
+  rating: null,
 });
 
 export const useSession = create<SessionState>()(
@@ -149,6 +150,16 @@ export const useSession = create<SessionState>()(
         REAL_BACKEND
           ? { rider: s.rider, accessToken: s.accessToken, refreshToken: s.refreshToken }
           : {},
+      // Version 1 stopped inventing a vehicle and rating for real riders. Older saved sessions
+      // still carry the made up "Bike" and 4.8, so drop them on upgrade.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as Partial<SessionState>;
+        if (version < 1 && state.rider) {
+          state.rider = { ...state.rider, vehicle: null, rating: null };
+        }
+        return state as SessionState;
+      },
     },
   ),
 );

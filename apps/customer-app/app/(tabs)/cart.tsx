@@ -298,7 +298,7 @@ export default function CartScreen() {
           </View>
           <View style={styles.payRight}>
             <Text style={styles.payText}>Proceed to pay</Text>
-            <Ionicons name="caret-forward" size={14} color={Colors.surface} />
+            <Ionicons name="caret-forward" size={14} color={Colors.onBrand} />
           </View>
         </Pressable>
       </View>
@@ -504,22 +504,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing[16],
     height: 56,
   },
-  payPressed: { backgroundColor: Colors.brandPressed },
+  payPressed: { backgroundColor: Colors.brandFillPressed },
   payTotal: {
     fontSize: 16,
     lineHeight: 20,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
     fontVariant: ["tabular-nums"],
   },
   payTotalLabel: {
     fontSize: 10,
     lineHeight: 12,
     fontWeight: "800",
-    color: "rgba(255,255,255,0.8)",
+    color: Colors.onBrandMuted,
   },
   payRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-  payText: { fontSize: 16, fontWeight: "800", color: Colors.surface },
+  payText: { fontSize: 16, fontWeight: "800", color: Colors.onBrand },
 
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing[32] },
   emptyArt: {
@@ -546,5 +546,5 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: "center",
   },
-  emptyCtaText: { fontSize: 15, fontWeight: "800", color: Colors.surface },
+  emptyCtaText: { fontSize: 15, fontWeight: "800", color: Colors.onBrand },
 });

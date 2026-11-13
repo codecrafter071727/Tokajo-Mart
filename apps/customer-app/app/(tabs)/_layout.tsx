@@ -53,7 +53,7 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: colors.brand[600],
+          tabBarActiveTintColor: Colors.brandText,
           tabBarStyle: {
             position: "absolute",
             height: TAB_BAR_CONTENT + insets.bottom,
@@ -155,6 +155,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#fff",
+    color: Colors.onBrand,
   },
 });

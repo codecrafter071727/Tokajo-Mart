@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   backHomeText: {
     fontSize: FontSize.body,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
   root: {
     flex: 1,
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   discountText: {
     fontSize: FontSize.caption,
     fontWeight: "800",
-    color: Colors.surface,
+    color: Colors.onBrand,
   },
   deliveryPill: {
     position: "absolute",

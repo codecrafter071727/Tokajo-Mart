@@ -106,7 +106,7 @@ export default function LoginScreen() {
 
         <View style={[styles.card, { paddingBottom: insets.bottom + Spacing[24] }]}>
           <View style={styles.logo}>
-            <Ionicons name="flash" size={26} color={Colors.surface} />
+            <Ionicons name="flash" size={26} color={Colors.onBrand} />
           </View>
           <Text style={styles.title}>India's last minute app</Text>
           <Text style={styles.subtitle}>Log in or sign up</Text>
@@ -169,7 +169,7 @@ export default function LoginScreen() {
             accessibilityState={{ disabled: !isValid || sending, busy: sending }}
           >
             {sending ? (
-              <ActivityIndicator color={Colors.surface} />
+              <ActivityIndicator color={Colors.onBrand} />
             ) : (
               <Text style={[styles.ctaText, !isValid && styles.ctaTextDisabled]}>Continue</Text>
             )}
@@ -298,10 +298,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  ctaPressed: { backgroundColor: Colors.brandPressed },
+  ctaPressed: { backgroundColor: Colors.brandFillPressed },
   ctaDisabled: { backgroundColor: "#C9D3D1" },
-  ctaText: { fontSize: 16, fontWeight: "800", color: Colors.surface },
-  ctaTextDisabled: { color: Colors.surface },
+  ctaText: { fontSize: 16, fontWeight: "800", color: Colors.onBrand },
+  ctaTextDisabled: { color: Colors.textSecondary },
   terms: {
     ...typography.caption,
     fontWeight: "400",
