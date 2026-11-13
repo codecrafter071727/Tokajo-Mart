@@ -29,3 +29,13 @@ export interface OtpSender {
 
 /** Demo mode: nothing is sent, because the fixed demo code is accepted. */
 export const demoSender: OtpSender = { async send() {} };
+
+/** "+919810000099, +919810000098" becomes a set. Anything that is not a +91 number is ignored. */
+export function parseTestNumbers(value: string | undefined): Set<string> {
+  return new Set(
+    (value ?? "")
+      .split(",")
+      .map((n) => n.trim())
+      .filter((n) => /^\+91[6-9]\d{9}$/.test(n)),
+  );
+}

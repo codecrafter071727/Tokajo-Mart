@@ -8,7 +8,8 @@ import {
 import { env } from "./config/env";
 import type { DB } from "./db/types.generated";
 import { registerAdminRoutes } from "./modules/admin/routes";
-import { demoSender, type OtpSender } from "./modules/auth/otp";
+import { createMsg91Sender } from "./modules/auth/msg91";
+import { demoSender, parseTestNumbers, type OtpSender } from "./modules/auth/otp";
 import { registerAuthRoutes } from "./modules/auth/routes";
 import { AuthService } from "./modules/auth/service";
 import { registerInternalRoutes } from "./modules/internal/routes";
@@ -17,6 +18,9 @@ export type BuildAppOptions = {
   /** Injected in tests. Defaults to the configured database. */
   db?: Kysely<DB>;
   sender?: OtpSender;
+  /** Overrides OTP_MODE and OTP_TEST_NUMBERS in tests */
+  otpMode?: "demo" | "sms";
+  testNumbers?: string;
   now?: () => Date;
 };
 
@@ -27,10 +31,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
 
   // Real SMS needs a provider (MSG91 with DLT registration in India). Until one is configured the
   // service stays in demo mode, which accepts a fixed code and sends nothing. Production must not.
-  const otpMode = env.OTP_MODE ?? (production ? "sms" : "demo");
-  if (otpMode === "sms" && !options.sender) {
+  const otpMode = options.otpMode ?? env.OTP_MODE ?? (production ? "sms" : "demo");
+  const msg91Configured = Boolean(env.MSG91_AUTH_KEY && env.MSG91_TEMPLATE_ID);
+  if (otpMode === "sms" && !options.sender && !msg91Configured) {
     throw new Error(
-      "OTP_MODE=sms needs an SMS provider. None is configured yet; use OTP_MODE=demo outside production.",
+      "OTP_MODE=sms needs MSG91_AUTH_KEY and MSG91_TEMPLATE_ID. Use OTP_MODE=demo outside production.",
     );
   }
 
@@ -60,7 +65,18 @@ export async function buildApp(options: BuildAppOptions = {}) {
     refreshTtlDays: env.REFRESH_TOKEN_TTL_DAYS,
     otpTtlSeconds: env.OTP_TTL_SECONDS,
     otpMode,
-    sender: options.sender ?? demoSender,
+    sender:
+      options.sender ??
+      (otpMode === "sms"
+        ? createMsg91Sender({
+            authKey: env.MSG91_AUTH_KEY as string,
+            templateId: env.MSG91_TEMPLATE_ID as string,
+            expiryMinutes: Math.max(1, Math.round(env.OTP_TTL_SECONDS / 60)),
+            baseUrl: env.MSG91_BASE_URL,
+            onError: (reason) => app.log.error({ reason }, "sms delivery failed"),
+          })
+        : demoSender),
+    testNumbers: parseTestNumbers(options.testNumbers ?? env.OTP_TEST_NUMBERS),
     now: options.now,
   });
 

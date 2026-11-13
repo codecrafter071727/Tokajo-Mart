@@ -628,4 +628,107 @@ suite("identity: sign in and sessions", async () => {
       expect((await call("GET", `/internal/riders/batch?ids=${ids}`)).json().items).toHaveLength(2);
     });
   });
+
+  describe("real sms mode", () => {
+    const SMS_PHONE = "+919999000004";
+    const REVIEW_PHONE = "+919999000005";
+
+    it("sends a random code by SMS, does not accept the demo code, and accepts the sent one", async () => {
+      const sms: { phone: string; code: string }[] = [];
+      const smsApp = await buildApp({
+        db,
+        otpMode: "sms",
+        sender: {
+          async send(phone, code) {
+            sms.push({ phone, code });
+          },
+        },
+        now: () => clock,
+      });
+      const res = await smsApp.inject({
+        method: "POST",
+        url: "/v1/identity/auth/otp/request",
+        payload: { phone: SMS_PHONE },
+      });
+      expect(res.json()).toMatchObject({ demoMode: false, codeLength: 4 });
+      expect(sms).toHaveLength(1);
+      const sent = sms[0]!.code;
+      expect(sent).toMatch(/^\d{4}$/);
+      if (sent !== "1234") {
+        const demo = await smsApp.inject({
+          method: "POST",
+          url: "/v1/identity/auth/otp/verify",
+          payload: { phone: SMS_PHONE, code: "1234" },
+        });
+        expect(demo.statusCode).toBe(401);
+      }
+      const ok = await smsApp.inject({
+        method: "POST",
+        url: "/v1/identity/auth/otp/verify",
+        payload: { phone: SMS_PHONE, code: sent },
+      });
+      expect(ok.statusCode).toBe(200);
+      await smsApp.close();
+    });
+
+    it("answers 503 when the SMS cannot be sent, and the failed try does not use up a request", async () => {
+      const failing = await buildApp({
+        db,
+        otpMode: "sms",
+        sender: {
+          async send() {
+            throw Object.assign(
+              new Error("We could not send the code right now. Try again in a minute."),
+              { statusCode: 503 },
+            );
+          },
+        },
+        now: () => clock,
+      });
+      for (let i = 0; i < 6; i += 1) {
+        const res = await failing.inject({
+          method: "POST",
+          url: "/v1/identity/auth/otp/request",
+          payload: { phone: SMS_PHONE },
+        });
+        expect(res.statusCode).toBe(503);
+      }
+      const left = await db
+        .selectFrom("identity.otpChallenges")
+        .select("id")
+        .where("phone", "=", SMS_PHONE)
+        .execute();
+      expect(left).toHaveLength(0);
+      await failing.close();
+    });
+
+    it("lets a configured test number use the demo code without sending an SMS", async () => {
+      const sms: string[] = [];
+      const review = await buildApp({
+        db,
+        otpMode: "sms",
+        testNumbers: REVIEW_PHONE,
+        sender: {
+          async send(phone) {
+            sms.push(phone);
+          },
+        },
+        now: () => clock,
+      });
+      const res = await review.inject({
+        method: "POST",
+        url: "/v1/identity/auth/otp/request",
+        payload: { phone: REVIEW_PHONE },
+      });
+      expect(res.json().demoMode).toBe(false);
+      expect(sms).toEqual([]);
+      const ok = await review.inject({
+        method: "POST",
+        url: "/v1/identity/auth/otp/verify",
+        payload: { phone: REVIEW_PHONE, code: "1234" },
+      });
+      expect(ok.statusCode).toBe(200);
+      await review.close();
+    });
+  });
 });

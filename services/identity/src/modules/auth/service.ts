@@ -14,6 +14,8 @@ export type AuthConfig = {
   otpTtlSeconds: number;
   otpMode: "demo" | "sms";
   sender: OtpSender;
+  /** Numbers that use the demo code and get no SMS, even in sms mode (store review, QA) */
+  testNumbers?: Set<string>;
   now?: () => Date;
 };
 
@@ -83,8 +85,9 @@ export class AuthService {
     }
 
     const demo = this.cfg.otpMode === "demo";
-    const code = demo ? demoCode(role) : generateCode(otpLength(role));
-    await this.db
+    const testNumber = !demo && (this.cfg.testNumbers?.has(phone) ?? false);
+    const code = demo || testNumber ? demoCode(role) : generateCode(otpLength(role));
+    const challenge = await this.db
       .insertInto("identity.otpChallenges")
       .values({
         phone,
@@ -92,8 +95,17 @@ export class AuthService {
         createdAt: now,
         expiresAt: new Date(now.getTime() + this.cfg.otpTtlSeconds * 1000),
       })
-      .execute();
-    await this.cfg.sender.send(phone, code);
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    if (!testNumber) {
+      try {
+        await this.cfg.sender.send(phone, code);
+      } catch (error) {
+        // The customer never got this code, so it must not count against them or stay usable
+        await this.db.deleteFrom("identity.otpChallenges").where("id", "=", challenge.id).execute();
+        throw error;
+      }
+    }
 
     return {
       expiresInSeconds: this.cfg.otpTtlSeconds,
