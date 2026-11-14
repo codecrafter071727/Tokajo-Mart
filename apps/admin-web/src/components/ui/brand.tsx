@@ -1,31 +1,21 @@
+import Image from "next/image";
 import { cn } from "./core";
 
-/** Tokajo's mark: a solid accent tile with a shopping bag and a bolt (quick delivery). Flat, no gradient. */
-export function Logo({ size = 36, className }: { size?: number; className?: string }) {
+const RATIO = 1024 / 682;
+
+/** Full Milcki lockup — matches tab icon and warehouse header. */
+export function Logo({ height = 36, className }: { height?: number; className?: string }) {
+  const width = Math.round(height * RATIO);
   return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-[10px] bg-accent text-on-accent",
-        className,
-      )}
-      style={{ width: size, height: size }}
+    <Image
+      src="/logo.png"
+      alt=""
+      width={width}
+      height={height}
       aria-hidden
-    >
-      <svg
-        viewBox="0 0 24 24"
-        width={size * 0.56}
-        height={size * 0.56}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2.25}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M5 7h14l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7Z" />
-        <path d="M9 7V5a3 3 0 0 1 6 0v2" />
-        <path d="m12.5 11-2 3.5h3l-2 3.5" />
-      </svg>
-    </span>
+      className={cn("h-auto w-auto shrink-0 object-contain", className)}
+      style={{ height, width, maxHeight: height }}
+    />
   );
 }
 

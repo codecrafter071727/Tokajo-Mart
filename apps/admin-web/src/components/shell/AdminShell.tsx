@@ -159,11 +159,11 @@ function Frame({ children }: { children: ReactNode }) {
           narrow ? "justify-center" : "gap-3 px-4",
         )}
       >
-        <Logo size={36} />
+        <Logo height={34} />
         {!narrow && (
           <span className="min-w-0 leading-tight">
             <span className="block text-lg font-semibold whitespace-nowrap text-nav-ink">
-              Tokajo Mart
+              Milcki
             </span>
             <span className="block text-[11px] font-medium tracking-wide text-nav-text uppercase">
               Admin console

@@ -15,12 +15,19 @@ const dmSans = DM_Sans({
 const jetbrainsMono = JetBrains_Mono({ variable: "--font-jetbrains-mono", subsets: ["latin"] });
 
 /** Sets the dark class before first paint from the saved choice, so a page never flashes the wrong theme. */
-const THEME_SCRIPT = `try{var t=localStorage.getItem("qc-admin-theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}`;
+const THEME_SCRIPT = `try{var t=localStorage.getItem("qc-admin-theme")||"light";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}`;
 
 export const metadata: Metadata = {
-  title: { default: "Tokajo Mart admin", template: "%s · Tokajo Mart admin" },
+  title: { default: "Milcki admin", template: "%s · Milcki admin" },
   description: "Run every warehouse, rider and order",
   robots: { index: false },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-192.png", sizes: "192x192" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

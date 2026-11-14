@@ -1,5 +1,5 @@
 /*
- * Tokajo Warehouse service worker. It only makes the app installable and keeps the app shell
+ * Milcki Warehouse service worker. It only makes the app installable and keeps the app shell
  * (built JS, CSS, fonts, icons and an offline page) cached. It never caches API responses or
  * pages: orders, stock and handover codes always come live from the server.
  */

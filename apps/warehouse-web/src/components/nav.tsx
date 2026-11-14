@@ -8,6 +8,7 @@ import { WAREHOUSES, isLate } from "../lib/helpers";
 import { useHandovers, useNow, useQueue } from "../lib/live";
 import { useStockAlerts } from "../lib/alerts";
 import { OrderAlerts } from "./order-alerts";
+import { BrandLogo } from "./brand-logo";
 import { Icon, type IconName } from "./ui";
 
 const ITEMS: { href: string; label: string; icon: IconName }[] = [
@@ -66,12 +67,10 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-4 px-4 lg:px-6">
-        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Queue">
-          <span className="grid size-9 place-items-center rounded-lg bg-brand-600 text-lg font-extrabold text-ink-900">
-            Q
-          </span>
+        <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="Queue">
+          <BrandLogo height={34} />
           <span className="hidden text-base font-extrabold leading-tight xl:block">
-            Tokajo
+            Milcki
             <span className="block text-xs font-semibold text-ink-500">Warehouse</span>
           </span>
         </Link>

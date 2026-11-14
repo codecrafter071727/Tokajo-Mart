@@ -1,5 +1,5 @@
 // Draws the installable app icons as PNG files with no image libraries: a brand green tile with a
-// dark "T" for Tokajo. Run from apps/warehouse-web: node scripts/make-icons.mjs
+// dark "T" for Milcki. Run from apps/warehouse-web: node scripts/make-icons.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { deflateSync } from "node:zlib";

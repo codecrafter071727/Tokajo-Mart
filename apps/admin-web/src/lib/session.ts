@@ -1,7 +1,8 @@
 import type { NextResponse } from "next/server";
 
 /** Where the browser's calls go. Only the Next server talks to it, so the browser never sees a token. */
-export const GATEWAY_URL = process.env.GATEWAY_URL ?? "http://localhost:4000";
+export const GATEWAY_URL =
+  process.env.GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
 export const ACCESS_COOKIE = "qc_admin_access";
 export const REFRESH_COOKIE = "qc_admin_refresh";

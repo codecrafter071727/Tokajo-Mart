@@ -1,14 +1,14 @@
 {
-  "name": "Tokajo Warehouse",
-  "short_name": "Warehouse",
-  "description": "Pick, pack and hand over Tokajo Mart orders",
+  "name": "Milcki Warehouse",
+  "short_name": "Milcki",
+  "description": "Pick, pack and hand over Milcki orders",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "landscape",
   "background_color": "#ffffff",
-  "theme_color": "#42C86E",
+  "theme_color": "#0d2818",
   "categories": ["business", "productivity"],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

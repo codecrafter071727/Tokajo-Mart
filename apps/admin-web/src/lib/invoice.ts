@@ -17,7 +17,7 @@ export async function downloadInvoice(orderId: string, orderNumber: string): Pro
   const href = URL.createObjectURL(await res.blob());
   const a = document.createElement("a");
   a.href = href;
-  a.download = `tokajo-invoice-${orderNumber}.pdf`;
+  a.download = `milcki-invoice-${orderNumber}.pdf`;
   document.body.appendChild(a);
   a.click();
   a.remove();

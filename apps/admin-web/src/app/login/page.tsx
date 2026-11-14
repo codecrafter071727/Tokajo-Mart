@@ -69,7 +69,7 @@ function LoginForm() {
           required
           autoComplete="username"
           autoFocus
-          placeholder="you@tokajo.in"
+          placeholder="you@milcki.in"
           className={INPUT}
         />
       </label>
@@ -116,8 +116,8 @@ export default function LoginPage() {
     <main className="grid min-h-screen lg:grid-cols-2">
       <section className="hidden flex-col justify-between border-r border-nav-line bg-nav p-10 text-nav-text lg:flex">
         <div className="flex items-center gap-2.5">
-          <Logo size={32} />
-          <span className="text-lg font-semibold text-nav-ink">Tokajo Mart</span>
+          <Logo height={40} />
+          <span className="text-lg font-semibold text-nav-ink">Milcki</span>
         </div>
         <div>
           <h2 className="max-w-md text-3xl leading-tight font-semibold tracking-tight text-nav-ink">
@@ -132,7 +132,7 @@ export default function LoginPage() {
             ))}
           </ul>
         </div>
-        <p className="text-xs">Tokajo Mart admin console</p>
+        <p className="text-xs">Milcki admin console</p>
       </section>
       <section className="relative flex items-center justify-center px-6 py-12">
         <div className="absolute top-4 right-4">
@@ -140,8 +140,8 @@ export default function LoginPage() {
         </div>
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <Logo size={32} />
-            <span className="text-lg font-semibold">Tokajo Mart</span>
+            <Logo height={40} />
+            <span className="text-lg font-semibold">Milcki</span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
           <p className="mt-1 mb-6 text-sm text-muted">For platform admins. Use your work email.</p>

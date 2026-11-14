@@ -5,18 +5,19 @@ import { Providers } from "../lib/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tokajo Warehouse",
+  title: "Milcki Warehouse",
   description: "Warehouse pick, pack and handover",
-  applicationName: "Tokajo Warehouse",
+  applicationName: "Milcki Warehouse",
   manifest: "/manifest.webmanifest",
+  // Tab icon: src/app/favicon.ico + icon.png (see scripts/generate-milcki-icons.mjs)
   icons: {
     icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/icon-192.png", sizes: "192x192" },
     ],
     apple: "/icons/apple-touch-icon.png",
   },
-  appleWebApp: { capable: true, title: "Warehouse", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Milcki Warehouse", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

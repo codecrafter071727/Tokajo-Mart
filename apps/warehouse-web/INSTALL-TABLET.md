@@ -1,4 +1,4 @@
-# Install Tokajo Warehouse on an Android tablet
+# Install Milcki Warehouse on an Android tablet
 
 The warehouse app is a web app that installs like a normal app: full screen, its own icon, no
 browser bar. It needs the production site on HTTPS (installing does not work from a local dev
@@ -8,7 +8,7 @@ server).
 2. Sign in with your warehouse email and password.
 3. Tap the **three dots** menu at the top right, then **Install app** (on older Chrome it says
    **Add to Home screen**, then **Install**).
-4. Confirm. **Tokajo Warehouse** appears on the home screen and in the app drawer.
+4. Confirm. **Milcki Warehouse** appears on the home screen and in the app drawer.
 5. Open it from the icon. It starts full screen in landscape.
 
 ## New order sound

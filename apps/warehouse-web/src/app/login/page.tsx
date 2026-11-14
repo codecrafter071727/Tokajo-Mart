@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { BrandLogo } from "../../components/brand-logo";
 import { Button, Icon, inputClass } from "../../components/ui";
 
 export default function LoginPage() {
@@ -38,10 +39,8 @@ export default function LoginPage() {
     <main className="grid min-h-screen lg:grid-cols-2">
       <section className="relative hidden flex-col justify-between overflow-hidden bg-brand-600 p-12 text-ink-900 lg:flex">
         <div className="relative z-10 flex items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-xl bg-ink-900 text-xl font-extrabold text-brand-500">
-            Q
-          </span>
-          <span className="text-xl font-extrabold">Tokajo Warehouse</span>
+          <BrandLogo height={56} priority />
+          <span className="text-xl font-extrabold">Milcki Warehouse</span>
         </div>
         <div className="relative z-10">
           <p className="max-w-md text-[30px] font-extrabold leading-tight">
@@ -71,10 +70,8 @@ export default function LoginPage() {
       <section className="grid place-items-center p-6">
         <form method="post" action="/login" onSubmit={submit} className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <span className="grid size-10 place-items-center rounded-xl bg-brand-600 text-lg font-extrabold text-ink-900">
-              Q
-            </span>
-            <span className="text-lg font-extrabold">Tokajo Warehouse</span>
+            <BrandLogo height={48} priority />
+            <span className="text-lg font-extrabold">Milcki Warehouse</span>
           </div>
           <h1 className="text-[30px] font-extrabold leading-9">Sign in</h1>
           <p className="mt-1 text-base text-ink-700">Use the account your manager gave you.</p>

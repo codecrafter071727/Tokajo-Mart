@@ -11,5 +11,9 @@ export function middleware(request: NextRequest) {
 
 // The install files must load without a session: browsers fetch the manifest without cookies
 export const config = {
-  matcher: ["/((?!api|_next|favicon.ico|manifest.webmanifest|sw.js|offline.html|icons/).*)"],
+  // Paths with a file extension (logo.png, icons/*) must load without a session — Next.js
+  // image optimization fetches them from the server with no auth cookies.
+  matcher: [
+    "/((?!api|_next|favicon.ico|manifest.webmanifest|sw.js|offline.html|icons/|logo\\.png|logo-mark\\.png|.*\\..*).*)",
+  ],
 };

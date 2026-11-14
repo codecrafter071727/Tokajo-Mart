@@ -1,7 +1,8 @@
 import type { NextResponse } from "next/server";
 
 /** Server side only. The tokens live in httpOnly cookies, so page scripts never see them. */
-export const GATEWAY_URL = process.env.GATEWAY_URL ?? "http://localhost:4000";
+export const GATEWAY_URL =
+  process.env.GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 export const AT = "qc_at";
 export const RT = "qc_rt";
 export const USER = "qc_user";
