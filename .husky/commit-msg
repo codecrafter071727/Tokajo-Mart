@@ -1,1 +1,12 @@
-pnpm exec commitlint --edit "$1"
+# Strip Co-authored-by trailers (e.g. added by IDE/agents); subject-only commits stay clean.
+msg_file=$1
+if [ -n "$msg_file" ] && [ -f "$msg_file" ]; then
+  grep -vi '^co-authored-by:' "$msg_file" >"${msg_file}.tmp" || true
+  if [ -s "${msg_file}.tmp" ]; then
+    mv "${msg_file}.tmp" "$msg_file"
+  else
+    rm -f "${msg_file}.tmp"
+  fi
+fi
+
+pnpm exec commitlint --edit "$msg_file"

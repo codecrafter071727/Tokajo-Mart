@@ -41,12 +41,13 @@ Optional scope: `feat(warehouse):`, `fix(admin):`, `chore(seed):`.
 - Words like *implement*, *leverage*, *enhance*, *comprehensive*, *ensure robust*
 - *This commit…*, *Updated files to…*, ticket spam, emojis
 - Past tense (*fixed bug*) — use *fix bug*
+- **Any `Co-authored-by:` / `Co-Authored-By:` line** (Cursor, Anthropic, bots, etc.)
 
 ## Before each commit
 
 1. On `Anshul`. Never stage `.env` or secrets.
 2. Stage only files for this unit of work.
-3. `git commit -m "type(scope): short summary"` (HEREDOC if needed).
+3. **`git commit -m "type(scope): short summary"` only** — one line in `-m`, no `--author`, no trailers, no multi-line body. HEREDOC must contain **only** that subject line (see example).
 4. Do **not** push unless the user asks.
 5. Follow repo Git Safety Protocol (no config changes, no force push, no `--no-verify`).
 
