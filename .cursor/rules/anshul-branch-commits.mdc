@@ -7,6 +7,15 @@ alwaysApply: true
 
 Branch: **`Anshul`** (`git checkout Anshul`).
 
+## Checklist (every commit)
+
+1. **Prefix** — starts with `feat:`, `fix:`, `chore:`, `docs:`, `style:`, `refactor:`, or `test:` (optional scope: `fix(admin):`).
+2. **One line** — subject only, ≤ 72 chars, no body, no bullet list, no essay.
+3. **Human tone** — short imperative (`add`, `fix`, `use`), not AI wording (*implement*, *leverage*, *comprehensive*).
+4. **No trailers** — never `Co-authored-by:` / `Co-Authored-By:` (Cursor or anyone). Use `git commit -m "type: summary"` only.
+
+`commitlint` + `.husky/commit-msg` enforce this in the repo.
+
 ## When to commit
 
 After a **small, finished** change: one fix, tweak, or focused slice. No giant mixed commits. No commit if the user only asked a question or said not to commit.
