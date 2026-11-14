@@ -1,0 +1,42 @@
+---
+description: Commit small completed work to the Anshul branch
+alwaysApply: true
+---
+
+# Anshul branch — incremental commits
+
+Anshul owns local progress on git branch **`Anshul`** (checkout: `git checkout Anshul`).
+
+## When to commit
+
+After a **small, finished unit of work** in the agent session, commit before moving on:
+
+- One bug fix, UI tweak, config fix, or doc update
+- A focused feature slice that builds and is self-contained
+- Rebrand/icon/script changes tied to one goal
+
+Do **not** batch unrelated edits into one giant commit. Do **not** commit mid-task if tests or the app are broken unless the user asked for a WIP commit.
+
+Skip committing when the user only asked a question, wanted an explanation, or said not to commit.
+
+## Before each commit
+
+1. `git checkout Anshul` (create from `main` only if the branch is missing).
+2. Never stage `.env`, credentials, `node_modules`, or local secrets — warn if asked.
+3. Run `git status` and `git diff`; stage only files for **this** unit of work.
+4. Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `chore:`, `docs:`, etc., 1–2 sentences focusing on **why**.
+5. Commit via HEREDOC message; `git status` after to confirm.
+6. Do **not** push unless the user explicitly asks.
+7. Follow the repo’s Git Safety Protocol (no config changes, no force push, no skip hooks).
+
+## Example
+
+```bash
+git checkout Anshul
+git add apps/admin-web/src/components/shell/ThemeToggle.tsx apps/admin-web/src/app/layout.tsx
+git commit -m "$(cat <<'EOF'
+fix(admin): default light theme and explicit appearance menu
+
+EOF
+)"
+```
