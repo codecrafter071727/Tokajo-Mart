@@ -53,7 +53,7 @@ suite("invoices and account deletion support", async () => {
     identity: none,
     inventory: {
       get: async () =>
-        ({ id: "wh-noida-62", name: "Tokajo Noida 62", lat: 0, lng: 0, open: true }) as never,
+        ({ id: "wh-noida-62", name: "Milcki Noida 62", lat: 0, lng: 0, open: true }) as never,
       post: async () => ({}) as never,
     },
     payment: {
@@ -142,7 +142,7 @@ suite("invoices and account deletion support", async () => {
     const res = await get(`/v1/orders/${DELIVERED}/invoice.pdf`, owner);
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("application/pdf");
-    expect(res.headers["content-disposition"]).toContain("tokajo-invoice-QC-261113-90001.pdf");
+    expect(res.headers["content-disposition"]).toContain("milcki-invoice-QC-261113-90001.pdf");
     expect(res.rawPayload.subarray(0, 5).toString()).toBe("%PDF-");
     // It opens as a valid PDF and its title carries the invoice number
     const doc = await PDFDocument.load(res.rawPayload);

@@ -259,8 +259,8 @@ suite("identity: sign in and sessions", async () => {
   describe("staff email and password", () => {
     it("signs in the seeded manager with a warehouse claim", async () => {
       const res = await call("POST", "/v1/identity/auth/login", {
-        email: "Manager@Tokajo.dev",
-        password: "tokajo-dev",
+        email: "Manager@milcki.dev",
+        password: "milcki-dev",
       });
       expect(res.statusCode).toBe(200);
       expect(res.json().user).toMatchObject({
@@ -271,11 +271,11 @@ suite("identity: sign in and sessions", async () => {
 
     it("gives the same answer for a wrong password and an unknown email", async () => {
       const wrong = await call("POST", "/v1/identity/auth/login", {
-        email: "manager@tokajo.dev",
+        email: "manager@milcki.dev",
         password: "not-the-password",
       });
       const unknown = await call("POST", "/v1/identity/auth/login", {
-        email: "nobody@tokajo.dev",
+        email: "nobody@milcki.dev",
         password: "not-the-password",
       });
       expect(wrong.statusCode).toBe(401);
@@ -474,7 +474,7 @@ suite("identity: sign in and sessions", async () => {
       const byPhone = (await list("?q=9810000012")).json().items;
       expect(byPhone).toHaveLength(1);
       expect((await list("?q=%25")).json().items).toEqual([]); // wildcards are not wildcards
-      expect((await list("?role=admin")).json().items[0].email).toBe("admin@tokajo.dev");
+      expect((await list("?role=admin")).json().items[0].email).toBe("admin@milcki.dev");
     });
 
     it("gives one user to an admin, and 404 for an unknown id", async () => {

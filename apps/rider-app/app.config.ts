@@ -5,9 +5,9 @@ type AppEnv = "development" | "staging" | "production";
 const APP_ENV = (process.env.APP_ENV ?? "development") as AppEnv;
 
 const variants: Record<AppEnv, { name: string; idSuffix: string }> = {
-  development: { name: "QC Rider (Dev)", idSuffix: ".dev" },
-  staging: { name: "QC Rider (Staging)", idSuffix: ".staging" },
-  production: { name: "QC Rider", idSuffix: "" },
+  development: { name: "Milcki Rider (Dev)", idSuffix: ".dev" },
+  staging: { name: "Milcki Rider (Staging)", idSuffix: ".staging" },
+  production: { name: "Milcki Rider", idSuffix: "" },
 };
 
 const variant = variants[APP_ENV];
@@ -19,8 +19,14 @@ const locationReason =
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: variant.name,
-  slug: "qc-rider",
-  scheme: "qcrider",
+  slug: "milcki-rider",
+  scheme: "milckirider",
+  icon: "./assets/icon.png",
+  splash: {
+    image: "./assets/milcki-logo.png",
+    resizeMode: "contain",
+    backgroundColor: "#1a4d2e",
+  },
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "automatic",
@@ -36,6 +42,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: appId,
+    adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
+      backgroundColor: "#1a4d2e",
+    },
     googleServicesFile: process.env.GOOGLE_SERVICES_JSON,
     config: { googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_KEY } },
   },

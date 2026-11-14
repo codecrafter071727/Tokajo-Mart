@@ -87,8 +87,8 @@ for (const s of seedStock) {
 }
 
 // ---- identity: dev accounts. The password is for local development only.
-const DEV_PASSWORD = "tokajo-dev";
-const salt = Buffer.from("tokajo-dev-seed-salt-1234567890!".slice(0, 16));
+const DEV_PASSWORD = "milcki-dev";
+const salt = Buffer.from("milcki-dev-seed-1234567890".slice(0, 16));
 const passwordHash = await hashPassword(DEV_PASSWORD, salt);
 const WH = "wh-noida-62";
 const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -98,15 +98,15 @@ lines.push(
   "-- identity (dev accounts: staff and admin sign in with the password " + DEV_PASSWORD + ")",
 );
 const staff = [
-  { id: uid(1), role: "admin", name: "Admin", email: "admin@tokajo.dev", wh: null },
+  { id: uid(1), role: "admin", name: "Admin", email: "admin@milcki.dev", wh: null },
   {
     id: uid(2),
     role: "warehouse_manager",
     name: "Noida Manager",
-    email: "manager@tokajo.dev",
+    email: "manager@milcki.dev",
     wh: WH,
   },
-  { id: uid(3), role: "warehouse_staff", name: "Noida Packer", email: "packer@tokajo.dev", wh: WH },
+  { id: uid(3), role: "warehouse_staff", name: "Noida Packer", email: "packer@milcki.dev", wh: WH },
 ];
 for (const u of staff) {
   lines.push(

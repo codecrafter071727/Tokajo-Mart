@@ -75,7 +75,7 @@ function fakeServices() {
       }
       if (path === "/internal/reservations" && state.reserveError) throw state.reserveError;
       if (path.startsWith("/internal/warehouses/")) {
-        return { id: "wh-noida-62", name: "Tokajo Noida 62", lat: 28.61, lng: 77.35, open: true };
+        return { id: "wh-noida-62", name: "Milcki Noida 62", lat: 28.61, lng: 77.35, open: true };
       }
       return { id: "r", status: "ok" };
     }),

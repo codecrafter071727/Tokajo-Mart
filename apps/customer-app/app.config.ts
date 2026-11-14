@@ -16,9 +16,9 @@ function existingProjectFile(filePath: string | undefined): string | undefined {
 const APP_ENV = (process.env.APP_ENV ?? "development") as AppEnv;
 
 const variants: Record<AppEnv, { name: string; idSuffix: string }> = {
-  development: { name: "QC (Dev)", idSuffix: ".dev" },
-  staging: { name: "QC (Staging)", idSuffix: ".staging" },
-  production: { name: "QC", idSuffix: "" },
+  development: { name: "Milcki (Dev)", idSuffix: ".dev" },
+  staging: { name: "Milcki (Staging)", idSuffix: ".staging" },
+  production: { name: "Milcki", idSuffix: "" },
 };
 
 const variant = variants[APP_ENV];
@@ -31,8 +31,14 @@ const hasGoogleServices = Boolean(googleServicesPlist && googleServicesJson);
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: variant.name,
-  slug: "qc-customer",
-  scheme: "qccustomer",
+  slug: "milcki-customer",
+  icon: "./assets/icon.png",
+  splash: {
+    image: "./assets/milcki-logo.png",
+    resizeMode: "contain",
+    backgroundColor: "#1a4d2e",
+  },
+  scheme: "milckicustomer",
   version: "0.1.0",
   orientation: "portrait",
   userInterfaceStyle: "automatic",
@@ -50,6 +56,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: appId,
+    adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
+      backgroundColor: "#1a4d2e",
+    },
     ...(googleServicesJson ? { googleServicesFile: googleServicesJson } : {}),
     config: { googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_KEY } },
   },

@@ -11,7 +11,7 @@ hash of it.
    Principal Entity on a DLT portal (Jio, Vodafone Idea, Airtel or BSNL), register a 6 letter
    sender id (header), and get an OTP **content template** approved, for example:
 
-   `##OTP## is your Tokajo Mart code. It is valid for 5 minutes. Do not share it with anyone.`
+   `##OTP## is your Milcki code. It is valid for 5 minutes. Do not share it with anyone.`
 
    Approval usually takes a few working days. Add the DLT entity id, header and template id in
    MSG91 so its template is linked to the approved one.

@@ -11,7 +11,7 @@ const envSchema = baseEnvSchema.extend({
   /** The secret set on the webhook in the Razorpay dashboard */
   RAZORPAY_WEBHOOK_SECRET: optionalString(),
   /** Shown at the top of the Razorpay checkout sheet */
-  PAYMENTS_MERCHANT_NAME: z.string().default("Tokajo Mart"),
+  PAYMENTS_MERCHANT_NAME: z.string().default("Milcki"),
   /** CI and local tests only: a pretend Razorpay that never calls the network. Refused in production. */
   PAYMENTS_FAKE_PROVIDER: z
     .enum(["0", "1", "true", "false"])

@@ -119,7 +119,7 @@ export default function AccountScreen() {
             label="Share the app"
             onPress={() =>
               void Share.share({
-                message: "Groceries in minutes with Tokajo Mart. Try it!",
+                message: "Groceries in minutes with Milcki. Try it!",
               }).catch(() => undefined)
             }
           />
@@ -138,7 +138,7 @@ export default function AccountScreen() {
           />
         </View>
 
-        <Text style={styles.footer}>Tokajo Mart{"\n"}India's last minute app</Text>
+        <Text style={styles.footer}>Milcki{"\n"}India's last minute app</Text>
       </ScrollView>
     </View>
   );

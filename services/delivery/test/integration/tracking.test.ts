@@ -93,7 +93,7 @@ suite("live location, tracking and the door photo", async () => {
         orderId,
         orderNumber: "QC-TRACK",
         warehouseId: "wh-noida-62",
-        store: { name: "Tokajo Noida 62", address: "Sector 62", ...STORE },
+        store: { name: "Milcki Noida 62", address: "Sector 62", ...STORE },
         customer: {
           name: "Alice",
           phone: "+919999000001",

@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BrandLogo } from "../../src/components/BrandLogo";
 import { BigButton } from "../../src/components/BigButton";
 import { CodeInput } from "../../src/components/CodeInput";
 import { TextLink } from "../../src/components/TextLink";
@@ -85,10 +86,8 @@ export default function LoginScreen() {
         bounces={false}
       >
         <View style={[styles.hero, { paddingTop: insets.top + space[8] }]}>
-          <View style={styles.logo}>
-            <Ionicons name="bicycle" size={40} color={colors.ink[900]} />
-          </View>
-          <Text style={styles.brand}>Tokajo Rider</Text>
+          <BrandLogo size={84} style={styles.logo} />
+          <Text style={styles.brand}>Milcki Rider</Text>
           <Text style={styles.tagline}>Deliver fast. Earn every ride.</Text>
         </View>
 
@@ -197,7 +196,7 @@ export default function LoginScreen() {
               disabled={otp.length !== OTP_LENGTH}
             />
           )}
-          <Text style={styles.legal}>Only riders registered by a Tokajo store can log in.</Text>
+          <Text style={styles.legal}>Only riders registered by a Milcki store can log in.</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -209,12 +208,6 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1 },
   hero: { alignItems: "center", paddingBottom: space[8], gap: space[1] },
   logo: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    backgroundColor: colors.brand[600],
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: space[3],
     transform: [{ rotate: "-6deg" }],
   },

@@ -26,7 +26,7 @@ const checkout: CheckoutResponse = {
   keyId: "rzp_test_public",
   amountPaise: 9400,
   currency: "INR",
-  name: "Tokajo Mart",
+  name: "Milcki",
   description: "Order QC-1",
   prefill: { contact: "+919999000001", name: "Asha" },
 };

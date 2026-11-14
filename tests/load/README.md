@@ -29,7 +29,7 @@ BASE_URL=http://127.0.0.1:4000 k6 run tests/load/rider.js
 | `BASE_URL`      | `http://localhost:4000`                      | all              |
 | `WAREHOUSE_ID`  | `wh-noida-62`                                | browse, checkout |
 | `CUSTOMER_POOL` | `8` customers signed in during setup         | checkout         |
-| `MANAGER_EMAIL` | `manager@tokajo.dev` (password `tokajo-dev`) | warehouse        |
+| `MANAGER_EMAIL` | `manager@milcki.dev` (password `milcki-dev`) | warehouse        |
 | `RIDER_PHONES`  | the three seeded riders                      | rider            |
 
 ## What each script proves

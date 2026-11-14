@@ -84,7 +84,7 @@ export default function ProductDetailScreen() {
           <Pressable
             onPress={() =>
               void Share.share({
-                message: `${product.name} (${product.unit}) for ₹${product.price} on Tokajo Mart`,
+                message: `${product.name} (${product.unit}) for ₹${product.price} on Milcki`,
               }).catch(() => undefined)
             }
             hitSlop={8}
@@ -214,9 +214,9 @@ export default function ProductDetailScreen() {
           ) : null}
         </View>
 
-        {/* Why shop from Tokajo Mart */}
+        {/* Why shop from Milcki */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Why shop from Tokajo Mart?</Text>
+          <Text style={styles.cardTitle}>Why shop from Milcki?</Text>
           <View style={styles.trustRow}>
             <Ionicons name="flash" size={22} color={Colors.brandText} />
             <View style={styles.trustText}>

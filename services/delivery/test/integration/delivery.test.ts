@@ -52,7 +52,7 @@ const order = (orderId: string, number: string, warehouseId = "wh-noida-62") => 
   orderId,
   orderNumber: number,
   warehouseId,
-  store: { name: "Tokajo Noida 62", address: "Sector 62, Noida", lat: 28.61, lng: 77.35 },
+  store: { name: "Milcki Noida 62", address: "Sector 62, Noida", lat: 28.61, lng: 77.35 },
   customer: {
     name: "Alice",
     phone: "+919999000001",

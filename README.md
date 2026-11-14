@@ -2,7 +2,7 @@
 
 Warehouse-based quick commerce platform (dark store model). Customers order from a mobile app; a nearby warehouse picks and packs; a rider delivers.
 
-Working name **QC Platform** (`@qc/*`). Built by TheHXD. Rename when the client brand is confirmed.
+Customer-facing brand **Milcki**. Monorepo package scope remains **QC Platform** (`@qc/*`). Built by TheHXD.
 
 | Surface       | Package             | Stack                   |
 | ------------- | ------------------- | ----------------------- |

@@ -58,7 +58,7 @@ suite("payment service", async () => {
     keyId: "rzp_test_abc",
     keySecret: KEY_SECRET,
     webhookSecret: WEBHOOK_SECRET,
-    merchantName: "Tokajo Mart",
+    merchantName: "Milcki",
   };
   const app = await buildApp({ db, orderClient, config });
   const off = await buildApp({
@@ -161,7 +161,7 @@ suite("payment service", async () => {
         keyId: "rzp_test_abc",
         amountPaise: 25_900,
         currency: "INR",
-        name: "Tokajo Mart",
+        name: "Milcki",
         prefill: { contact: "+919999000001", name: "Alice" },
       });
       const again = await checkout(order.id);

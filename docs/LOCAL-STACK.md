@@ -46,9 +46,9 @@ Integration tests are skipped when `TEST_DATABASE_URL` is not set.
 | ----------------- | ---------------------------------------------------------------- |
 | Customer          | Any phone number, code `1234` (creates the user)                 |
 | Rider             | `+919810000011`, `+919810000012`, `+919810000013`, code `123456` |
-| Warehouse manager | `manager@tokajo.dev` / `tokajo-dev`                              |
-| Warehouse staff   | `packer@tokajo.dev` / `tokajo-dev`                               |
-| Admin             | `admin@tokajo.dev` / `tokajo-dev`                                |
+| Warehouse manager | `manager@milcki.dev` / `milcki-dev`                              |
+| Warehouse staff   | `packer@milcki.dev` / `milcki-dev`                               |
+| Admin             | `admin@milcki.dev` / `milcki-dev`                                |
 
 The fixed codes only work while `OTP_MODE=demo`, which is the default outside production. In
 production the identity service refuses to start without an SMS provider.

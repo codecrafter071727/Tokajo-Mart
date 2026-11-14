@@ -10,8 +10,8 @@ describe("invoice links", () => {
     expect(invoiceUrl("http://localhost:4000/", "/v1/invoices/abc.1.sig")).toBe(
       "http://localhost:4000/v1/invoices/abc.1.sig",
     );
-    expect(invoiceUrl("https://api.tokajo.in", "/v1/invoices/x")).toBe(
-      "https://api.tokajo.in/v1/invoices/x",
+    expect(invoiceUrl("https://api.milcki.in", "/v1/invoices/x")).toBe(
+      "https://api.milcki.in/v1/invoices/x",
     );
   });
 });

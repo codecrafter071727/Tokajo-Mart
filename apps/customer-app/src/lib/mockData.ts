@@ -1,4 +1,4 @@
-// Mock data for Tokajo Mart customer app
+// Mock data for Milcki customer app
 
 export interface Product {
   id: string;

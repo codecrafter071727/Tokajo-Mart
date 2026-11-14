@@ -90,7 +90,7 @@ assert.equal(again.id, order.id);
 const manager = await ok(
   "warehouse manager signs in",
   call("POST", "/v1/identity/auth/login", {
-    body: { email: "manager@tokajo.dev", password: "tokajo-dev" },
+    body: { email: "manager@milcki.dev", password: "milcki-dev" },
   }),
 );
 const queue = await ok(
@@ -242,7 +242,7 @@ await ok(
 const admin = await ok(
   "admin signs in",
   call("POST", "/v1/identity/auth/login", {
-    body: { email: "admin@tokajo.dev", password: "tokajo-dev" },
+    body: { email: "admin@milcki.dev", password: "milcki-dev" },
   }),
 );
 const all = await ok(

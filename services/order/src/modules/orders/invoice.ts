@@ -95,9 +95,9 @@ function fit(font: PDFFont, text: string, size: number, width: number): string {
 
 export async function renderInvoice(data: InvoiceData): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`Tokajo Mart invoice ${invoiceNumber(data.orderNumber)}`);
-  pdf.setAuthor("Tokajo Mart");
-  pdf.setCreator("Tokajo Mart");
+  pdf.setTitle(`Milcki invoice ${invoiceNumber(data.orderNumber)}`);
+  pdf.setAuthor("Milcki");
+  pdf.setCreator("Milcki");
   pdf.setCreationDate(data.deliveredAt);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -120,7 +120,7 @@ export async function renderInvoice(data: InvoiceData): Promise<Uint8Array> {
 
   // Header band
   page.drawRectangle({ x: 0, y: A4.height - 96, width: A4.width, height: 96, color: GREEN });
-  text("Tokajo Mart", M, A4.height - 52, { size: 24, font: bold });
+  text("Milcki", M, A4.height - 52, { size: 24, font: bold });
   text("Groceries in minutes", M, A4.height - 72, { size: 10 });
   text("INVOICE", A4.width - M, A4.height - 52, { size: 18, font: bold, right: true });
   text(invoiceNumber(data.orderNumber), A4.width - M, A4.height - 72, { size: 10, right: true });
@@ -241,7 +241,7 @@ export async function renderInvoice(data: InvoiceData): Promise<Uint8Array> {
   });
 
   for (const p of pdf.getPages()) {
-    p.drawText(pdfSafe("Thank you for shopping with Tokajo Mart"), {
+    p.drawText(pdfSafe("Thank you for shopping with Milcki"), {
       x: M,
       y: 32,
       size: 9,

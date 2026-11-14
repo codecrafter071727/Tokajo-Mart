@@ -14,6 +14,7 @@ import { AnimatedView } from "../src/components/AnimatedView";
 import { useAuthStore } from "../src/store/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { products } from "../src/lib/mockData";
+import { BrandLogo } from "../src/components/BrandLogo";
 import { ProductImage } from "../src/components/ProductImage";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -116,10 +117,8 @@ export default function OnboardingScreen() {
 
       {/* Logo */}
       <AnimatedView style={[styles.logoSection, logoStyle]}>
-        <View style={styles.logoCircle}>
-          <Ionicons name="flash" size={28} color={Colors.brandText} />
-        </View>
-        <Text style={styles.appName}>Tokajo Mart</Text>
+        <BrandLogo size={72} />
+        <Text style={styles.appName}>Milcki</Text>
       </AnimatedView>
 
       {/* Slide carousel */}

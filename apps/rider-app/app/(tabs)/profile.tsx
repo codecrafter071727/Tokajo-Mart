@@ -106,7 +106,7 @@ export default function ProfileScreen() {
             <Text style={styles.confirmText}>
               {busy
                 ? "Finish your current delivery before you log out."
-                : "Log out of Tokajo Rider on this phone?"}
+                : "Log out of Milcki Rider on this phone?"}
             </Text>
             {!busy ? (
               <BigButton

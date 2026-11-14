@@ -15,8 +15,8 @@ export const options = {
 };
 
 export function setup() {
-  const email = __ENV.MANAGER_EMAIL || "manager@tokajo.dev";
-  const password = __ENV.MANAGER_PASSWORD || "tokajo-dev";
+  const email = __ENV.MANAGER_EMAIL || "manager@milcki.dev";
+  const password = __ENV.MANAGER_PASSWORD || "milcki-dev";
   return { token: signInWithPassword(email, password).accessToken };
 }
 

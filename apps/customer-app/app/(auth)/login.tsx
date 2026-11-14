@@ -19,6 +19,7 @@ import { noWebOutline } from "../../src/theme/web";
 import { requestOtp } from "../../src/lib/auth";
 import { backendEnabled } from "../../src/lib/session";
 import { products } from "../../src/lib/mockData";
+import { BrandLogo } from "../../src/components/BrandLogo";
 import { ProductImage } from "../../src/components/ProductImage";
 
 /** Product photos for the collage behind the sign in card, in three staggered columns */
@@ -106,7 +107,7 @@ export default function LoginScreen() {
 
         <View style={[styles.card, { paddingBottom: insets.bottom + Spacing[24] }]}>
           <View style={styles.logo}>
-            <Ionicons name="flash" size={26} color={Colors.onBrand} />
+            <BrandLogo size={64} />
           </View>
           <Text style={styles.title}>India's last minute app</Text>
           <Text style={styles.subtitle}>Log in or sign up</Text>

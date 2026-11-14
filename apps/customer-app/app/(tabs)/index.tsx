@@ -356,7 +356,7 @@ export default function HomeScreen() {
           <Text style={styles.footerBrand}>India's last{"\n"}minute app</Text>
           <View style={styles.footerLine}>
             <Ionicons name="heart" size={14} color={Colors.danger} />
-            <Text style={styles.footerSub}>Tokajo Mart</Text>
+            <Text style={styles.footerSub}>Milcki</Text>
           </View>
         </View>
       </ScrollView>

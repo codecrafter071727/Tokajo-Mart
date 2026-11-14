@@ -1143,7 +1143,7 @@ export class OrderService {
       this.clients.inventory
         .get<WarehouseInfo>(`/internal/warehouses/${row.warehouseId}`)
         .then((w) => w.name)
-        .catch(() => "Tokajo Mart"),
+        .catch(() => "Milcki"),
       row.paymentMethod === "online"
         ? this.clients.payment
             .get<{ razorpayPaymentId: string | null }>(`/internal/payments/orders/${row.id}`)
@@ -1176,7 +1176,7 @@ export class OrderService {
       paymentMethod: row.paymentMethod === "online" ? "online" : "cod",
       razorpayPaymentId: payment,
     });
-    return { pdf, filename: `tokajo-invoice-${row.number}.pdf` };
+    return { pdf, filename: `milcki-invoice-${row.number}.pdf` };
   }
 
   async invoiceFor(identity: Identity, id: string) {
