@@ -19,8 +19,6 @@ apps/*/android/
 apps/*/ios/
 
 # secrets
-.env
-.env.*
 !.env.example
 google-services.json
 GoogleService-Info.plist
@@ -46,3 +44,4 @@ expo-env.d.ts
 
 # Reference project kept locally only (its own git repo and secrets)
 booking-hub/
+config.bat
